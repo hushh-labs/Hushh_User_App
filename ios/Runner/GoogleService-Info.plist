@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CLIENT_ID</key>
+	<string>53407187172-nremqtd8hlmnqbcc6jkfavlk6iljq803.apps.googleusercontent.com</string>
+	<key>REVERSED_CLIENT_ID</key>
+	<string>com.googleusercontent.apps.53407187172-nremqtd8hlmnqbcc6jkfavlk6iljq803</string>
+	<key>ANDROID_CLIENT_ID</key>
+	<string>53407187172-0h9ckq232jev9dd2u8re190pck2kku3o.apps.googleusercontent.com</string>
+	<key>API_KEY</key>
+	<string>AIzaSyAfo5qtNDVT6edPNFl6OmQ-XE5RGZeADk4</string>
+	<key>GCM_SENDER_ID</key>
+	<string>53407187172</string>
+	<key>PLIST_VERSION</key>
+	<string>1</string>
+	<key>BUNDLE_ID</key>
+	<string>com.hushone.userapp</string>
+	<key>PROJECT_ID</key>
+	<string>hushone-app</string>
+	<key>STORAGE_BUCKET</key>
+	<string>hushone-app.appspot.com</string>
+	<key>IS_ADS_ENABLED</key>
+	<false></false>
+	<key>IS_ANALYTICS_ENABLED</key>
+	<false></false>
+	<key>IS_APPINVITE_ENABLED</key>
+	<true></true>
+	<key>IS_GCM_ENABLED</key>
+	<true></true>
+	<key>IS_SIGNIN_ENABLED</key>
+	<true></true>
+	<key>GOOGLE_APP_ID</key>
+	<string>1:53407187172:ios:a77f9f5ee0e15396b32cf1</string>
+	<key>DATABASE_URL</key>
+	<string>https://hushone-app-default-rtdb.firebaseio.com</string>
+</dict>
+</plist>
