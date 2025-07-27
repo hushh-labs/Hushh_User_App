@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'card_created_success_page.dart';
 import '../../../../core/routing/route_paths.dart';
 
 class VideoRecordingPage extends StatefulWidget {

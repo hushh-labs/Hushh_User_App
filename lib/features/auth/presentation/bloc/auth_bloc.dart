@@ -58,6 +58,8 @@ class CreateUserCardEvent extends AuthEvent {
 
 class SignOutEvent extends AuthEvent {}
 
+class CheckAuthStateEvent extends AuthEvent {}
+
 // States
 abstract class AuthState {}
 
@@ -131,6 +133,12 @@ class SignOutFailureState extends AuthState {
   SignOutFailureState(this.message);
 }
 
+class AuthStateCheckedState extends AuthState {
+  final bool isAuthenticated;
+  final firebase_auth.User? user;
+  AuthStateCheckedState({required this.isAuthenticated, this.user});
+}
+
 // Country Masks
 const Map<String, String> countryMasks = {
   'US': '+1 (###) ###-####',
@@ -190,9 +198,13 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     on<CheckUserCardEvent>(onCheckUserCardEvent);
     on<CreateUserCardEvent>(onCreateUserCardEvent);
     on<SignOutEvent>(onSignOutEvent);
+    on<CheckAuthStateEvent>(onCheckAuthStateEvent);
 
     // Initialize immediately
     _initializeCountries();
+
+    // Listen to authentication state changes
+    _listenToAuthStateChanges();
   }
 
   void _initializeCountries() {
@@ -207,6 +219,18 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     );
     filteredCountries = _countryList;
     phoneController = TextEditingController();
+  }
+
+  void _listenToAuthStateChanges() {
+    firebase_auth.FirebaseAuth.instance.authStateChanges().listen((user) {
+      if (user != null) {
+        // User is signed in
+        add(CheckAuthStateEvent());
+      } else {
+        // User is signed out
+        add(SignOutEvent());
+      }
+    });
   }
 
   FutureOr<void> onInitializeEvent(
@@ -265,7 +289,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     SendPhoneOtpEvent event,
     Emitter<AuthState> emit,
   ) async {
-    print('🔥 [AUTH_BLOC] Starting OTP send for: ${event.phoneNumber}');
     emit(SendingOtpState());
 
     final params = SendPhoneOtpParams(
@@ -286,16 +309,10 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
     result.fold(
       (failure) {
-        print('🔥 [AUTH_BLOC] OTP send failed: ${failure.message}');
-        print('🔥 [AUTH_BLOC] About to emit OtpSentFailureState');
         emit(OtpSentFailureState(failure.message));
-        print('🔥 [AUTH_BLOC] OtpSentFailureState emitted');
       },
       (_) {
-        print('🔥 [AUTH_BLOC] OTP send successful');
-        print('🔥 [AUTH_BLOC] About to emit OtpSentState');
         emit(OtpSentState());
-        print('🔥 [AUTH_BLOC] OtpSentState emitted');
       },
     );
   }
@@ -358,6 +375,20 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     result.fold(
       (failure) => emit(SignOutFailureState(failure.message)),
       (_) => emit(SignedOutState()),
+    );
+  }
+
+  FutureOr<void> onCheckAuthStateEvent(
+    CheckAuthStateEvent event,
+    Emitter<AuthState> emit,
+  ) async {
+    final currentUser = firebase_auth.FirebaseAuth.instance.currentUser;
+    final isAuthenticated = currentUser != null;
+    emit(
+      AuthStateCheckedState(
+        isAuthenticated: isAuthenticated,
+        user: currentUser,
+      ),
     );
   }
 

@@ -55,8 +55,6 @@ class _AuthPageState extends State<AuthPage> {
       final countryCode = authBloc.selectedCountry?.dialCode ?? '91';
       final fullPhoneNumber = '+$countryCode$phoneDigits';
 
-      print('Sending OTP from auth page to: $fullPhoneNumber');
-
       // Send OTP - navigation will be handled by BLoC callback
       authBloc.add(SendPhoneOtpEvent(fullPhoneNumber));
     }
@@ -71,7 +69,6 @@ class _AuthPageState extends State<AuthPage> {
           _showErrorDialog(context, state.message);
         } else if (state is OtpSentState) {
           // OTP sent successfully, navigation will be handled by BLoC callback
-          print('OTP sent successfully, waiting for navigation...');
         }
       },
       child: Container(
@@ -201,9 +198,11 @@ class _AuthPageState extends State<AuthPage> {
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: Colors.orange.withOpacity(0.1),
+                    color: Colors.orange.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.orange.withOpacity(0.3)),
+                    border: Border.all(
+                      color: Colors.orange.withValues(alpha: 0.3),
+                    ),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,

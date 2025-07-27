@@ -11,15 +11,12 @@ class SendPhoneOtpUseCase implements BaseUseCase<void, SendPhoneOtpParams> {
   @override
   Future<Either<Failure, void>> call(SendPhoneOtpParams params) async {
     try {
-      print('🔥 [USE_CASE] Calling sendPhoneOtp for: ${params.phoneNumber}');
       await _authRepository.sendPhoneOtp(
         params.phoneNumber,
         onOtpSent: params.onOtpSent,
       );
-      print('🔥 [USE_CASE] sendPhoneOtp successful');
       return const Right(null);
     } catch (e) {
-      print('🔥 [USE_CASE] sendPhoneOtp failed: $e');
       return Left(ServerFailure(e.toString()));
     }
   }

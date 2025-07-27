@@ -1,12 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:go_router/go_router.dart';
-import 'package:hushh_user_app/core/routing/route_paths.dart';
 import '../bloc/auth_bloc.dart';
 import '../widgets/country_code_text_field.dart';
 import '../widgets/phone_number_text_field.dart';
-import 'otp_verification.dart';
-import '../../domain/enums.dart';
 
 class PhoneInputPage extends StatefulWidget {
   const PhoneInputPage({super.key});

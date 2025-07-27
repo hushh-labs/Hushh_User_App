@@ -5,14 +5,11 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 import 'package:hushh_user_app/features/auth/presentation/pages/create_first_card.dart';
-import 'package:hushh_user_app/features/auth/presentation/pages/discover_page.dart';
 import '../widgets/otp_heading_section.dart';
 import '../widgets/otp_text_field.dart';
 import '../bloc/auth_bloc.dart';
 import '../../domain/enums.dart';
-import '../../domain/entities/user_card.dart';
 import '../../../../core/routing/route_paths.dart';
-import '../../../../shared/utils/utils.dart';
 import '../../../../shared/core/utils/toast_manager.dart';
 
 class OtpVerificationPageArgs {

@@ -91,7 +91,7 @@ class AuthRepositoryImpl implements AuthRepository {
     } catch (e) {
       // Re-throw the exception with the specific error message
       if (e is Exception) {
-        throw e;
+        rethrow;
       } else {
         throw Exception('Failed to send OTP: $e');
       }

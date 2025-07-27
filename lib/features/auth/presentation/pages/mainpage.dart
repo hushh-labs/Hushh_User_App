@@ -3,7 +3,6 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'auth.dart';
 import '../../domain/enums.dart';
-import '../../../../shared/utils/utils.dart';
 
 class MainAuthPage extends StatefulWidget {
   const MainAuthPage({super.key});

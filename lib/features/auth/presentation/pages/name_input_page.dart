@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:firebase_auth/firebase_auth.dart' as firebase_auth;
 import 'package:go_router/go_router.dart';
-import 'video_recording_page.dart';
 import '../bloc/auth_bloc.dart';
 import '../../domain/entities/user_card.dart';
 import '../../../../core/routing/route_paths.dart';

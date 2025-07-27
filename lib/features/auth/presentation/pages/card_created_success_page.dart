@@ -1,9 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
-import 'discover_page.dart';
-import '../bloc/auth_bloc.dart';
 import '../../../../core/routing/route_paths.dart';
 
 class CardCreatedSuccessPage extends StatefulWidget {

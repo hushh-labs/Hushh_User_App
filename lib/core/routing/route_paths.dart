@@ -13,9 +13,13 @@ class RoutePaths {
   static const String cardCreatedSuccess = '/card-created-success';
   static const String videoRecording = '/video-recording';
 
+  // Main app routes
+  static const String pda = '/pda';
+  static const String chat = '/chat';
+  static const String profile = '/profile';
+
   // Home routes
   static const String home = '/home';
-  static const String profile = '/profile';
 
   // Feature routes (add more as you create features)
   static const String settings = '/settings';
@@ -36,9 +40,13 @@ class RouteNames {
   static const String cardCreatedSuccess = 'cardCreatedSuccess';
   static const String videoRecording = 'videoRecording';
 
+  // Main app route names
+  static const String pda = 'pda';
+  static const String chat = 'chat';
+  static const String profile = 'profile';
+
   // Home route names
   static const String home = 'home';
-  static const String profile = 'profile';
 
   // Feature route names
   static const String settings = 'settings';

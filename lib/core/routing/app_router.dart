@@ -4,7 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:hushh_user_app/features/auth/presentation/pages/mainpage.dart';
 import 'package:hushh_user_app/features/auth/presentation/pages/phone_input_page.dart';
 import 'package:hushh_user_app/features/auth/presentation/pages/otp_verification.dart';
-import 'package:hushh_user_app/features/auth/presentation/pages/discover_page.dart';
+import 'package:hushh_user_app/features/auth/presentation/pages/main_app_page.dart';
 import 'package:hushh_user_app/features/auth/presentation/pages/create_first_card.dart';
 import 'package:hushh_user_app/features/auth/presentation/pages/card_created_success_page.dart';
 import 'package:hushh_user_app/features/auth/presentation/pages/video_recording_page.dart';
@@ -15,6 +15,7 @@ import 'auth_guard.dart';
 class AppRouter {
   static final GlobalKey<NavigatorState> navigatorKey =
       GlobalKey<NavigatorState>();
+
   static final GoRouter router = GoRouter(
     navigatorKey: navigatorKey,
     initialLocation: RoutePaths.mainAuth,
@@ -41,11 +42,11 @@ class AppRouter {
           return OtpVerificationPage(args: args);
         },
       ),
-      // Discover page
+      // Main app page (handles all tabs)
       GoRoute(
         path: RoutePaths.discover,
         name: RouteNames.discover,
-        builder: (context, state) => const DiscoverPage(),
+        builder: (context, state) => const MainAppPage(),
       ),
       // Create first card page
       GoRoute(
