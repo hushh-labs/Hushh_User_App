@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'card_created_success_page.dart';
+import '../../../../core/routing/route_paths.dart';
 
 class VideoRecordingPage extends StatefulWidget {
   const VideoRecordingPage({super.key});
@@ -129,12 +131,7 @@ class _VideoRecordingPageState extends State<VideoRecordingPage> {
               InkWell(
                 onTap: () {
                   // Navigate to card created success page
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const CardCreatedSuccessPage(),
-                    ),
-                  );
+                  context.go(RoutePaths.cardCreatedSuccess);
                 },
                 child: Container(
                   width: double.infinity,
@@ -162,12 +159,7 @@ class _VideoRecordingPageState extends State<VideoRecordingPage> {
               InkWell(
                 onTap: () {
                   // Navigate to card created success page
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const CardCreatedSuccessPage(),
-                    ),
-                  );
+                  context.go(RoutePaths.cardCreatedSuccess);
                 },
                 child: Container(
                   width: double.infinity,

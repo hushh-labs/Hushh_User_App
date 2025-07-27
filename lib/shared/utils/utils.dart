@@ -55,3 +55,38 @@ class Utils {
     return '${text.substring(0, maxLength)}...';
   }
 }
+
+/// Development helper to generate test phone numbers
+/// This helps avoid "too-many-requests" errors during development
+class DevelopmentHelper {
+  static bool get isDevelopment =>
+      const bool.fromEnvironment('dart.vm.product') == false;
+
+  /// Generate a test phone number for development
+  /// This helps avoid rate limiting issues during testing
+  static String generateTestPhoneNumber() {
+    // Generate a random phone number for testing
+    final random = DateTime.now().millisecondsSinceEpoch;
+    final lastDigits = (random % 9999).toString().padLeft(4, '0');
+    return '+91843144$lastDigits';
+  }
+
+  /// Check if the current phone number is a test number
+  static bool isTestPhoneNumber(String phoneNumber) {
+    return phoneNumber.startsWith('+91843144') && phoneNumber.length == 13;
+  }
+
+  /// Get development tips for common Firebase errors
+  static String getDevelopmentTip(String errorCode) {
+    switch (errorCode) {
+      case 'too-many-requests':
+        return '💡 Development Tip: Try using a different phone number or wait 5-10 minutes. You can also use the test number generator.';
+      case 'invalid-phone-number':
+        return '💡 Development Tip: Make sure the phone number includes the country code (e.g., +91 for India).';
+      case 'quota-exceeded':
+        return '💡 Development Tip: Firebase SMS quota exceeded. Try again later or use a different phone number.';
+      default:
+        return '💡 Development Tip: Check your Firebase configuration and network connection.';
+    }
+  }
+}

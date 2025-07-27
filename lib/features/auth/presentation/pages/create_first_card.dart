@@ -10,13 +10,12 @@ class CreateFirstCardPageArgs {
 }
 
 class CreateFirstCardPage extends StatelessWidget {
-  const CreateFirstCardPage({super.key});
+  final CreateFirstCardPageArgs? args;
+
+  const CreateFirstCardPage({super.key, this.args});
 
   @override
   Widget build(BuildContext context) {
-    final args =
-        ModalRoute.of(context)?.settings.arguments as CreateFirstCardPageArgs?;
-
     return Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(

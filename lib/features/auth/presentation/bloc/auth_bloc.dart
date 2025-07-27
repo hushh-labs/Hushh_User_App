@@ -3,7 +3,19 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:mask_text_input_formatter/mask_text_input_formatter.dart';
+import 'package:firebase_auth/firebase_auth.dart' as firebase_auth;
 import '../../data/models/countries_model.dart';
+import '../../domain/usecases/send_phone_otp_usecase.dart';
+import '../../domain/usecases/verify_phone_otp_usecase.dart';
+import '../../domain/usecases/check_user_card_exists_usecase.dart';
+import '../../domain/usecases/create_user_card_usecase.dart';
+import '../../domain/usecases/sign_out_usecase.dart';
+import '../../domain/entities/user_card.dart';
+import '../../domain/enums.dart';
+import '../../../../core/usecases/usecase.dart';
+import '../../../../core/routing/route_paths.dart';
+import '../../../../core/routing/app_router.dart';
+import '../pages/otp_verification.dart';
 
 // Events
 abstract class AuthEvent {}
@@ -22,6 +34,29 @@ class OnPhoneUpdateEvent extends AuthEvent {
   final String value;
   OnPhoneUpdateEvent(this.value);
 }
+
+class SendPhoneOtpEvent extends AuthEvent {
+  final String phoneNumber;
+  SendPhoneOtpEvent(this.phoneNumber);
+}
+
+class VerifyPhoneOtpEvent extends AuthEvent {
+  final String phoneNumber;
+  final String otp;
+  VerifyPhoneOtpEvent({required this.phoneNumber, required this.otp});
+}
+
+class CheckUserCardEvent extends AuthEvent {
+  final String userId;
+  CheckUserCardEvent(this.userId);
+}
+
+class CreateUserCardEvent extends AuthEvent {
+  final UserCard userCard;
+  CreateUserCardEvent(this.userCard);
+}
+
+class SignOutEvent extends AuthEvent {}
 
 // States
 abstract class AuthState {}
@@ -44,6 +79,57 @@ class CountryUpdatedState extends AuthState {}
 class PhoneUpdatingState extends AuthState {}
 
 class PhoneUpdatedState extends AuthState {}
+
+class SendingOtpState extends AuthState {}
+
+class OtpSentState extends AuthState {}
+
+class OtpSentFailureState extends AuthState {
+  final String message;
+  OtpSentFailureState(this.message);
+}
+
+class VerifyingOtpState extends AuthState {}
+
+class OtpVerifiedState extends AuthState {
+  final firebase_auth.UserCredential userCredential;
+  OtpVerifiedState(this.userCredential);
+}
+
+class OtpVerificationFailureState extends AuthState {
+  final String message;
+  OtpVerificationFailureState(this.message);
+}
+
+class CheckingUserCardState extends AuthState {}
+
+class UserCardExistsState extends AuthState {
+  final bool exists;
+  UserCardExistsState(this.exists);
+}
+
+class UserCardCheckFailureState extends AuthState {
+  final String message;
+  UserCardCheckFailureState(this.message);
+}
+
+class CreatingUserCardState extends AuthState {}
+
+class UserCardCreatedState extends AuthState {}
+
+class UserCardCreationFailureState extends AuthState {
+  final String message;
+  UserCardCreationFailureState(this.message);
+}
+
+class SigningOutState extends AuthState {}
+
+class SignedOutState extends AuthState {}
+
+class SignOutFailureState extends AuthState {
+  final String message;
+  SignOutFailureState(this.message);
+}
 
 // Country Masks
 const Map<String, String> countryMasks = {
@@ -77,10 +163,33 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   var phoneNumberWithoutCountryCode = "";
   Country? selectedCountry;
 
-  AuthBloc() : super(AuthInitialState()) {
+  // Use cases
+  final SendPhoneOtpUseCase _sendPhoneOtpUseCase;
+  final VerifyPhoneOtpUseCase _verifyPhoneOtpUseCase;
+  final CheckUserCardExistsUseCase _checkUserCardExistsUseCase;
+  final CreateUserCardUseCase _createUserCardUseCase;
+  final SignOutUseCase _signOutUseCase;
+
+  AuthBloc({
+    required SendPhoneOtpUseCase sendPhoneOtpUseCase,
+    required VerifyPhoneOtpUseCase verifyPhoneOtpUseCase,
+    required CheckUserCardExistsUseCase checkUserCardExistsUseCase,
+    required CreateUserCardUseCase createUserCardUseCase,
+    required SignOutUseCase signOutUseCase,
+  }) : _sendPhoneOtpUseCase = sendPhoneOtpUseCase,
+       _verifyPhoneOtpUseCase = verifyPhoneOtpUseCase,
+       _checkUserCardExistsUseCase = checkUserCardExistsUseCase,
+       _createUserCardUseCase = createUserCardUseCase,
+       _signOutUseCase = signOutUseCase,
+       super(AuthInitialState()) {
     on<InitializeEvent>(onInitializeEvent);
     on<OnCountryUpdateEvent>(onCountryUpdateEvent);
     on<OnPhoneUpdateEvent>(onPhoneUpdateEvent);
+    on<SendPhoneOtpEvent>(onSendPhoneOtpEvent);
+    on<VerifyPhoneOtpEvent>(onVerifyPhoneOtpEvent);
+    on<CheckUserCardEvent>(onCheckUserCardEvent);
+    on<CreateUserCardEvent>(onCreateUserCardEvent);
+    on<SignOutEvent>(onSignOutEvent);
 
     // Initialize immediately
     _initializeCountries();
@@ -117,7 +226,10 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     );
     _countryList = countries;
     filteredCountries = _countryList;
-    phoneController = TextEditingController();
+
+    // Clear the phone controller to prevent auto-fill
+    phoneController.clear();
+    phoneNumberWithoutCountryCode = "";
 
     emit(InitializedState());
   }
@@ -127,27 +239,126 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     Emitter<AuthState> emit,
   ) async {
     emit(PhoneUpdatingState());
-    final initialPhoneNumber = PhoneNumber(
-      countryISOCode: selectedCountry!.code,
-      countryCode: '+${selectedCountry!.dialCode}',
-      number: phoneController.text
-          .replaceAll(' ', '')
-          .replaceAll('-', '')
-          .replaceAll('(', '')
-          .replaceAll(')', ''),
-    );
+
+    // Store only the digits from the phone number (without country code)
+    final phoneDigits = phoneController.text
+        .replaceAll(' ', '')
+        .replaceAll('-', '')
+        .replaceAll('(', '')
+        .replaceAll(')', '');
+
+    phoneNumberWithoutCountryCode = phoneDigits;
+
+    // Check if phone number is complete based on country
     int phoneLengthBasedOnCountryCode = countries
-        .firstWhere(
-          (element) => element.code == initialPhoneNumber.countryISOCode,
-        )
+        .firstWhere((element) => element.code == selectedCountry!.code)
         .maxLength;
 
-    if (initialPhoneNumber.number.length == phoneLengthBasedOnCountryCode) {
+    if (phoneDigits.length == phoneLengthBasedOnCountryCode) {
       FocusManager.instance.primaryFocus?.unfocus();
     }
 
-    phoneNumberWithoutCountryCode = phoneController.text;
     emit(PhoneUpdatedState());
+  }
+
+  FutureOr<void> onSendPhoneOtpEvent(
+    SendPhoneOtpEvent event,
+    Emitter<AuthState> emit,
+  ) async {
+    print('🔥 [AUTH_BLOC] Starting OTP send for: ${event.phoneNumber}');
+    emit(SendingOtpState());
+
+    final params = SendPhoneOtpParams(
+      phoneNumber: event.phoneNumber,
+      onOtpSent: (phoneNumber) {
+        // Navigate to OTP verification page
+        AppRouter.router.goNamed(
+          RouteNames.otpVerification,
+          extra: OtpVerificationPageArgs(
+            emailOrPhone: phoneNumber,
+            type: OtpVerificationType.phone,
+          ),
+        );
+      },
+    );
+
+    final result = await _sendPhoneOtpUseCase(params);
+
+    result.fold(
+      (failure) {
+        print('🔥 [AUTH_BLOC] OTP send failed: ${failure.message}');
+        print('🔥 [AUTH_BLOC] About to emit OtpSentFailureState');
+        emit(OtpSentFailureState(failure.message));
+        print('🔥 [AUTH_BLOC] OtpSentFailureState emitted');
+      },
+      (_) {
+        print('🔥 [AUTH_BLOC] OTP send successful');
+        print('🔥 [AUTH_BLOC] About to emit OtpSentState');
+        emit(OtpSentState());
+        print('🔥 [AUTH_BLOC] OtpSentState emitted');
+      },
+    );
+  }
+
+  FutureOr<void> onVerifyPhoneOtpEvent(
+    VerifyPhoneOtpEvent event,
+    Emitter<AuthState> emit,
+  ) async {
+    emit(VerifyingOtpState());
+
+    final params = VerifyPhoneOtpParams(
+      phoneNumber: event.phoneNumber,
+      otp: event.otp,
+    );
+
+    final result = await _verifyPhoneOtpUseCase(params);
+
+    result.fold(
+      (failure) => emit(OtpVerificationFailureState(failure.message)),
+      (userCredential) => emit(OtpVerifiedState(userCredential)),
+    );
+  }
+
+  FutureOr<void> onCheckUserCardEvent(
+    CheckUserCardEvent event,
+    Emitter<AuthState> emit,
+  ) async {
+    emit(CheckingUserCardState());
+
+    final result = await _checkUserCardExistsUseCase(event.userId);
+
+    result.fold(
+      (failure) => emit(UserCardCheckFailureState(failure.message)),
+      (exists) => emit(UserCardExistsState(exists)),
+    );
+  }
+
+  FutureOr<void> onCreateUserCardEvent(
+    CreateUserCardEvent event,
+    Emitter<AuthState> emit,
+  ) async {
+    emit(CreatingUserCardState());
+
+    final result = await _createUserCardUseCase(event.userCard);
+
+    result.fold(
+      (failure) => emit(UserCardCreationFailureState(failure.message)),
+      (_) => emit(UserCardCreatedState()),
+    );
+  }
+
+  FutureOr<void> onSignOutEvent(
+    SignOutEvent event,
+    Emitter<AuthState> emit,
+  ) async {
+    emit(SigningOutState());
+
+    final result = await _signOutUseCase(const NoParams());
+
+    result.fold(
+      (failure) => emit(SignOutFailureState(failure.message)),
+      (_) => emit(SignedOutState()),
+    );
   }
 
   FutureOr<void> onCountryUpdateEvent(
@@ -242,6 +453,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
                                 '+# ### ### ####',
                             filter: {"#": RegExp(r'[0-9]')},
                           );
+                          // Clear phone controller when country changes to prevent auto-fill
+                          phoneController.clear();
+                          phoneNumberWithoutCountryCode = "";
                           Navigator.of(context).pop();
                           FocusScope.of(context).unfocus();
                         },

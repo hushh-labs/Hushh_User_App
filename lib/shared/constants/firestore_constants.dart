@@ -1,7 +1,7 @@
 // Firestore collections and subcollections constants
 class FirestoreCollections {
   // Main collections
-  static const String users = 'users';
+  static const String users = 'HushUsers';
   static const String auth = 'auth';
   static const String profiles = 'profiles';
   static const String settings = 'settings';
@@ -92,7 +92,7 @@ class FirestoreFields {
   static const String passwordResetToken = 'passwordResetToken';
   static const String passwordResetExpires = 'passwordResetExpires';
 
-    // Post fields
+  // Post fields
   static const String postTitle = 'title';
   static const String content = 'content';
   static const String mediaUrls = 'mediaUrls';
@@ -107,14 +107,14 @@ class FirestoreFields {
   static const String commentCount = 'commentCount';
   static const String shareCount = 'shareCount';
   static const String viewCount = 'viewCount';
-  
+
   // Comment fields
   static const String postId = 'postId';
   static const String parentCommentId = 'parentCommentId';
   static const String text = 'text';
   static const String commentLikeCount = 'likeCount';
   static const String replyCount = 'replyCount';
-  
+
   // Message fields
   static const String chatId = 'chatId';
   static const String senderId = 'senderId';
@@ -128,7 +128,7 @@ class FirestoreFields {
   static const String messageEditedAt = 'editedAt';
   static const String messageIsDeleted = 'isDeleted';
   static const String messageDeletedAt = 'deletedAt';
-  
+
   // Notification fields
   static const String type = 'type';
   static const String notificationTitle = 'title';

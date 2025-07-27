@@ -7,24 +7,33 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:hushh_user_app/app.dart';
-
+import 'package:get_it/get_it.dart';
+import 'package:hushh_user_app/di/core_module.dart';
+import 'package:hushh_user_app/core/routing/navigation_service.dart';
+import 'package:hushh_user_app/core/routing/route_paths.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
+  group('Dependency Injection Tests', () {
+    setUpAll(() {
+      // Initialize only core module (no Firebase dependencies)
+      CoreModule.register();
+    });
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+    test('NavigationService should be registered', () {
+      final navigationService = GetIt.instance<NavigationService>();
+      expect(navigationService, isNotNull);
+      expect(navigationService, isA<NavigationService>());
+    });
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
+    test('DI should resolve navigation service', () {
+      // This test verifies that navigation service can be resolved
+      expect(() => GetIt.instance<NavigationService>(), returnsNormally);
+    });
 
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+    test('Route names should be correctly defined', () {
+      // Verify that route names are properly defined
+      expect(RouteNames.otpVerification, equals('otpVerification'));
+      expect(RoutePaths.otpVerification, equals('/otp-verification'));
+    });
   });
 }

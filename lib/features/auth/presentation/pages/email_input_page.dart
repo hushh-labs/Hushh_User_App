@@ -173,7 +173,7 @@ class _EmailInputPageState extends State<EmailInputPage> {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (context) => const NameInputPage(),
+                        builder: (context) => NameInputPage(email: _emailController.text.trim()),
                       ),
                     );
                   }

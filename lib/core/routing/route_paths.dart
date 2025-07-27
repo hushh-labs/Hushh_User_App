@@ -6,7 +6,12 @@ class RoutePaths {
   static const String register = '/register';
   static const String forgotPassword = '/forgot-password';
   static const String phoneLogin = '/phone-login';
+  static const String phoneInput = '/phone-input';
   static const String otpVerification = '/otp-verification';
+  static const String discover = '/discover';
+  static const String createFirstCard = '/create-first-card';
+  static const String cardCreatedSuccess = '/card-created-success';
+  static const String videoRecording = '/video-recording';
 
   // Home routes
   static const String home = '/home';
@@ -24,7 +29,12 @@ class RouteNames {
   static const String register = 'register';
   static const String forgotPassword = 'forgotPassword';
   static const String phoneLogin = 'phoneLogin';
+  static const String phoneInput = 'phoneInput';
   static const String otpVerification = 'otpVerification';
+  static const String discover = 'discover';
+  static const String createFirstCard = 'createFirstCard';
+  static const String cardCreatedSuccess = 'cardCreatedSuccess';
+  static const String videoRecording = 'videoRecording';
 
   // Home route names
   static const String home = 'home';
