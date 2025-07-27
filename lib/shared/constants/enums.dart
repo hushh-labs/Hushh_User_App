@@ -1,5 +1,5 @@
 // Enums for the application
-enum OnboardStatus { authenticated, signed_up, completed }
+enum OnboardStatus { authenticated, signedUp, completed }
 
 enum Entity { user }
 

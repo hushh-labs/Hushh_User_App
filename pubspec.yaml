@@ -90,6 +90,10 @@ dependencies:
   # JSON serialization
   json_annotation: ^4.8.1
   
+  # Text input formatting
+  mask_text_input_formatter: ^2.9.0
+  pin_code_fields: ^8.0.1
+  
   # Local storage
   shared_preferences: ^2.2.2
   neopop: ^1.0.2

@@ -23,13 +23,15 @@ class CustomTextField extends StatelessWidget {
     this.onChanged,
     this.textInputType,
     this.focusNode,
-    this.height, this.trailing,
+    this.height,
+    this.trailing,
   });
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: edgeInsets ??
+      padding:
+          edgeInsets ??
           EdgeInsets.only(bottom: 100.h / 50.75, top: 100.h / 50.75),
       child: SizedBox(
         height: height ?? 40,
@@ -50,15 +52,19 @@ class CustomTextField extends StatelessWidget {
             fillColor: Colors.white,
             hintText: hintText ?? 'Search',
             hintStyle: const TextStyle(
-                fontSize: 16.0,
-                color: Color(0xFF7f7f97),
-                fontWeight: FontWeight.w300),
+              fontSize: 16.0,
+              color: Color(0xFF7f7f97),
+              fontWeight: FontWeight.w300,
+            ),
             prefixIcon: showPrefix
                 ? Padding(
                     padding: const EdgeInsets.all(6),
                     child: SvgPicture.asset(
                       'assets/search_new.svg',
-                      color: const Color(0xFF616180),
+                      colorFilter: const ColorFilter.mode(
+                        Color(0xFF616180),
+                        BlendMode.srcIn,
+                      ),
                     ),
                   )
                 : null,

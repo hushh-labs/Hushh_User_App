@@ -4,6 +4,7 @@ class RoutePaths {
   static const String mainAuth = '/';
   static const String login = '/login';
   static const String register = '/register';
+  static const String forgotPassword = '/forgot-password';
   static const String phoneLogin = '/phone-login';
   static const String otpVerification = '/otp-verification';
 
@@ -21,6 +22,7 @@ class RouteNames {
   static const String mainAuth = 'mainAuth';
   static const String login = 'login';
   static const String register = 'register';
+  static const String forgotPassword = 'forgotPassword';
   static const String phoneLogin = 'phoneLogin';
   static const String otpVerification = 'otpVerification';
 

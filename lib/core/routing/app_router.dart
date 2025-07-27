@@ -1,7 +1,7 @@
 // App router configuration
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-//import '../../features/Auth/presentation/pages/main_page.dart';
+import 'package:hushh_user_app/features/auth/presentation/pages/mainpage.dart';
 // import '../../features/auth/presentation/pages/phone_login_page.dart';
 // import '../../features/auth/presentation/pages/otp_verification_page.dart';
 
@@ -14,11 +14,11 @@ class AppRouter {
     redirect: AuthGuard.redirect,
     routes: [
       // Main auth page
-      // GoRoute(
-      //   path: RoutePaths.mainAuth,
-      //   name: RouteNames.mainAuth,
-      //   builder: (context, state) => const MainAuthPage(),
-      // ),
+      GoRoute(
+        path: RoutePaths.mainAuth,
+        name: RouteNames.mainAuth,
+        builder: (context, state) => const MainAuthPage(),
+      ),
       // // Phone login page
       // GoRoute(
       //   path: RoutePaths.phoneLogin,
