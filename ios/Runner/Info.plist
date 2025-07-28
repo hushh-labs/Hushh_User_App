@@ -56,5 +56,9 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>Hushh needs camera access to let you take a profile photo directly from your camera</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Hushh needs photo library access to let you choose a profile photo from your existing photos</string>
 </dict>
 </plist>

@@ -1,14 +1,15 @@
-// Enhanced Profile page with improved UI
 import 'dart:io';
-
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:package_info_plus/package_info_plus.dart';
-import 'package:hushh_user_app/shared/utils/app_local_storage.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:hushh_user_app/shared/constants/app_routes.dart';
+import '../bloc/profile_bloc.dart';
+import 'package:hushh_user_app/features/auth/presentation/bloc/auth_bloc.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -45,6 +46,9 @@ class _ProfilePageState extends State<ProfilePage>
 
     _getAppInfo();
     _animationController.forward();
+
+    // Load profile data
+    context.read<ProfileBloc>().add(const GetProfileEvent());
   }
 
   @override
@@ -90,37 +94,124 @@ class _ProfilePageState extends State<ProfilePage>
         opacity: _fadeAnimation,
         child: SlideTransition(
           position: _slideAnimation,
-          child: SingleChildScrollView(
-            physics: const BouncingScrollPhysics(),
-            padding: const EdgeInsets.symmetric(horizontal: 16.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const SizedBox(height: 8),
+          child: BlocConsumer<ProfileBloc, ProfileState>(
+            listener: (context, state) {
+              if (state is ProfileError) {
+                _showErrorSnackBar(state.message);
+              } else if (state is ProfileUpdated) {
+                _showSuccessSnackBar('Profile updated successfully');
+              } else if (state is ImageUploaded) {
+                _showSuccessSnackBar('Profile image updated successfully');
+              }
+            },
+            builder: (context, state) {
+              if (state is ProfileLoading) {
+                return const Center(
+                  child: CircularProgressIndicator(
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                      Color(0xFFA342FF),
+                    ),
+                  ),
+                );
+              }
 
-                // Enhanced Profile Header
-                _buildEnhancedProfileHeader(),
+              if (state is ProfileError) {
+                return Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.error_outline,
+                        size: 64,
+                        color: Colors.grey[400],
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        'Failed to load profile',
+                        style: TextStyle(fontSize: 18, color: Colors.grey[600]),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        state.message,
+                        style: TextStyle(fontSize: 14, color: Colors.grey[500]),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 16),
+                      ElevatedButton(
+                        onPressed: () {
+                          context.read<ProfileBloc>().add(
+                            const GetProfileEvent(),
+                          );
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFFA342FF),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                        child: const Text('Retry'),
+                      ),
+                    ],
+                  ),
+                );
+              }
 
-                const SizedBox(height: 20),
+              if (state is ProfileLoaded ||
+                  state is ProfileUpdating ||
+                  state is ProfileUpdated ||
+                  state is ImageUploading ||
+                  state is ImageUploaded) {
+                final profile = state is ProfileLoaded
+                    ? state.profile
+                    : state is ProfileUpdated
+                    ? state.profile
+                    : state is ImageUploaded
+                    ? state.profile
+                    : (state as ProfileUpdating).currentProfile;
 
-                // Enhanced Essential Options
-                _buildEnhancedEssentialOptions(),
+                return SingleChildScrollView(
+                  physics: const BouncingScrollPhysics(),
+                  padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const SizedBox(height: 8),
 
-                const SizedBox(height: 24),
+                      // Enhanced Profile Header
+                      _buildEnhancedProfileHeader(profile, state),
 
-                // Enhanced App Version
-                _buildAppVersionCard(),
+                      const SizedBox(height: 20),
 
-                const SizedBox(height: 20),
-              ],
-            ),
+                      // Logout Button
+                      _buildLogoutButton(),
+
+                      const SizedBox(height: 20),
+
+                      // Enhanced Essential Options
+                      _buildEnhancedEssentialOptions(),
+
+                      const SizedBox(height: 24),
+
+                      // Enhanced App Version
+                      _buildAppVersionCard(),
+
+                      const SizedBox(height: 20),
+                    ],
+                  ),
+                );
+              }
+
+              return const SizedBox.shrink();
+            },
           ),
         ),
       ),
     );
   }
 
-  Widget _buildEnhancedProfileHeader() {
+  Widget _buildEnhancedProfileHeader(profile, ProfileState state) {
+    final isLoading = state is ProfileUpdating || state is ImageUploading;
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -135,20 +226,19 @@ class _ProfilePageState extends State<ProfilePage>
           ),
         ],
       ),
-      child: _buildUserProfileHeader(),
+      child: _buildUserProfileHeader(profile, isLoading),
     );
   }
 
-  Widget _buildUserProfileHeader() {
-    final user = AppLocalStorage.user;
-    final displayName = user?.name?.isNotEmpty == true
-        ? user!.name!
+  Widget _buildUserProfileHeader(profile, bool isLoading) {
+    final displayName = profile.name.isNotEmpty
+        ? profile.name
         : 'Update your name';
-    final phoneNumber = user?.phoneNumber?.isNotEmpty == true
-        ? user!.phoneNumber!
+    final phoneNumber = profile.phoneNumber?.isNotEmpty == true
+        ? profile.phoneNumber!
         : 'Add phone number';
-    final email = user?.email?.isNotEmpty == true
-        ? user!.email!
+    final email = profile.email?.isNotEmpty == true
+        ? profile.email!
         : 'Add email address';
 
     return Column(
@@ -158,69 +248,90 @@ class _ProfilePageState extends State<ProfilePage>
             // Enhanced Profile Avatar
             Hero(
               tag: 'profile_avatar',
-              child: Container(
-                width: 70,
-                height: 70,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFFA342FF), Color(0xFFE54D60)],
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: const Color(0xFFA342FF).withValues(alpha: 0.3),
-                      blurRadius: 10,
-                      offset: const Offset(0, 3),
+              child: Stack(
+                children: [
+                  Container(
+                    width: 70,
+                    height: 70,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFFA342FF), Color(0xFFE54D60)],
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFFA342FF).withValues(alpha: 0.3),
+                          blurRadius: 10,
+                          offset: const Offset(0, 3),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
-                padding: const EdgeInsets.all(2),
-                child: Container(
-                  decoration: const BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: Colors.white,
+                    padding: const EdgeInsets.all(2),
+                    child: Container(
+                      decoration: const BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: Colors.white,
+                      ),
+                      child: profile.avatar?.isNotEmpty == true
+                          ? ClipOval(
+                              child: CachedNetworkImage(
+                                imageUrl: profile.avatar!,
+                                fit: BoxFit.cover,
+                                placeholder: (context, url) => Container(
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: Colors.grey[50],
+                                  ),
+                                  child: Icon(
+                                    Icons.person,
+                                    size: 35,
+                                    color: Colors.grey[400],
+                                  ),
+                                ),
+                                errorWidget: (context, url, error) => Container(
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: Colors.grey[50],
+                                  ),
+                                  child: Icon(
+                                    Icons.person,
+                                    size: 35,
+                                    color: Colors.grey[400],
+                                  ),
+                                ),
+                              ),
+                            )
+                          : Container(
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: Colors.grey[50],
+                              ),
+                              child: Icon(
+                                Icons.person,
+                                size: 35,
+                                color: Colors.grey[400],
+                              ),
+                            ),
+                    ),
                   ),
-                  child: user?.avatar?.isNotEmpty == true
-                      ? ClipOval(
-                          child: CachedNetworkImage(
-                            imageUrl: user!.avatar!,
-                            fit: BoxFit.cover,
-                            placeholder: (context, url) => Container(
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: Colors.grey[50],
-                              ),
-                              child: Icon(
-                                Icons.person,
-                                size: 35,
-                                color: Colors.grey[400],
-                              ),
+                  if (isLoading)
+                    Positioned.fill(
+                      child: Container(
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Colors.black.withValues(alpha: 0.3),
+                        ),
+                        child: const Center(
+                          child: CircularProgressIndicator(
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              Colors.white,
                             ),
-                            errorWidget: (context, url, error) => Container(
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: Colors.grey[50],
-                              ),
-                              child: Icon(
-                                Icons.person,
-                                size: 35,
-                                color: Colors.grey[400],
-                              ),
-                            ),
-                          ),
-                        )
-                      : Container(
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: Colors.grey[50],
-                          ),
-                          child: Icon(
-                            Icons.person,
-                            size: 35,
-                            color: Colors.grey[400],
+                            strokeWidth: 2,
                           ),
                         ),
-                ),
+                      ),
+                    ),
+                ],
               ),
             ),
 
@@ -254,13 +365,13 @@ class _ProfilePageState extends State<ProfilePage>
                   _buildInfoRow(
                     Icons.email_outlined,
                     email,
-                    user?.email?.isNotEmpty == true,
+                    profile.email?.isNotEmpty == true,
                   ),
                   const SizedBox(height: 6),
                   _buildInfoRow(
                     Icons.phone_outlined,
                     phoneNumber,
-                    user?.phoneNumber?.isNotEmpty == true,
+                    profile.phoneNumber?.isNotEmpty == true,
                   ),
                 ],
               ),
@@ -284,10 +395,12 @@ class _ProfilePageState extends State<ProfilePage>
               child: Material(
                 color: Colors.transparent,
                 child: InkWell(
-                  onTap: () => _showEditProfileBottomSheet(context),
+                  onTap: isLoading
+                      ? null
+                      : () => _showEditProfileBottomSheet(context, profile),
                   borderRadius: BorderRadius.circular(10),
-                  child: const Padding(
-                    padding: EdgeInsets.all(10),
+                  child: Padding(
+                    padding: const EdgeInsets.all(10),
                     child: Icon(
                       Icons.edit_outlined,
                       color: Colors.white,
@@ -382,13 +495,6 @@ class _ProfilePageState extends State<ProfilePage>
                 _showErrorSnackBar('Unable to open Delete Account');
               }
             }),
-            _MenuItemData('Logout', Icons.logout_outlined, () {
-              try {
-                _showLogoutDialog();
-              } catch (e) {
-                _showErrorSnackBar('Unable to open Logout dialog');
-              }
-            }, showArrow: false),
           ],
         ]),
       ],
@@ -519,6 +625,42 @@ class _ProfilePageState extends State<ProfilePage>
     );
   }
 
+  Widget _buildLogoutButton() {
+    return Container(
+      width: double.infinity,
+      height: 48,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.red[300]!, width: 1),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () => _showLogoutDialog(),
+          borderRadius: BorderRadius.circular(12),
+          child: Container(
+            alignment: Alignment.center,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.logout, color: Colors.red[600], size: 20),
+                const SizedBox(width: 8),
+                Text(
+                  'Logout',
+                  style: TextStyle(
+                    color: Colors.red[600],
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildAppVersionCard() {
     return Center(
       child: Text(
@@ -530,16 +672,8 @@ class _ProfilePageState extends State<ProfilePage>
     );
   }
 
-  void _showEditProfileBottomSheet(BuildContext context) {
-    _showEditUserProfileBottomSheet(context);
-  }
-
-  void _showEditUserProfileBottomSheet(BuildContext context) {
-    final user = AppLocalStorage.user;
-    final nameController = TextEditingController(text: user?.name ?? '');
-    final phoneController = TextEditingController(
-      text: user?.phoneNumber ?? '',
-    );
+  void _showEditProfileBottomSheet(BuildContext context, profile) {
+    final nameController = TextEditingController(text: profile.name);
     String? selectedImagePath;
 
     showModalBottomSheet(
@@ -635,10 +769,10 @@ class _ProfilePageState extends State<ProfilePage>
                                           fit: BoxFit.cover,
                                         ),
                                       )
-                                    : (user?.avatar?.isNotEmpty == true
+                                    : (profile.avatar?.isNotEmpty == true
                                           ? ClipOval(
                                               child: CachedNetworkImage(
-                                                imageUrl: user!.avatar!,
+                                                imageUrl: profile.avatar!,
                                                 fit: BoxFit.cover,
                                                 errorWidget:
                                                     (
@@ -697,10 +831,11 @@ class _ProfilePageState extends State<ProfilePage>
                               child: Material(
                                 color: Colors.transparent,
                                 child: InkWell(
-                                  onTap: () =>
-                                      _pickProfileImage(setModalState, (path) {
-                                        selectedImagePath = path;
-                                      }),
+                                  onTap: () => _showImagePickerModal((path) {
+                                    setModalState(() {
+                                      selectedImagePath = path;
+                                    });
+                                  }),
                                   borderRadius: BorderRadius.circular(16),
                                   child: const Padding(
                                     padding: EdgeInsets.all(8),
@@ -719,15 +854,21 @@ class _ProfilePageState extends State<ProfilePage>
                     ),
                     const SizedBox(height: 24),
 
-                    // Enhanced Input Fields
+                    // Enhanced Input Fields - Only Name is editable
                     _buildInputField('Name', nameController, 'Enter your name'),
                     const SizedBox(height: 16),
-                    _buildInputField(
-                      'Phone Number',
-                      phoneController,
-                      'Enter your phone number',
-                      keyboardType: TextInputType.phone,
+
+                    // Read-only fields
+                    _buildReadOnlyField(
+                      'Email',
+                      profile.email ?? 'Not provided',
                     ),
+                    const SizedBox(height: 16),
+                    _buildReadOnlyField(
+                      'Phone Number',
+                      profile.phoneNumber ?? 'Not provided',
+                    ),
+
                     const SizedBox(height: 24),
 
                     // Enhanced Save Button
@@ -738,7 +879,6 @@ class _ProfilePageState extends State<ProfilePage>
                         onPressed: () => _saveProfile(
                           context,
                           nameController.text,
-                          phoneController.text,
                           selectedImagePath,
                         ),
                         style: ElevatedButton.styleFrom(
@@ -838,11 +978,183 @@ class _ProfilePageState extends State<ProfilePage>
     );
   }
 
-  Future<void> _pickProfileImage(
-    StateSetter setModalState,
-    Function(String) onImageSelected,
-  ) async {
+  Widget _buildReadOnlyField(String label, String value) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            color: Colors.black,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: Colors.grey[100],
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: Colors.grey[200]!),
+          ),
+          child: Text(
+            value,
+            style: TextStyle(color: Colors.grey[600], fontSize: 14),
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _showImagePickerModal(Function(String) onImageSelected) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (BuildContext context) {
+        return Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Handle bar
+              Container(
+                margin: const EdgeInsets.only(top: 12),
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey[300],
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 20),
+
+              // Title
+              const Text(
+                'Choose Photo',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.black,
+                ),
+              ),
+              const SizedBox(height: 20),
+
+              // Options
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: Column(
+                  children: [
+                    // Gallery option
+                    _buildImagePickerOption(
+                      icon: Icons.photo_library_outlined,
+                      title: 'Photo Gallery',
+                      subtitle: 'Choose from your photos',
+                      onTap: () {
+                        Navigator.pop(context);
+                        _pickImageFromGallery(onImageSelected);
+                      },
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Camera option
+                    _buildImagePickerOption(
+                      icon: Icons.camera_alt_outlined,
+                      title: 'Camera',
+                      subtitle: 'Take a new photo',
+                      onTap: () {
+                        Navigator.pop(context);
+                        _pickImageFromCamera(onImageSelected);
+                      },
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 32),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildImagePickerOption({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.grey[50],
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.grey[200]!),
+          ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFFA342FF), Color(0xFFE54D60)],
+                  ),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(icon, color: Colors.white, size: 24),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.black,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey[400]),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pickImageFromGallery(Function(String) onImageSelected) async {
     try {
+      // Request storage permission
+      final status = await Permission.storage.request();
+
+      if (status.isDenied || status.isPermanentlyDenied) {
+        _showPermissionDialog(
+          'Storage Permission',
+          'Hushh needs access to your photos to let you choose a profile photo. Please grant storage permission in settings.',
+          Permission.storage,
+        );
+        return;
+      }
+
       final ImagePicker picker = ImagePicker();
       final XFile? image = await picker.pickImage(
         source: ImageSource.gallery,
@@ -852,25 +1164,87 @@ class _ProfilePageState extends State<ProfilePage>
       );
 
       if (image != null) {
-        setModalState(() {
-          onImageSelected(image.path);
-        });
+        onImageSelected(image.path);
       }
     } catch (e) {
-      _showErrorSnackBar('Unable to pick image');
+      _showErrorSnackBar('Unable to pick image from gallery');
     }
+  }
+
+  Future<void> _pickImageFromCamera(Function(String) onImageSelected) async {
+    try {
+      // Request camera permission
+      final status = await Permission.camera.request();
+
+      if (status.isDenied || status.isPermanentlyDenied) {
+        _showPermissionDialog(
+          'Camera Permission',
+          'Hushh needs access to your camera to let you take a profile photo. Please grant camera permission in settings.',
+          Permission.camera,
+        );
+        return;
+      }
+
+      final ImagePicker picker = ImagePicker();
+      final XFile? image = await picker.pickImage(
+        source: ImageSource.camera,
+        maxWidth: 800,
+        maxHeight: 800,
+        imageQuality: 80,
+      );
+
+      if (image != null) {
+        onImageSelected(image.path);
+      }
+    } catch (e) {
+      _showErrorSnackBar('Unable to take photo with camera');
+    }
+  }
+
+  void _showPermissionDialog(
+    String title,
+    String message,
+    Permission permission,
+  ) {
+    showCupertinoDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return CupertinoAlertDialog(
+          title: Text(title),
+          content: Text(message),
+          actions: [
+            CupertinoDialogAction(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            CupertinoDialogAction(
+              onPressed: () {
+                Navigator.pop(context);
+                openAppSettings();
+              },
+              isDefaultAction: true,
+              child: const Text('Open Settings'),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   void _saveProfile(
     BuildContext context,
     String name,
-    String phone,
     String? imagePath,
   ) async {
     try {
-      _showSuccessSnackBar('Profile updated successfully');
+      if (imagePath != null) {
+        // Upload image first
+        context.read<ProfileBloc>().add(UploadProfileImageEvent(imagePath));
+      } else {
+        // Update profile without image
+        context.read<ProfileBloc>().add(UpdateProfileEvent(name: name));
+      }
       Navigator.pop(context);
-      setState(() {});
     } catch (e) {
       _showErrorSnackBar('Unable to save profile changes');
     }
@@ -891,7 +1265,8 @@ class _ProfilePageState extends State<ProfilePage>
             CupertinoDialogAction(
               onPressed: () {
                 Navigator.pop(context);
-                _showSuccessSnackBar('Logged out successfully');
+                // Trigger logout through AuthBloc
+                context.read<AuthBloc>().add(SignOutEvent());
               },
               isDestructiveAction: true,
               child: const Text('Logout'),
@@ -932,25 +1307,4 @@ class _MenuItemData {
   final bool showArrow;
 
   _MenuItemData(this.title, this.icon, this.onTap, {this.showArrow = true});
-}
-
-class DottedLinePainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = Colors.grey
-      ..strokeWidth = 1;
-
-    const dashWidth = 3.0;
-    const dashSpace = 2.0;
-    double startX = 0;
-
-    while (startX < size.width) {
-      canvas.drawLine(Offset(startX, 0), Offset(startX + dashWidth, 0), paint);
-      startX += dashWidth + dashSpace;
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

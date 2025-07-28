@@ -3,7 +3,7 @@ import '../../../../shared/presentation/widgets/google_style_bottom_nav.dart';
 import '../../../../shared/utils/app_local_storage.dart';
 import '../../../pda/presentation/pages/pda_guest_locked_page.dart';
 import '../../../pda/presentation/pages/pda_simple_page.dart';
-import '../../../profile/presentation/pages/profile_page.dart';
+import '../../../profile/presentation/pages/profile_page_wrapper.dart';
 
 class MainAppPage extends StatefulWidget {
   const MainAppPage({super.key});
@@ -122,7 +122,7 @@ class _MainAppPageState extends State<MainAppPage> {
   }
 
   Widget _buildProfilePage() {
-    return const ProfilePage();
+    return const ProfilePageWrapper();
   }
 
   @override

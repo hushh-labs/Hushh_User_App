@@ -10,6 +10,7 @@ import 'di/core_module.dart';
 import 'features/auth/di/auth_module.dart';
 import 'features/auth/presentation/bloc/auth_bloc.dart';
 import 'features/pda/di/pda_module.dart';
+import 'features/profile/di/profile_module.dart';
 import 'shared/di/dependencies.dart';
 
 final GetIt getIt = GetIt.instance;
@@ -24,6 +25,7 @@ Future<void> mainApp() async {
   CoreModule.register();
   AuthModule.register();
   PdaModule.register();
+  ProfileModule.init();
   setupDependencies();
 
   runApp(const MyApp());
