@@ -8,6 +8,7 @@ import 'package:hushh_user_app/features/auth/presentation/pages/main_app_page.da
 import 'package:hushh_user_app/features/auth/presentation/pages/create_first_card.dart';
 import 'package:hushh_user_app/features/auth/presentation/pages/card_created_success_page.dart';
 import 'package:hushh_user_app/features/auth/presentation/pages/video_recording_page.dart';
+import 'package:hushh_user_app/features/pda/presentation/pages/pda_simple_page.dart';
 
 import 'route_paths.dart';
 import 'auth_guard.dart';
@@ -68,6 +69,12 @@ class AppRouter {
         path: RoutePaths.videoRecording,
         name: RouteNames.videoRecording,
         builder: (context, state) => const VideoRecordingPage(),
+      ),
+      // PDA page
+      GoRoute(
+        path: RoutePaths.pda,
+        name: RouteNames.pda,
+        builder: (context, state) => const PdaSimplePage(),
       ),
       // TODO: Add more auth routes when login/register pages are created
       // GoRoute(

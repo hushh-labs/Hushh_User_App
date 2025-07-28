@@ -9,6 +9,8 @@ import 'core/routing/route_paths.dart';
 import 'di/core_module.dart';
 import 'features/auth/di/auth_module.dart';
 import 'features/auth/presentation/bloc/auth_bloc.dart';
+import 'features/pda/di/pda_module.dart';
+import 'shared/di/dependencies.dart';
 
 final GetIt getIt = GetIt.instance;
 
@@ -21,6 +23,8 @@ Future<void> mainApp() async {
   // Initialize dependency injection
   CoreModule.register();
   AuthModule.register();
+  PdaModule.register();
+  setupDependencies();
 
   runApp(const MyApp());
 }

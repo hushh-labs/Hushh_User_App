@@ -94,6 +94,15 @@ dependencies:
   mask_text_input_formatter: ^2.9.0
   pin_code_fields: ^8.0.1
   
+  # Markdown rendering
+  flutter_markdown: ^0.6.18
+  
+  # Image picker
+  image_picker: ^1.0.7
+  
+  # Package info
+  package_info_plus: ^8.0.2
+  
   # Local storage
   shared_preferences: ^2.2.2
   neopop: ^1.0.2
@@ -102,6 +111,12 @@ dependencies:
   fadingpageview: ^1.0.0
   hive_flutter: ^1.1.0
   webview_flutter_plus: ^0.4.19
+  
+  # UUID generation
+  uuid: ^4.3.3
+  
+  # Image caching
+  cached_network_image: ^3.3.1
 
 dev_dependencies:
   flutter_test:

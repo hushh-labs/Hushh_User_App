@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
-import '../bloc/auth_bloc.dart';
 import '../../../../shared/presentation/widgets/google_style_bottom_nav.dart';
+import '../../../../shared/utils/app_local_storage.dart';
+import '../../../pda/presentation/pages/pda_guest_locked_page.dart';
+import '../../../pda/presentation/pages/pda_simple_page.dart';
+import '../../../profile/presentation/pages/profile_page.dart';
 
 class MainAppPage extends StatefulWidget {
   const MainAppPage({super.key});
@@ -53,21 +55,6 @@ class _MainAppPageState extends State<MainAppPage> {
     }
   }
 
-  String _getCurrentTitle() {
-    switch (_currentIndex) {
-      case 0:
-        return 'Discover';
-      case 1:
-        return 'PDA';
-      case 2:
-        return 'Chat';
-      case 3:
-        return 'Profile';
-      default:
-        return 'Discover';
-    }
-  }
-
   Widget _buildDiscoverPage() {
     return const Center(
       child: Column(
@@ -90,37 +77,14 @@ class _MainAppPageState extends State<MainAppPage> {
   }
 
   Widget _buildPdaPage() {
-    return const Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.psychology, size: 100, color: Colors.purple),
-          SizedBox(height: 20),
-          Text(
-            'Personal Digital Assistant',
-            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-          ),
-          SizedBox(height: 10),
-          Text(
-            'Your AI-powered assistant is here to help!',
-            style: TextStyle(fontSize: 16, color: Colors.grey),
-          ),
-          SizedBox(height: 30),
-          Text(
-            'Features:',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-          ),
-          SizedBox(height: 10),
-          Text(
-            '• Smart recommendations\n'
-            '• Voice commands\n'
-            '• Task automation\n'
-            '• Personal insights',
-            style: TextStyle(fontSize: 14, color: Colors.grey),
-          ),
-        ],
-      ),
-    );
+    // Check if user is in guest mode
+    final isGuestMode = AppLocalStorage.isGuestMode;
+
+    if (isGuestMode) {
+      return const PdaGuestLockedPage();
+    } else {
+      return const PdaSimplePage();
+    }
   }
 
   Widget _buildChatPage() {
@@ -158,67 +122,14 @@ class _MainAppPageState extends State<MainAppPage> {
   }
 
   Widget _buildProfilePage() {
-    return const Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          CircleAvatar(
-            radius: 50,
-            backgroundColor: Colors.orange,
-            child: Icon(Icons.person, size: 50, color: Colors.white),
-          ),
-          SizedBox(height: 20),
-          Text(
-            'Profile',
-            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-          ),
-          SizedBox(height: 10),
-          Text(
-            'Manage your account and preferences!',
-            style: TextStyle(fontSize: 16, color: Colors.grey),
-          ),
-          SizedBox(height: 30),
-          Text(
-            'Features:',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-          ),
-          SizedBox(height: 10),
-          Text(
-            '• Account settings\n'
-            '• Privacy controls\n'
-            '• Notification preferences\n'
-            '• Personal information',
-            style: TextStyle(fontSize: 14, color: Colors.grey),
-          ),
-        ],
-      ),
-    );
+    return const ProfilePage();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        title: Text(
-          _getCurrentTitle(),
-          style: const TextStyle(
-            color: Colors.black,
-            fontSize: 24,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        actions: [
-          IconButton(
-            onPressed: () {
-              context.read<AuthBloc>().add(SignOutEvent());
-            },
-            icon: const Icon(Icons.logout, color: Colors.black),
-          ),
-        ],
-      ),
+
       body: _buildCurrentPage(),
       bottomNavigationBar: GoogleStyleBottomNav(
         currentIndex: _currentIndex,
