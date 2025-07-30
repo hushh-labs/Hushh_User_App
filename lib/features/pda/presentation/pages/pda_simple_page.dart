@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
-import 'package:cached_network_image/cached_network_image.dart';
+
 import 'package:get_it/get_it.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:hushh_user_app/features/pda/domain/entities/pda_message.dart';
@@ -8,10 +8,9 @@ import 'package:hushh_user_app/features/pda/domain/usecases/send_message_use_cas
 import 'package:hushh_user_app/features/pda/domain/usecases/get_messages_use_case.dart';
 import 'package:hushh_user_app/features/pda/domain/usecases/clear_messages_use_case.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:hushh_user_app/shared/widgets/profile_expanded_popup.dart';
+
 import 'package:hushh_user_app/shared/widgets/user_coins_elevated_button.dart';
 import 'package:hushh_user_app/shared/utils/app_local_storage.dart';
-import 'package:hushh_user_app/shared/constants/app_routes.dart';
 
 class PdaSimplePage extends StatefulWidget {
   const PdaSimplePage({super.key});
@@ -244,57 +243,33 @@ class _PdaSimplePageState extends State<PdaSimplePage> {
         title: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            // Avatar section
+            // PDA icon
             Container(
               margin: const EdgeInsets.only(right: 12),
-              child: InkWell(
-                onTap: () async {
-                  final user = AppLocalStorage.user;
-                  if (user?.avatar?.isNotEmpty == true) {
-                    await showDialog(
-                      context: context,
-                      builder: (_) => const ProfileExpandedPopup(),
-                    );
-                  } else {
-                    Navigator.pushNamed(context, AppRoutes.cardWallet.settings);
-                  }
-                },
-                child: CircleAvatar(
-                  radius: 18,
-                  backgroundColor: primaryPurple.withValues(
-                    alpha: 0.1,
-                  ), // Subtle background
-                  backgroundImage:
-                      AppLocalStorage.user?.avatar?.isNotEmpty == true
-                      ? CachedNetworkImageProvider(
-                          AppLocalStorage.user!.avatar!,
-                        )
-                      : null,
-                  child: AppLocalStorage.user?.avatar?.isNotEmpty == true
-                      ? null
-                      : Icon(
-                          CupertinoIcons.person_fill, // More filled icon
-                          size: 18,
-                          color: primaryPurple.withValues(
-                            alpha: 0.7,
-                          ), // Color from palette
-                        ),
+              child: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: primaryPurple.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(
+                  Icons.psychology_alt_outlined,
+                  size: 24,
+                  color: primaryPurple,
                 ),
               ),
             ),
-
             const Text(
               'Hushh PDA',
               style: TextStyle(
                 color: Colors.black87,
-                fontWeight: FontWeight.w700, // Slightly bolder
-                fontSize: 19, // Slightly larger
+                fontWeight: FontWeight.w700,
+                fontSize: 19,
               ),
             ),
-            // No lock icon - assume security is implicit or shown elsewhere
             const Spacer(),
-            const UserCoinsElevatedButton(), // Keep as is, assuming its style is consistent
-            const SizedBox(width: 8), // Reduced space for better flow
+            const UserCoinsElevatedButton(),
+            const SizedBox(width: 8),
             PopupMenuButton<String>(
               onSelected: (value) {
                 if (value == 'clear') {
@@ -310,31 +285,31 @@ class _PdaSimplePageState extends State<PdaSimplePage> {
                         Icons.cleaning_services_outlined,
                         size: 20,
                         color: Colors.redAccent,
-                      ), // More descriptive icon
-                      SizedBox(width: 10), // Increased space
+                      ),
+                      SizedBox(width: 10),
                       Text(
                         'Clear Chat',
                         style: TextStyle(color: Colors.redAccent),
-                      ), // Highlight clear action
+                      ),
                     ],
                   ),
                 ),
               ],
-              offset: const Offset(0, 48), // Adjust offset
+              offset: const Offset(0, 48),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
-              ), // Rounded popup menu
+              ),
               elevation: 4,
               child: Padding(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 8.0,
                   vertical: 4.0,
-                ), // Padding around icon
+                ),
                 child: Icon(
                   Icons.more_horiz_rounded,
                   color: Colors.black54,
                   size: 26,
-                ), // More modern icon
+                ),
               ),
             ),
           ],

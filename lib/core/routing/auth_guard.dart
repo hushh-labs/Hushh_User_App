@@ -10,17 +10,20 @@ class AuthGuard {
     final isAuthRoute =
         state.matchedLocation == RoutePaths.mainAuth ||
         state.matchedLocation == RoutePaths.phoneInput ||
-        state.matchedLocation == RoutePaths.otpVerification ||
+        state.matchedLocation == RoutePaths.otpVerification;
+
+    // Special routes that require authentication but should not auto-redirect to discover
+    final isAuthenticatedOnlyRoute =
         state.matchedLocation == RoutePaths.createFirstCard ||
         state.matchedLocation == RoutePaths.cardCreatedSuccess ||
         state.matchedLocation == RoutePaths.videoRecording;
 
     // If user is not authenticated and trying to access protected route
-    if (!isAuthenticated && !isAuthRoute) {
+    if (!isAuthenticated && !isAuthRoute && !isAuthenticatedOnlyRoute) {
       return RoutePaths.mainAuth;
     }
 
-    // If user is authenticated and trying to access auth routes
+    // If user is authenticated and trying to access auth routes (but not authenticated-only routes)
     if (isAuthenticated && isAuthRoute) {
       return RoutePaths.discover;
     }

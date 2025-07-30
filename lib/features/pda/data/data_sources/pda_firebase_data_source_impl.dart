@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
@@ -19,7 +20,7 @@ class PdaFirebaseDataSourceImpl implements PdaDataSource {
   String? _getCurrentUserId() {
     final currentUserId = _auth.currentUser?.uid;
     if (currentUserId == null) {
-      print(
+      debugPrint(
         '⚠️ [PDA AUTH] User not authenticated. Please sign in to use PDA features.',
       );
     }
@@ -46,7 +47,7 @@ class PdaFirebaseDataSourceImpl implements PdaDataSource {
           .map((doc) => PdaMessageModel.fromJson({'id': doc.id, ...doc.data()}))
           .toList();
     } catch (e) {
-      print('❌ [PDA FIREBASE] Error getting messages: $e');
+      debugPrint('❌ [PDA FIREBASE] Error getting messages: $e');
       throw Exception('Failed to get messages: $e');
     }
   }
@@ -66,7 +67,7 @@ class PdaFirebaseDataSourceImpl implements PdaDataSource {
           .doc(message.id)
           .set(message.toJson());
     } catch (e) {
-      print('❌ [PDA FIREBASE] Error saving message: $e');
+      debugPrint('❌ [PDA FIREBASE] Error saving message: $e');
       throw Exception('Failed to save message: $e');
     }
   }
@@ -86,7 +87,7 @@ class PdaFirebaseDataSourceImpl implements PdaDataSource {
           .doc(messageId)
           .delete();
     } catch (e) {
-      print('❌ [PDA FIREBASE] Error deleting message: $e');
+      debugPrint('❌ [PDA FIREBASE] Error deleting message: $e');
       throw Exception('Failed to delete message: $e');
     }
   }
@@ -111,7 +112,7 @@ class PdaFirebaseDataSourceImpl implements PdaDataSource {
       }
       await batch.commit();
     } catch (e) {
-      print('❌ [PDA FIREBASE] Error clearing messages: $e');
+      debugPrint('❌ [PDA FIREBASE] Error clearing messages: $e');
       throw Exception('Failed to clear messages: $e');
     }
   }
@@ -199,27 +200,29 @@ Please provide a helpful, contextual response based on the user's context and co
         );
       }
     } catch (e) {
-      print('❌ [PDA FIREBASE] Error sending to Gemini: $e');
+      debugPrint('❌ [PDA FIREBASE] Error sending to Gemini: $e');
       throw Exception('Failed to get response from AI: $e');
     }
   }
 
   @override
   Future<void> prewarmUserContext(String hushhId) async {
-    print(
+    debugPrint(
       '🚀 [PDA PREWARM] Starting PDA context prewarming for user: $hushhId',
     );
     try {
       final currentUserId = _getCurrentUserId();
       if (currentUserId == null) {
-        print('Warning: User not authenticated when prewarming context');
+        debugPrint('Warning: User not authenticated when prewarming context');
         return;
       }
 
       await getUserContext(currentUserId);
-      print('🚀 [PDA PREWARM] ✅ PDA context prewarming completed successfully');
+      debugPrint(
+        '🚀 [PDA PREWARM] ✅ PDA context prewarming completed successfully',
+      );
     } catch (e) {
-      print('🚀 [PDA PREWARM] ⚠️ PDA context prewarming failed: $e');
+      debugPrint('🚀 [PDA PREWARM] ⚠️ PDA context prewarming failed: $e');
     }
   }
 
@@ -228,7 +231,7 @@ Please provide a helpful, contextual response based on the user's context and co
     try {
       final currentUserId = _getCurrentUserId();
       if (currentUserId == null) {
-        print('Warning: User not authenticated when getting user context');
+        debugPrint('Warning: User not authenticated when getting user context');
         return {};
       }
 
@@ -238,7 +241,7 @@ Please provide a helpful, contextual response based on the user's context and co
           .get();
 
       if (!userDoc.exists) {
-        print('⚠️ [PDA FIREBASE] User document not found');
+        debugPrint('⚠️ [PDA FIREBASE] User document not found');
         return {};
       }
 
@@ -263,7 +266,7 @@ Please provide a helpful, contextual response based on the user's context and co
         'timestamp': DateTime.now().toIso8601String(),
       };
     } catch (e) {
-      print('❌ [PDA FIREBASE] Error getting user context: $e');
+      debugPrint('❌ [PDA FIREBASE] Error getting user context: $e');
       return {};
     }
   }

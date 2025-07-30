@@ -4,6 +4,7 @@ import '../../../../shared/utils/app_local_storage.dart';
 import '../../../pda/presentation/pages/pda_guest_locked_page.dart';
 import '../../../pda/presentation/pages/pda_simple_page.dart';
 import '../../../profile/presentation/pages/profile_page_wrapper.dart';
+import '../../../discover/presentation/pages/discover_page_wrapper.dart';
 
 class MainAppPage extends StatefulWidget {
   const MainAppPage({super.key});
@@ -56,24 +57,7 @@ class _MainAppPageState extends State<MainAppPage> {
   }
 
   Widget _buildDiscoverPage() {
-    return const Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.explore, size: 100, color: Colors.blue),
-          SizedBox(height: 20),
-          Text(
-            'Discover Page',
-            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-          ),
-          SizedBox(height: 10),
-          Text(
-            'Explore new content and features here!',
-            style: TextStyle(fontSize: 16, color: Colors.grey),
-          ),
-        ],
-      ),
-    );
+    return const DiscoverPageWrapper();
   }
 
   Widget _buildPdaPage() {

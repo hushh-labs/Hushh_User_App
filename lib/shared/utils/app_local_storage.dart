@@ -1,4 +1,7 @@
 // Mock user and agent classes for UI purposes
+import 'package:shared_preferences/shared_preferences.dart';
+import '../../features/auth/domain/enums.dart';
+
 class MockUser {
   final String? avatar;
   final String name;
@@ -45,5 +48,30 @@ class AppLocalStorage {
 
   static Future<void> setGuestMode(bool value) async {
     // Mock implementation for UI
+  }
+
+  // Login type storage
+  static const String _loginTypeKey = 'user_login_type';
+
+  static Future<void> setLoginType(OtpVerificationType loginType) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_loginTypeKey, loginType.name);
+  }
+
+  static Future<OtpVerificationType?> getLoginType() async {
+    final prefs = await SharedPreferences.getInstance();
+    final loginTypeString = prefs.getString(_loginTypeKey);
+    if (loginTypeString != null) {
+      return OtpVerificationType.values.firstWhere(
+        (type) => type.name == loginTypeString,
+        orElse: () => OtpVerificationType.phone, // Default to phone
+      );
+    }
+    return null;
+  }
+
+  static Future<void> clearLoginType() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_loginTypeKey);
   }
 }

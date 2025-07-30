@@ -544,7 +544,6 @@ class _ProfilePageState extends State<ProfilePage>
                 item.onTap,
                 isFirst: isFirst,
                 isLast: isLast,
-                showArrow: item.showArrow,
               ),
               if (!isLast) _buildDivider(),
             ],
@@ -560,7 +559,6 @@ class _ProfilePageState extends State<ProfilePage>
     VoidCallback? onTap, {
     bool isFirst = false,
     bool isLast = false,
-    bool showArrow = true,
   }) {
     return Material(
       color: Colors.transparent,
@@ -604,12 +602,7 @@ class _ProfilePageState extends State<ProfilePage>
                   ),
                 ),
               ),
-              if (showArrow)
-                Icon(
-                  Icons.arrow_forward_ios,
-                  size: 14,
-                  color: Colors.grey[400],
-                ),
+              Icon(Icons.arrow_forward_ios, size: 14, color: Colors.grey[400]),
             ],
           ),
         ),
@@ -1304,7 +1297,6 @@ class _MenuItemData {
   final String title;
   final IconData icon;
   final VoidCallback onTap;
-  final bool showArrow;
 
-  _MenuItemData(this.title, this.icon, this.onTap, {this.showArrow = true});
+  _MenuItemData(this.title, this.icon, this.onTap);
 }

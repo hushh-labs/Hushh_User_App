@@ -16,6 +16,7 @@ import '../../../../core/usecases/usecase.dart';
 import '../../../../core/routing/route_paths.dart';
 import '../../../../core/routing/app_router.dart';
 import '../pages/otp_verification.dart';
+import '../../../../shared/utils/app_local_storage.dart';
 
 // Events
 abstract class AuthEvent {}
@@ -330,9 +331,17 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
     final result = await _verifyPhoneOtpUseCase(params);
 
-    result.fold(
-      (failure) => emit(OtpVerificationFailureState(failure.message)),
-      (userCredential) => emit(OtpVerifiedState(userCredential)),
+    await result.fold(
+      (failure) async {
+        emit(OtpVerificationFailureState(failure.message));
+      },
+      (userCredential) async {
+        // Store the login type as phone
+        await AppLocalStorage.setLoginType(OtpVerificationType.phone);
+        if (!emit.isDone) {
+          emit(OtpVerifiedState(userCredential));
+        }
+      },
     );
   }
 
@@ -372,9 +381,17 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
     final result = await _signOutUseCase(const NoParams());
 
-    result.fold(
-      (failure) => emit(SignOutFailureState(failure.message)),
-      (_) => emit(SignedOutState()),
+    await result.fold(
+      (failure) async {
+        emit(SignOutFailureState(failure.message));
+      },
+      (_) async {
+        // Clear the stored login type when user signs out
+        await AppLocalStorage.clearLoginType();
+        if (!emit.isDone) {
+          emit(SignedOutState());
+        }
+      },
     );
   }
 

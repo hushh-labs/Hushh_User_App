@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'email_input_page.dart';
 import 'phone_input_page.dart';
 import '../../domain/enums.dart';
+import '../../../../shared/utils/app_local_storage.dart';
 
 class CreateFirstCardPageArgs {
   final OtpVerificationType initialLoginType;
@@ -9,10 +10,42 @@ class CreateFirstCardPageArgs {
   CreateFirstCardPageArgs({required this.initialLoginType});
 }
 
-class CreateFirstCardPage extends StatelessWidget {
+class CreateFirstCardPage extends StatefulWidget {
   final CreateFirstCardPageArgs? args;
 
   const CreateFirstCardPage({super.key, this.args});
+
+  @override
+  State<CreateFirstCardPage> createState() => _CreateFirstCardPageState();
+}
+
+class _CreateFirstCardPageState extends State<CreateFirstCardPage> {
+  OtpVerificationType? _loginType;
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _determineLoginType();
+  }
+
+  Future<void> _determineLoginType() async {
+    if (widget.args != null) {
+      // If args are provided, use the initial login type
+      _loginType = widget.args!.initialLoginType;
+    } else {
+      // If no args provided, try to get the stored login type
+      _loginType = await AppLocalStorage.getLoginType();
+      // If no stored login type, default to phone (most common case)
+      _loginType ??= OtpVerificationType.phone;
+    }
+
+    if (mounted) {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -79,26 +112,28 @@ class CreateFirstCardPage extends StatelessWidget {
                 ),
                 const SizedBox(height: 52),
                 InkWell(
-                  onTap: () {
-                    // Navigate to the appropriate input page based on initial login type
-                    if (args?.initialLoginType == OtpVerificationType.phone) {
-                      // If phone was used initially, go to email input
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const EmailInputPage(),
-                        ),
-                      );
-                    } else {
-                      // If email was used initially, go to phone input
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const PhoneInputPage(),
-                        ),
-                      );
-                    }
-                  },
+                  onTap: _isLoading
+                      ? null
+                      : () {
+                          // Navigate to the appropriate input page based on login type
+                          if (_loginType == OtpVerificationType.phone) {
+                            // If phone was used initially, go to email input
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => const EmailInputPage(),
+                              ),
+                            );
+                          } else {
+                            // If email was used initially, go to phone input
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => const PhoneInputPage(),
+                              ),
+                            );
+                          }
+                        },
                   child: Container(
                     width: double.infinity,
                     height: 56,
@@ -108,15 +143,24 @@ class CreateFirstCardPage extends StatelessWidget {
                       ),
                       borderRadius: BorderRadius.circular(6),
                     ),
-                    child: const Center(
-                      child: Text(
-                        "Start Now",
-                        style: TextStyle(
-                          color: Color(0xffFFFFFF),
-                          fontSize: 18,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
+                    child: Center(
+                      child: _isLoading
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                color: Colors.white,
+                                strokeWidth: 2,
+                              ),
+                            )
+                          : const Text(
+                              "Start Now",
+                              style: TextStyle(
+                                color: Color(0xffFFFFFF),
+                                fontSize: 18,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
                     ),
                   ),
                 ),

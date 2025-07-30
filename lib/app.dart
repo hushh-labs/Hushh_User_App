@@ -11,6 +11,7 @@ import 'features/auth/di/auth_module.dart';
 import 'features/auth/presentation/bloc/auth_bloc.dart';
 import 'features/pda/di/pda_module.dart';
 import 'features/profile/di/profile_module.dart';
+import 'features/discover/di/discover_module.dart';
 import 'shared/di/dependencies.dart';
 
 final GetIt getIt = GetIt.instance;
@@ -26,6 +27,7 @@ Future<void> mainApp() async {
   AuthModule.register();
   PdaModule.register();
   ProfileModule.init();
+  DiscoverModule.init();
   setupDependencies();
 
   runApp(const MyApp());
@@ -52,6 +54,18 @@ class MyApp extends StatelessWidget {
               // User is authenticated, check if they have a user card
               context.read<AuthBloc>().add(CheckUserCardEvent(state.user!.uid));
             }
+          } else if (state is UserCardExistsState) {
+            // Handle user card existence check result
+            if (state.exists) {
+              // User has a card, navigate to discover page
+              AppRouter.router.go(RoutePaths.discover);
+            } else {
+              // User doesn't have a card, navigate to create first card page without args
+              AppRouter.router.go(RoutePaths.createFirstCard);
+            }
+          } else if (state is UserCardCheckFailureState) {
+            // Handle user card check failure - default to create first card without args
+            AppRouter.router.go(RoutePaths.createFirstCard);
           }
         },
         child: _AppContent(),

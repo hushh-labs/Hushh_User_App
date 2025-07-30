@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'name_input_page.dart';
+import '../../../../shared/utils/app_local_storage.dart';
+import '../../domain/enums.dart';
 
 class EmailInputPage extends StatefulWidget {
   const EmailInputPage({super.key});
@@ -40,9 +42,10 @@ class _EmailInputPageState extends State<EmailInputPage> {
                       width: 40,
                       height: 40,
                       decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: const Color(0xFFD8DADC))),
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: const Color(0xFFD8DADC)),
+                      ),
                       child: const Center(
                         child: Icon(
                           Icons.arrow_back_ios_new_sharp,
@@ -98,7 +101,7 @@ class _EmailInputPageState extends State<EmailInputPage> {
               Align(
                 alignment: Alignment.centerLeft,
                 child: Text(
-                  'Please enter your email address. We\'ll send you a verification code to continue.',
+                  'Please enter your email address to continue.',
                   style: TextStyle(
                     fontSize: 16,
                     color: Colors.black.withValues(alpha: 0.7),
@@ -125,16 +128,10 @@ class _EmailInputPageState extends State<EmailInputPage> {
                     enabledBorder: InputBorder.none,
                     focusedBorder: InputBorder.none,
                     errorBorder: UnderlineInputBorder(
-                      borderSide: BorderSide(
-                        color: Colors.red,
-                        width: 2,
-                      ),
+                      borderSide: BorderSide(color: Colors.red, width: 2),
                     ),
                     focusedErrorBorder: UnderlineInputBorder(
-                      borderSide: BorderSide(
-                        color: Colors.red,
-                        width: 2,
-                      ),
+                      borderSide: BorderSide(color: Colors.red, width: 2),
                     ),
                     contentPadding: const EdgeInsets.symmetric(
                       horizontal: 0,
@@ -158,7 +155,9 @@ class _EmailInputPageState extends State<EmailInputPage> {
                     if (value == null || value.isEmpty) {
                       return 'Please enter your email';
                     }
-                    if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(value)) {
+                    if (!RegExp(
+                      r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$',
+                    ).hasMatch(value)) {
                       return 'Please enter a valid email';
                     }
                     return null;
@@ -167,15 +166,21 @@ class _EmailInputPageState extends State<EmailInputPage> {
               ),
               const Spacer(),
               InkWell(
-                onTap: () {
+                onTap: () async {
                   if (_formKey.currentState!.validate()) {
+                    final navigatorContext = context;
+                    // Store the login type as email
+                    await AppLocalStorage.setLoginType(OtpVerificationType.email);
                     // Navigate to name input page
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => NameInputPage(email: _emailController.text.trim()),
-                      ),
-                    );
+                    if (mounted) {
+                      Navigator.push(
+                        navigatorContext,
+                        MaterialPageRoute(
+                          builder: (context) =>
+                              NameInputPage(email: _emailController.text.trim()),
+                        ),
+                      );
+                    }
                   }
                 },
                 child: Container(
@@ -205,4 +210,4 @@ class _EmailInputPageState extends State<EmailInputPage> {
       ),
     );
   }
-} 
+}
