@@ -12,6 +12,7 @@ import 'features/auth/presentation/bloc/auth_bloc.dart';
 import 'features/pda/di/pda_module.dart';
 import 'features/profile/di/profile_module.dart';
 import 'features/discover/di/discover_module.dart';
+import 'features/notifications/di/notification_module.dart';
 import 'shared/di/dependencies.dart';
 
 final GetIt getIt = GetIt.instance;
@@ -28,6 +29,7 @@ Future<void> mainApp() async {
   PdaModule.register();
   ProfileModule.init();
   DiscoverModule.init();
+  NotificationModule.register();
   setupDependencies();
 
   runApp(const MyApp());

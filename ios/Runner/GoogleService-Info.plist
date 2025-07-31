@@ -3,9 +3,9 @@
 <plist version="1.0">
 <dict>
 	<key>CLIENT_ID</key>
-	<string>53407187172-nremqtd8hlmnqbcc6jkfavlk6iljq803.apps.googleusercontent.com</string>
+	<string>53407187172-t9oqptv6mhqmrlf0rb3b50hfip2nmgm2.apps.googleusercontent.com</string>
 	<key>REVERSED_CLIENT_ID</key>
-	<string>com.googleusercontent.apps.53407187172-nremqtd8hlmnqbcc6jkfavlk6iljq803</string>
+	<string>com.googleusercontent.apps.53407187172-t9oqptv6mhqmrlf0rb3b50hfip2nmgm2</string>
 	<key>ANDROID_CLIENT_ID</key>
 	<string>53407187172-0h9ckq232jev9dd2u8re190pck2kku3o.apps.googleusercontent.com</string>
 	<key>API_KEY</key>
@@ -15,7 +15,7 @@
 	<key>PLIST_VERSION</key>
 	<string>1</string>
 	<key>BUNDLE_ID</key>
-	<string>com.hushone.userapp</string>
+	<string>com.hushhone.hushh</string>
 	<key>PROJECT_ID</key>
 	<string>hushone-app</string>
 	<key>STORAGE_BUCKET</key>
@@ -31,7 +31,7 @@
 	<key>IS_SIGNIN_ENABLED</key>
 	<true></true>
 	<key>GOOGLE_APP_ID</key>
-	<string>1:53407187172:ios:a77f9f5ee0e15396b32cf1</string>
+	<string>1:53407187172:ios:03a4f4a395604f9cb32cf1</string>
 	<key>DATABASE_URL</key>
 	<string>https://hushone-app-default-rtdb.firebaseio.com</string>
 </dict>

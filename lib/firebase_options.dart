@@ -59,7 +59,7 @@ class DefaultFirebaseOptions {
 
   static const FirebaseOptions android = FirebaseOptions(
     apiKey: 'AIzaSyBcFDiD_GotGnPhjCso9tHCHievk1putmQ',
-    appId: '1:53407187172:android:6f3e2b29617cd47ab32cf1',
+    appId: '1:53407187172:android:f3064a8c57756660b32cf1',
     messagingSenderId: '53407187172',
     projectId: 'hushone-app',
     databaseURL: 'https://hushone-app-default-rtdb.firebaseio.com',
@@ -73,8 +73,10 @@ class DefaultFirebaseOptions {
     projectId: 'hushone-app',
     databaseURL: 'https://hushone-app-default-rtdb.firebaseio.com',
     storageBucket: 'hushone-app.appspot.com',
-    androidClientId: '53407187172-0h9ckq232jev9dd2u8re190pck2kku3o.apps.googleusercontent.com',
-    iosClientId: '53407187172-nremqtd8hlmnqbcc6jkfavlk6iljq803.apps.googleusercontent.com',
-    iosBundleId: 'com.hushone.userapp',
+    androidClientId:
+        '53407187172-0h9ckq232jev9dd2u8re190pck2kku3o.apps.googleusercontent.com',
+    iosClientId:
+        '53407187172-nremqtd8hlmnqbcc6jkfavlk6iljq803.apps.googleusercontent.com',
+    iosBundleId: 'com.hushhone.hushh',
   );
 }

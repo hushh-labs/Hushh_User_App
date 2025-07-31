@@ -17,6 +17,8 @@ import '../../../../core/routing/route_paths.dart';
 import '../../../../core/routing/app_router.dart';
 import '../pages/otp_verification.dart';
 import '../../../../shared/utils/app_local_storage.dart';
+import '../../../notifications/data/services/fcm_service.dart';
+import '../../../notifications/domain/repositories/notification_repository.dart';
 
 // Events
 abstract class AuthEvent {}
@@ -179,17 +181,25 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   final CreateUserCardUseCase _createUserCardUseCase;
   final SignOutUseCase _signOutUseCase;
 
+  // FCM Service
+  final FCMService _fcmService;
+  final NotificationRepository _notificationRepository;
+
   AuthBloc({
     required SendPhoneOtpUseCase sendPhoneOtpUseCase,
     required VerifyPhoneOtpUseCase verifyPhoneOtpUseCase,
     required CheckUserCardExistsUseCase checkUserCardExistsUseCase,
     required CreateUserCardUseCase createUserCardUseCase,
     required SignOutUseCase signOutUseCase,
+    required FCMService fcmService,
+    required NotificationRepository notificationRepository,
   }) : _sendPhoneOtpUseCase = sendPhoneOtpUseCase,
        _verifyPhoneOtpUseCase = verifyPhoneOtpUseCase,
        _checkUserCardExistsUseCase = checkUserCardExistsUseCase,
        _createUserCardUseCase = createUserCardUseCase,
        _signOutUseCase = signOutUseCase,
+       _fcmService = fcmService,
+       _notificationRepository = notificationRepository,
        super(AuthInitialState()) {
     on<InitializeEvent>(onInitializeEvent);
     on<OnCountryUpdateEvent>(onCountryUpdateEvent);
@@ -222,14 +232,29 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     phoneController = TextEditingController();
   }
 
+  bool _isSigningOut = false;
+
   void _listenToAuthStateChanges() {
-    firebase_auth.FirebaseAuth.instance.authStateChanges().listen((user) {
+    firebase_auth.FirebaseAuth.instance.authStateChanges().listen((user) async {
       if (user != null) {
+        // User is signed in - initialize FCM
+        try {
+          await _fcmService.initialize();
+          debugPrint('FCM initialized for user: ${user.uid}');
+
+          // Force generate token for testing
+          await _fcmService.forceTokenGeneration();
+        } catch (e) {
+          debugPrint('Failed to initialize FCM: $e');
+        }
+
         // User is signed in
         add(CheckAuthStateEvent());
       } else {
-        // User is signed out
-        add(SignOutEvent());
+        // User is signed out - only trigger if we're not already signing out
+        if (!_isSigningOut) {
+          add(SignOutEvent());
+        }
       }
     });
   }
@@ -377,12 +402,14 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     SignOutEvent event,
     Emitter<AuthState> emit,
   ) async {
+    _isSigningOut = true;
     emit(SigningOutState());
 
     final result = await _signOutUseCase(const NoParams());
 
     await result.fold(
       (failure) async {
+        _isSigningOut = false;
         emit(SignOutFailureState(failure.message));
       },
       (_) async {
@@ -391,6 +418,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         if (!emit.isDone) {
           emit(SignedOutState());
         }
+        _isSigningOut = false;
       },
     );
   }

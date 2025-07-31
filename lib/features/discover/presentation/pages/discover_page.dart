@@ -810,12 +810,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
                               .agentId] ??
                           false,
                       onProductClicked: (productId) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text('Opening product $productId...'),
-                            duration: const Duration(seconds: 1),
-                          ),
-                        );
+                        // Product click handled silently
                       },
                       onProductInventoryIncremented: (productId) {
                         context.read<InventoryBloc>().add(

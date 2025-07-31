@@ -16,6 +16,13 @@ class MainAppPage extends StatefulWidget {
 class _MainAppPageState extends State<MainAppPage> {
   int _currentIndex = 0;
 
+  final List<Widget> _pages = [
+    const DiscoverPageWrapper(),
+    const PdaSimplePage(),
+    const Center(child: Text('Chat')),
+    const ProfilePageWrapper(),
+  ];
+
   final List<BottomNavItem> _bottomNavItems = [
     BottomNavItem.user(label: 'Discover', icon: Icons.explore_outlined),
     BottomNavItem.user(
@@ -36,90 +43,29 @@ class _MainAppPageState extends State<MainAppPage> {
   ];
 
   void _onBottomNavTap(int index) {
-    setState(() {
-      _currentIndex = index;
-    });
-  }
-
-  Widget _buildCurrentPage() {
-    switch (_currentIndex) {
-      case 0:
-        return _buildDiscoverPage();
-      case 1:
-        return _buildPdaPage();
-      case 2:
-        return _buildChatPage();
-      case 3:
-        return _buildProfilePage();
-      default:
-        return _buildDiscoverPage();
-    }
-  }
-
-  Widget _buildDiscoverPage() {
-    return const DiscoverPageWrapper();
-  }
-
-  Widget _buildPdaPage() {
-    // Check if user is in guest mode
-    final isGuestMode = AppLocalStorage.isGuestMode;
-
-    if (isGuestMode) {
-      return const PdaGuestLockedPage();
+    // Check if the user is in guest mode and trying to access a restricted page
+    if (AppLocalStorage.isGuestMode &&
+        _bottomNavItems[index].isRestrictedForGuest) {
+      // Show a dialog or navigate to a locked page
+      showDialog(
+        context: context,
+        builder: (context) => const PdaGuestLockedPage(),
+      );
     } else {
-      return const PdaSimplePage();
+      setState(() {
+        _currentIndex = index;
+      });
     }
-  }
-
-  Widget _buildChatPage() {
-    return const Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.chat_bubble_outline, size: 100, color: Colors.green),
-          SizedBox(height: 20),
-          Text(
-            'Chat',
-            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-          ),
-          SizedBox(height: 10),
-          Text(
-            'Connect with others and start conversations!',
-            style: TextStyle(fontSize: 16, color: Colors.grey),
-          ),
-          SizedBox(height: 30),
-          Text(
-            'Features:',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-          ),
-          SizedBox(height: 10),
-          Text(
-            '• Real-time messaging\n'
-            '• Group chats\n'
-            '• Voice messages\n'
-            '• File sharing',
-            style: TextStyle(fontSize: 14, color: Colors.grey),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildProfilePage() {
-    return const ProfilePageWrapper();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
-
-      body: _buildCurrentPage(),
+      body: _pages[_currentIndex],
       bottomNavigationBar: GoogleStyleBottomNav(
-        currentIndex: _currentIndex,
         items: _bottomNavItems,
+        currentIndex: _currentIndex,
         onTap: _onBottomNavTap,
-        isAgentApp: false,
       ),
     );
   }

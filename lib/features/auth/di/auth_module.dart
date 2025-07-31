@@ -7,9 +7,15 @@ import '../domain/usecases/check_user_card_exists_usecase.dart';
 import '../domain/usecases/create_user_card_usecase.dart';
 import '../domain/usecases/sign_out_usecase.dart';
 import '../presentation/bloc/auth_bloc.dart';
+import '../../notifications/data/services/fcm_service.dart';
+import '../../notifications/domain/repositories/notification_repository.dart';
 
 class AuthModule {
+  static bool _isRegistered = false;
+
   static void register() {
+    if (_isRegistered) return;
+
     final getIt = GetIt.instance;
 
     // Repository
@@ -38,7 +44,11 @@ class AuthModule {
         checkUserCardExistsUseCase: getIt<CheckUserCardExistsUseCase>(),
         createUserCardUseCase: getIt<CreateUserCardUseCase>(),
         signOutUseCase: getIt<SignOutUseCase>(),
+        fcmService: getIt<FCMService>(),
+        notificationRepository: getIt<NotificationRepository>(),
       ),
     );
+
+    _isRegistered = true;
   }
 }

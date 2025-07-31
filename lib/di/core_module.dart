@@ -7,6 +7,7 @@ import '../core/services/firebase_service_impl.dart';
 import '../core/routing/navigation_service.dart';
 import '../core/routing/navigation_service_impl.dart';
 import '../core/routing/app_router.dart';
+import '../features/notifications/di/notification_module.dart';
 
 class CoreModule {
   static void register() {
@@ -22,5 +23,8 @@ class CoreModule {
     sl.registerLazySingleton<NavigationService>(
       () => NavigationServiceImpl(AppRouter.router),
     );
+
+    // Register feature modules
+    NotificationModule.register();
   }
 }
