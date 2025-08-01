@@ -53,20 +53,22 @@ class MyApp extends StatelessWidget {
           } else if (state is AuthStateCheckedState) {
             // Handle authentication state check
             if (state.isAuthenticated && state.user != null) {
-              // User is authenticated, check if they have a user card
-              context.read<AuthBloc>().add(CheckUserCardEvent(state.user!.uid));
+              // User is authenticated, check if they have completed their profile
+              context.read<AuthBloc>().add(
+                CheckUserProfileCompletionEvent(state.user!.uid),
+              );
             }
-          } else if (state is UserCardExistsState) {
-            // Handle user card existence check result
-            if (state.exists) {
-              // User has a card, navigate to discover page
+          } else if (state is UserProfileCompletedState) {
+            // Handle user profile completion check result
+            if (state.isCompleted) {
+              // User has completed profile, navigate to discover page
               AppRouter.router.go(RoutePaths.discover);
             } else {
-              // User doesn't have a card, navigate to create first card page without args
+              // User hasn't completed profile, navigate to create first card page
               AppRouter.router.go(RoutePaths.createFirstCard);
             }
-          } else if (state is UserCardCheckFailureState) {
-            // Handle user card check failure - default to create first card without args
+          } else if (state is UserProfileCheckFailureState) {
+            // Handle user profile check failure - default to create first card
             AppRouter.router.go(RoutePaths.createFirstCard);
           }
         },

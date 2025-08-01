@@ -5,6 +5,7 @@ import '../../../pda/presentation/pages/pda_guest_locked_page.dart';
 import '../../../pda/presentation/pages/pda_simple_page.dart';
 import '../../../profile/presentation/pages/profile_page_wrapper.dart';
 import '../../../discover/presentation/pages/discover_page_wrapper.dart';
+import '../../../../shared/presentation/widgets/debug_wrapper.dart';
 
 class MainAppPage extends StatefulWidget {
   const MainAppPage({super.key});
@@ -61,7 +62,7 @@ class _MainAppPageState extends State<MainAppPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: _pages[_currentIndex],
+      body: DebugWrapper(child: _pages[_currentIndex]),
       bottomNavigationBar: GoogleStyleBottomNav(
         items: _bottomNavItems,
         currentIndex: _currentIndex,

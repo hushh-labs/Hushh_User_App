@@ -12,6 +12,9 @@ abstract class FirebaseService {
     String password,
   );
   Future<void> signOut();
+  Future<void> deleteUser();
+  Future<bool> needsReauthentication();
+  Future<void> reauthenticateUser();
   User? getCurrentUser();
   Stream<User?> get authStateChanges;
 

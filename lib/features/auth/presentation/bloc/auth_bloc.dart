@@ -19,6 +19,8 @@ import '../pages/otp_verification.dart';
 import '../../../../shared/utils/app_local_storage.dart';
 import '../../../notifications/data/services/fcm_service.dart';
 import '../../../notifications/domain/repositories/notification_repository.dart';
+import 'package:get_it/get_it.dart';
+import '../../../../core/services/firebase_service.dart';
 
 // Events
 abstract class AuthEvent {}
@@ -52,6 +54,11 @@ class VerifyPhoneOtpEvent extends AuthEvent {
 class CheckUserCardEvent extends AuthEvent {
   final String userId;
   CheckUserCardEvent(this.userId);
+}
+
+class CheckUserProfileCompletionEvent extends AuthEvent {
+  final String userId;
+  CheckUserProfileCompletionEvent(this.userId);
 }
 
 class CreateUserCardEvent extends AuthEvent {
@@ -116,6 +123,16 @@ class UserCardExistsState extends AuthState {
 class UserCardCheckFailureState extends AuthState {
   final String message;
   UserCardCheckFailureState(this.message);
+}
+
+class UserProfileCompletedState extends AuthState {
+  final bool isCompleted;
+  UserProfileCompletedState(this.isCompleted);
+}
+
+class UserProfileCheckFailureState extends AuthState {
+  final String message;
+  UserProfileCheckFailureState(this.message);
 }
 
 class CreatingUserCardState extends AuthState {}
@@ -206,10 +223,10 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     on<OnPhoneUpdateEvent>(onPhoneUpdateEvent);
     on<SendPhoneOtpEvent>(onSendPhoneOtpEvent);
     on<VerifyPhoneOtpEvent>(onVerifyPhoneOtpEvent);
-    on<CheckUserCardEvent>(onCheckUserCardEvent);
     on<CreateUserCardEvent>(onCreateUserCardEvent);
     on<SignOutEvent>(onSignOutEvent);
     on<CheckAuthStateEvent>(onCheckAuthStateEvent);
+    on<CheckUserProfileCompletionEvent>(onCheckUserProfileCompletionEvent);
 
     // Initialize immediately
     _initializeCountries();
@@ -370,18 +387,35 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     );
   }
 
-  FutureOr<void> onCheckUserCardEvent(
-    CheckUserCardEvent event,
+  FutureOr<void> onCheckUserProfileCompletionEvent(
+    CheckUserProfileCompletionEvent event,
     Emitter<AuthState> emit,
   ) async {
-    emit(CheckingUserCardState());
+    emit(CheckingUserCardState()); // Reuse existing state for now
 
-    final result = await _checkUserCardExistsUseCase(event.userId);
+    try {
+      // Check if user has completed their profile by looking for required fields
+      final firebaseService = GetIt.instance<FirebaseService>();
+      final userData = await firebaseService.getUserData(event.userId);
 
-    result.fold(
-      (failure) => emit(UserCardCheckFailureState(failure.message)),
-      (exists) => emit(UserCardExistsState(exists)),
-    );
+      if (userData != null) {
+        // Check if user has completed required profile fields
+        final hasName =
+            userData['fullName'] != null &&
+            userData['fullName'].toString().isNotEmpty;
+        final hasEmail =
+            userData['email'] != null &&
+            userData['email'].toString().isNotEmpty;
+
+        final isProfileCompleted = hasName && hasEmail;
+        emit(UserProfileCompletedState(isProfileCompleted));
+      } else {
+        // No user data found, profile not completed
+        emit(UserProfileCompletedState(false));
+      }
+    } catch (e) {
+      emit(UserProfileCheckFailureState(e.toString()));
+    }
   }
 
   FutureOr<void> onCreateUserCardEvent(

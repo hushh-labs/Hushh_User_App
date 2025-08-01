@@ -9,6 +9,7 @@ import '../bloc/agents_products_bloc.dart';
 import '../../data/datasources/firebase_discover_datasource.dart';
 import '../../data/repositories/discover_repository_impl.dart';
 import 'discover_page.dart';
+import '../../../../shared/presentation/widgets/debug_wrapper.dart';
 
 class DiscoverPageWrapper extends StatelessWidget {
   const DiscoverPageWrapper({super.key});
@@ -30,7 +31,7 @@ class DiscoverPageWrapper extends StatelessWidget {
           ),
         ),
       ],
-      child: const DiscoverPage(),
+      child: const DebugWrapper(child: DiscoverPage()),
     );
   }
 }

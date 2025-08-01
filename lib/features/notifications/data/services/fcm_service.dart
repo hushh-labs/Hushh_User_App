@@ -43,6 +43,8 @@ class FCMService {
   /// Request notification permissions
   Future<void> _requestPermissions() async {
     try {
+      debugPrint('=== REQUESTING FCM PERMISSIONS ===');
+
       final settings = await _firebaseMessaging.requestPermission(
         alert: true,
         announcement: false,
@@ -53,15 +55,25 @@ class FCMService {
         sound: true,
       );
 
-      debugPrint('FCM Permission status: ${settings.authorizationStatus}');
+      debugPrint('=== FCM PERMISSION STATUS ===');
+      debugPrint('Authorization Status: ${settings.authorizationStatus}');
+      debugPrint('Alert Setting: ${settings.alert}');
+      debugPrint('Badge Setting: ${settings.badge}');
+      debugPrint('Sound Setting: ${settings.sound}');
 
       if (settings.authorizationStatus == AuthorizationStatus.authorized) {
-        debugPrint('FCM permissions granted');
-      } else {
-        debugPrint('FCM permissions denied');
+        debugPrint('✅ FCM permissions granted');
+      } else if (settings.authorizationStatus == AuthorizationStatus.denied) {
+        debugPrint('❌ FCM permissions denied');
+      } else if (settings.authorizationStatus ==
+          AuthorizationStatus.notDetermined) {
+        debugPrint('⏳ FCM permissions not determined');
+      } else if (settings.authorizationStatus ==
+          AuthorizationStatus.provisional) {
+        debugPrint('📱 FCM provisional permissions granted');
       }
     } catch (e) {
-      debugPrint('Error requesting FCM permissions: $e');
+      debugPrint('❌ Error requesting FCM permissions: $e');
     }
   }
 
@@ -96,6 +108,19 @@ class FCMService {
           }
         } else {
           debugPrint('APNS token not available - this is normal in simulator');
+          // In simulator, try to get FCM token without APNS
+          debugPrint('Trying to get FCM token without APNS token...');
+          try {
+            token = await _firebaseMessaging.getToken();
+            if (token != null) {
+              await _saveToken(token);
+              _currentToken = token;
+              debugPrint('FCM Token obtained without APNS: ${token.substring(0, 20)}...');
+              return;
+            }
+          } catch (e) {
+            debugPrint('Failed to get FCM token without APNS: $e');
+          }
         }
       }
 

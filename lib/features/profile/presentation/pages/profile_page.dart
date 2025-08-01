@@ -10,6 +10,10 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:hushh_user_app/shared/constants/app_routes.dart';
 import '../bloc/profile_bloc.dart';
 import 'package:hushh_user_app/features/auth/presentation/bloc/auth_bloc.dart';
+import 'package:go_router/go_router.dart';
+import 'package:hushh_user_app/core/routing/route_paths.dart';
+import 'package:hushh_user_app/core/services/firebase_service.dart';
+import 'package:get_it/get_it.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -490,7 +494,7 @@ class _ProfilePageState extends State<ProfilePage>
           if (!kIsWeb) ...[
             _MenuItemData('Delete Account', Icons.delete_outline, () {
               try {
-                Navigator.pushNamed(context, AppRoutes.deleteAccount);
+                _showDeleteAccountVerification();
               } catch (e) {
                 _showErrorSnackBar('Unable to open Delete Account');
               }
@@ -1289,6 +1293,95 @@ class _ProfilePageState extends State<ProfilePage>
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       ),
+    );
+  }
+
+  void _showDeleteAccountVerification() async {
+    try {
+      // Check if user needs re-authentication
+      final firebaseService = GetIt.instance<FirebaseService>();
+      final needsReauth = await firebaseService.needsReauthentication();
+
+      if (needsReauth) {
+        _showReauthenticationDialog();
+        return;
+      }
+
+      _showDeleteConfirmation();
+    } catch (e) {
+      _showErrorSnackBar(
+        'Unable to verify authentication status: ${e.toString()}',
+      );
+    }
+  }
+
+  void _showReauthenticationDialog() {
+    showCupertinoDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return CupertinoAlertDialog(
+          title: const Text('Re-authentication Required'),
+          content: const Text(
+            'For security reasons, you need to sign in again before deleting your account. This is a Firebase security requirement.',
+          ),
+          actions: [
+            CupertinoDialogAction(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            CupertinoDialogAction(
+              onPressed: () {
+                Navigator.pop(context);
+                _signOutAndNavigateToAuth();
+              },
+              isDefaultAction: true,
+              child: const Text('Sign In Again'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _signOutAndNavigateToAuth() async {
+    try {
+      final firebaseService = GetIt.instance<FirebaseService>();
+      await firebaseService.signOut();
+      if (mounted) {
+        context.go(RoutePaths.mainAuth);
+      }
+    } catch (e) {
+      if (mounted) {
+        _showErrorSnackBar('Failed to sign out: ${e.toString()}');
+      }
+    }
+  }
+
+  void _showDeleteConfirmation() {
+    showCupertinoDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return CupertinoAlertDialog(
+          title: const Text('Delete Account'),
+          content: const Text(
+            'Are you absolutely sure you want to delete your account? This action cannot be undone.',
+          ),
+          actions: [
+            CupertinoDialogAction(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            CupertinoDialogAction(
+              onPressed: () {
+                Navigator.pop(context);
+                context.go(RoutePaths.deleteAccount);
+              },
+              isDestructiveAction: true,
+              child: const Text('Delete Account'),
+            ),
+          ],
+        );
+      },
     );
   }
 }

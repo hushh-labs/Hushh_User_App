@@ -1,4 +1,5 @@
 import 'package:equatable/equatable.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class AgentProductModel extends Equatable {
   final String id;
@@ -32,6 +33,28 @@ class AgentProductModel extends Equatable {
   });
 
   factory AgentProductModel.fromJson(Map<String, dynamic> json) {
+    DateTime? parseFirestoreDate(dynamic dateField) {
+      if (dateField == null) return null;
+
+      if (dateField is Timestamp) {
+        return dateField.toDate();
+      } else if (dateField is String) {
+        try {
+          return DateTime.parse(dateField);
+        } catch (e) {
+          print('Failed to parse product date string: $dateField, error: $e');
+          return null;
+        }
+      } else if (dateField is DateTime) {
+        return dateField;
+      }
+
+      print(
+        'Unknown product date field type: ${dateField.runtimeType}, value: $dateField',
+      );
+      return null;
+    }
+
     return AgentProductModel(
       id: json['id']?.toString() ?? json['productId']?.toString() ?? '',
       productName: json['productName']?.toString() ?? '',
@@ -42,16 +65,8 @@ class AgentProductModel extends Equatable {
       productSkuUniqueId: json['productSkuUniqueId']?.toString(),
       stockQuantity: json['stockQuantity'] as int? ?? 0,
       category: json['category']?.toString(),
-      createdAt: json['createdAt'] != null
-          ? (json['createdAt'] is DateTime
-                ? json['createdAt']
-                : DateTime.parse(json['createdAt'].toString()))
-          : null,
-      updatedAt: json['updatedAt'] != null
-          ? (json['updatedAt'] is DateTime
-                ? json['updatedAt']
-                : DateTime.parse(json['updatedAt'].toString()))
-          : null,
+      createdAt: parseFirestoreDate(json['createdAt']),
+      updatedAt: parseFirestoreDate(json['updatedAt']),
       createdBy: json['createdBy']?.toString(),
       lookbookIds: json['lookbookIds'] != null
           ? List<String>.from(json['lookbookIds'])

@@ -1,4 +1,5 @@
 import 'package:equatable/equatable.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class AgentModel extends Equatable {
   final String agentId;
@@ -30,23 +31,41 @@ class AgentModel extends Equatable {
   });
 
   factory AgentModel.fromJson(Map<String, dynamic> json) {
+    DateTime parseFirestoreDate(dynamic dateField) {
+      if (dateField == null) return DateTime.now();
+
+      if (dateField is Timestamp) {
+        return dateField.toDate();
+      } else if (dateField is String) {
+        try {
+          return DateTime.parse(dateField);
+        } catch (e) {
+          print('Failed to parse date string: $dateField, error: $e');
+          return DateTime.now();
+        }
+      } else if (dateField is DateTime) {
+        return dateField;
+      }
+
+      print(
+        'Unknown date field type: ${dateField.runtimeType}, value: $dateField',
+      );
+      return DateTime.now();
+    }
+
     return AgentModel(
       agentId: json['agentId']?.toString() ?? '',
       brand: json['brand']?.toString() ?? '',
       brandName: json['brandName']?.toString() ?? '',
       categories: List<String>.from(json['categories'] ?? []),
-      createdAt: json['createdAt'] != null
-          ? (json['createdAt'] as dynamic).toDate()
-          : DateTime.now(),
+      createdAt: parseFirestoreDate(json['createdAt']),
       email: json['email']?.toString() ?? '',
       fullName: json['fullName']?.toString() ?? '',
       isActive: json['isActive'] as bool? ?? false,
       isProfileComplete: json['isProfileComplete'] as bool? ?? false,
       name: json['name']?.toString() ?? '',
       phone: json['phone']?.toString() ?? '',
-      updatedAt: json['updatedAt'] != null
-          ? (json['updatedAt'] as dynamic).toDate()
-          : DateTime.now(),
+      updatedAt: parseFirestoreDate(json['updatedAt']),
     );
   }
 
@@ -56,14 +75,14 @@ class AgentModel extends Equatable {
       'brand': brand,
       'brandName': brandName,
       'categories': categories,
-      'createdAt': createdAt,
+      'createdAt': createdAt.toIso8601String(),
       'email': email,
       'fullName': fullName,
       'isActive': isActive,
       'isProfileComplete': isProfileComplete,
       'name': name,
       'phone': phone,
-      'updatedAt': updatedAt,
+      'updatedAt': updatedAt.toIso8601String(),
     };
   }
 

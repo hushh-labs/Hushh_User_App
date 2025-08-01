@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import '../bloc/auth_bloc.dart';
 import '../../../../shared/presentation/widgets/google_style_bottom_nav.dart';
+import '../../../../shared/presentation/widgets/debug_wrapper.dart';
 
 class ChatPage extends StatefulWidget {
   const ChatPage({super.key});
@@ -78,35 +79,37 @@ class _ChatPageState extends State<ChatPage> {
           ),
         ],
       ),
-      body: const Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.chat_bubble_outline, size: 100, color: Colors.green),
-            SizedBox(height: 20),
-            Text(
-              'Chat',
-              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-            ),
-            SizedBox(height: 10),
-            Text(
-              'Connect with others and start conversations!',
-              style: TextStyle(fontSize: 16, color: Colors.grey),
-            ),
-            SizedBox(height: 30),
-            Text(
-              'Features:',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-            SizedBox(height: 10),
-            Text(
-              '• Real-time messaging\n'
-              '• Group chats\n'
-              '• Voice messages\n'
-              '• File sharing',
-              style: TextStyle(fontSize: 14, color: Colors.grey),
-            ),
-          ],
+      body: DebugWrapper(
+        child: const Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.chat_bubble_outline, size: 100, color: Colors.green),
+              SizedBox(height: 20),
+              Text(
+                'Chat',
+                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+              ),
+              SizedBox(height: 10),
+              Text(
+                'Connect with others and start conversations!',
+                style: TextStyle(fontSize: 16, color: Colors.grey),
+              ),
+              SizedBox(height: 30),
+              Text(
+                'Features:',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              SizedBox(height: 10),
+              Text(
+                '• Real-time messaging\n'
+                '• Group chats\n'
+                '• Voice messages\n'
+                '• File sharing',
+                style: TextStyle(fontSize: 14, color: Colors.grey),
+              ),
+            ],
+          ),
         ),
       ),
       bottomNavigationBar: GoogleStyleBottomNav(

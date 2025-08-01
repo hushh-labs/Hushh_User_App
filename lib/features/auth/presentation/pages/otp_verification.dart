@@ -73,21 +73,27 @@ class _OtpVerificationPageState extends State<OtpVerificationPage> {
       body: BlocListener<AuthBloc, AuthState>(
         listener: (context, state) {
           if (state is OtpVerifiedState) {
-            // Check if user card exists
+            // Check if user has completed their profile
             context.read<AuthBloc>().add(
-              CheckUserCardEvent(state.userCredential.user!.uid),
+              CheckUserProfileCompletionEvent(state.userCredential.user!.uid),
             );
-          } else if (state is UserCardExistsState) {
-            if (state.exists) {
-              // Navigate to discover page
+          } else if (state is UserProfileCompletedState) {
+            if (state.isCompleted) {
+              // User has completed profile, navigate to discover page
               context.go(RoutePaths.discover);
             } else {
-              // Navigate to create first card page
+              // User hasn't completed profile, navigate to create first card page
               context.push(
                 RoutePaths.createFirstCard,
                 extra: CreateFirstCardPageArgs(initialLoginType: args.type),
               );
             }
+          } else if (state is UserProfileCheckFailureState) {
+            // If profile check fails, default to create first card page
+            context.push(
+              RoutePaths.createFirstCard,
+              extra: CreateFirstCardPageArgs(initialLoginType: args.type),
+            );
           } else if (state is OtpVerificationFailureState) {
             ToastManager(
               Toast(

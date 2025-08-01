@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import '../bloc/auth_bloc.dart';
 import '../../../../shared/presentation/widgets/google_style_bottom_nav.dart';
+import '../../../../shared/presentation/widgets/debug_wrapper.dart';
 
 class PdaPage extends StatefulWidget {
   const PdaPage({super.key});
@@ -78,35 +79,37 @@ class _PdaPageState extends State<PdaPage> {
           ),
         ],
       ),
-      body: const Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.psychology, size: 100, color: Colors.purple),
-            SizedBox(height: 20),
-            Text(
-              'Personal Digital Assistant',
-              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-            ),
-            SizedBox(height: 10),
-            Text(
-              'Your AI-powered assistant is here to help!',
-              style: TextStyle(fontSize: 16, color: Colors.grey),
-            ),
-            SizedBox(height: 30),
-            Text(
-              'Features:',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-            SizedBox(height: 10),
-            Text(
-              '• Smart recommendations\n'
-              '• Voice commands\n'
-              '• Task automation\n'
-              '• Personal insights',
-              style: TextStyle(fontSize: 14, color: Colors.grey),
-            ),
-          ],
+      body: DebugWrapper(
+        child: const Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.psychology, size: 100, color: Colors.purple),
+              SizedBox(height: 20),
+              Text(
+                'Personal Digital Assistant',
+                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+              ),
+              SizedBox(height: 10),
+              Text(
+                'Your AI-powered assistant is here to help!',
+                style: TextStyle(fontSize: 16, color: Colors.grey),
+              ),
+              SizedBox(height: 30),
+              Text(
+                'Features:',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              SizedBox(height: 10),
+              Text(
+                '• Smart recommendations\n'
+                '• Voice commands\n'
+                '• Task automation\n'
+                '• Personal insights',
+                style: TextStyle(fontSize: 14, color: Colors.grey),
+              ),
+            ],
+          ),
         ),
       ),
       bottomNavigationBar: GoogleStyleBottomNav(

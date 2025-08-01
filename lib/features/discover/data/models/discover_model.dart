@@ -1,4 +1,5 @@
 import '../../domain/entities/discover_entity.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class DiscoverModel extends DiscoverEntity {
   const DiscoverModel({
@@ -13,6 +14,24 @@ class DiscoverModel extends DiscoverEntity {
   });
 
   factory DiscoverModel.fromJson(Map<String, dynamic> json) {
+    DateTime parseFirestoreDate(dynamic dateField) {
+      if (dateField == null) return DateTime.now();
+
+      if (dateField is Timestamp) {
+        return dateField.toDate();
+      } else if (dateField is String) {
+        try {
+          return DateTime.parse(dateField);
+        } catch (e) {
+          return DateTime.now();
+        }
+      } else if (dateField is DateTime) {
+        return dateField;
+      }
+
+      return DateTime.now();
+    }
+
     return DiscoverModel(
       id: json['id']?.toString() ?? '',
       title: json['title']?.toString() ?? '',
@@ -21,9 +40,7 @@ class DiscoverModel extends DiscoverEntity {
       category: json['category']?.toString() ?? '',
       rating: (json['rating'] as num?)?.toDouble() ?? 0.0,
       views: json['views'] as int? ?? 0,
-      createdAt: json['createdAt'] != null
-          ? DateTime.parse(json['createdAt'].toString())
-          : DateTime.now(),
+      createdAt: parseFirestoreDate(json['createdAt']),
     );
   }
 
