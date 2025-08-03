@@ -836,6 +836,15 @@ class _DiscoverPageState extends State<DiscoverPage> {
                   );
                 }
 
+                // Filter agents with products
+                final agentsWithProducts = agentsProductsState.agents.where((
+                  agent,
+                ) {
+                  final products =
+                      agentsProductsState.agentProducts[agent.agentId] ?? [];
+                  return products.isNotEmpty;
+                }).toList();
+
                 return ListView.builder(
                   controller: _scrollController,
                   padding: const EdgeInsets.symmetric(
@@ -843,11 +852,11 @@ class _DiscoverPageState extends State<DiscoverPage> {
                     vertical: 12,
                   ),
                   itemCount:
-                      agentsProductsState.agents.length +
+                      agentsWithProducts.length +
                       (agentsProductsState.hasMoreAgents ? 1 : 0),
                   itemBuilder: (context, index) {
                     // Show loading indicator at the end for infinite scroll
-                    if (index == agentsProductsState.agents.length) {
+                    if (index == agentsWithProducts.length) {
                       return Container(
                         height: 100,
                         margin: const EdgeInsets.only(bottom: 16),
@@ -859,7 +868,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
                       );
                     }
 
-                    final agent = agentsProductsState.agents[index];
+                    final agent = agentsWithProducts[index];
                     final products =
                         agentsProductsState.agentProducts[agent.agentId] ?? [];
 
@@ -1040,25 +1049,15 @@ class AgentProductsSection extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Agent Header with enhanced styling
-          Container(
-            margin: const EdgeInsets.only(bottom: 16),
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.05),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
+          // Simple agent header with profile picture
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: Row(
               children: [
+                // Profile picture
                 Container(
-                  padding: const EdgeInsets.all(2),
+                  width: 40,
+                  height: 40,
                   decoration: BoxDecoration(
                     gradient: const LinearGradient(
                       colors: [Color(0xFFA342FF), Color(0xFFE54D60)],
@@ -1067,24 +1066,24 @@ class AgentProductsSection extends StatelessWidget {
                     ),
                     borderRadius: BorderRadius.circular(20),
                   ),
-                  child: CircleAvatar(
-                    radius: 20,
-                    backgroundImage:
-                        agent['avatar'] != null && agent['avatar']!.isNotEmpty
-                        ? NetworkImage(agent['avatar']!)
-                        : null,
-                    backgroundColor: Colors.grey[200],
-                    child: agent['avatar'] == null || agent['avatar']!.isEmpty
-                        ? Text(
+                  child: agent['avatar'] != null && agent['avatar']!.isNotEmpty
+                      ? ClipRRect(
+                          borderRadius: BorderRadius.circular(20),
+                          child: Image.network(
+                            agent['avatar']!,
+                            fit: BoxFit.cover,
+                          ),
+                        )
+                      : Center(
+                          child: Text(
                             _getInitials(agent['name'] ?? 'A'),
                             style: const TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.w600,
-                              color: Colors.grey,
+                              color: Colors.white,
                             ),
-                          )
-                        : null,
-                  ),
+                          ),
+                        ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -1262,23 +1261,12 @@ class _DiscoverItemShimmerState extends State<DiscoverItemShimmer>
   Widget build(BuildContext context) {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Shimmer header with agent info
+          // Shimmer header with agent info (simplified design)
           Padding(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: Row(
               children: [
                 // Agent avatar shimmer
@@ -1312,7 +1300,7 @@ class _DiscoverItemShimmerState extends State<DiscoverItemShimmer>
             height: 240,
             child: ListView.builder(
               scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 16),
+              padding: const EdgeInsets.symmetric(horizontal: 4),
               itemCount: 3,
               itemBuilder: (context, index) {
                 return Container(
@@ -1344,7 +1332,6 @@ class _DiscoverItemShimmerState extends State<DiscoverItemShimmer>
               },
             ),
           ),
-          const SizedBox(height: 16),
         ],
       ),
     );

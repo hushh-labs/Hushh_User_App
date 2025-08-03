@@ -5,8 +5,9 @@ import 'package:flutter/cupertino.dart';
 import 'package:hushh_user_app/shared/utils/app_local_storage.dart';
 import 'package:hushh_user_app/shared/constants/app_routes.dart';
 import 'package:hushh_user_app/shared/utils/guest_access_control.dart';
-import 'package:hushh_user_app/shared/widgets/user_coins_elevated_button.dart';
 import 'package:hushh_user_app/features/pda/presentation/pages/pda_simple_page.dart';
+import 'package:hushh_user_app/core/routing/app_router.dart';
+import 'package:hushh_user_app/core/routing/route_paths.dart';
 
 class PdaGuestLockedPage extends StatefulWidget {
   const PdaGuestLockedPage({super.key});
@@ -57,8 +58,6 @@ class _PdaGuestLockedPageState extends State<PdaGuestLockedPage> {
             ),
             const Icon(Icons.lock_outline, size: 12),
             const Spacer(),
-            const UserCoinsElevatedButton(),
-            const SizedBox(width: 12),
             InkWell(
               onTap: () {
                 Navigator.pushNamed(
@@ -145,14 +144,14 @@ class _PdaGuestLockedPageState extends State<PdaGuestLockedPage> {
                 height: 56,
                 decoration: BoxDecoration(
                   gradient: const LinearGradient(
-                    begin: Alignment.topRight,
-                    end: Alignment.bottomLeft,
-                    colors: [Color(0xFFF6223C), Color(0xFFA342FF)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [Color(0xFFA342FF), Color(0xFFE54D60)],
                   ),
                   borderRadius: BorderRadius.circular(28),
                   boxShadow: [
                     BoxShadow(
-                      color: const Color(0xFFF6223C).withValues(alpha: 0.3),
+                      color: const Color(0xFFA342FF).withValues(alpha: 0.3),
                       blurRadius: 12,
                       offset: const Offset(0, 6),
                     ),
@@ -197,8 +196,8 @@ class _PdaGuestLockedPageState extends State<PdaGuestLockedPage> {
                   child: InkWell(
                     borderRadius: BorderRadius.circular(28),
                     onTap: () {
-                      // Navigate to home page to explore other guest-available features
-                      Navigator.pushReplacementNamed(context, AppRoutes.home);
+                      // Navigate to discover page to explore other guest-available features
+                      AppRouter.router.go(RoutePaths.discover);
                     },
                     child: const Center(
                       child: Text(

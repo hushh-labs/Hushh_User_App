@@ -44,10 +44,25 @@ class AppLocalStorage {
   );
 
   // Guest mode management
-  static bool get isGuestMode => false;
+  static const String _guestModeKey = 'guest_mode';
+  static bool _isGuestMode = false; // In-memory state
+
+  static bool get isGuestMode => _isGuestMode;
 
   static Future<void> setGuestMode(bool value) async {
-    // Mock implementation for UI
+    _isGuestMode = value; // Update in-memory state
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_guestModeKey, value);
+  }
+
+  static Future<bool> getGuestMode() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_guestModeKey) ?? false;
+  }
+
+  static Future<void> initializeGuestMode() async {
+    final prefs = await SharedPreferences.getInstance();
+    _isGuestMode = prefs.getBool(_guestModeKey) ?? false;
   }
 
   // Login type storage

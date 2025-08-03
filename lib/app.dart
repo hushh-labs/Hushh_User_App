@@ -14,6 +14,7 @@ import 'features/profile/di/profile_module.dart';
 import 'features/discover/di/discover_module.dart';
 import 'features/notifications/di/notification_module.dart';
 import 'shared/di/dependencies.dart';
+import 'shared/utils/app_local_storage.dart';
 
 final GetIt getIt = GetIt.instance;
 
@@ -22,6 +23,9 @@ Future<void> mainApp() async {
 
   // Initialize Firebase
   await FirebaseInit.initialize();
+
+  // Initialize guest mode state
+  await AppLocalStorage.initializeGuestMode();
 
   // Initialize dependency injection
   CoreModule.register();

@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import '../../utils/app_local_storage.dart';
 import '../../../core/routing/route_paths.dart';
+import '../../../core/routing/app_router.dart';
 
 /// Google-style bottom navigation bar component based on your design inspiration.
 class GoogleStyleBottomNav extends StatelessWidget {
@@ -166,7 +167,7 @@ class GoogleStyleBottomNav extends StatelessWidget {
               onPressed: () {
                 Navigator.of(context).pop();
                 AppLocalStorage.setGuestMode(false);
-                Navigator.pushReplacementNamed(context, RoutePaths.mainAuth);
+                AppRouter.router.go(RoutePaths.mainAuth);
               },
               child: const Text('Sign In'),
             ),

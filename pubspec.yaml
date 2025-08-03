@@ -126,6 +126,9 @@ dependencies:
   
   # Crypto for token validation
   crypto: ^3.0.3
+  
+  # URL launcher for opening web links
+  url_launcher: ^6.2.5
  
 
 dev_dependencies:
@@ -142,6 +145,9 @@ dev_dependencies:
   # JSON code generation
   json_serializable: ^6.7.1
   build_runner: ^2.4.7
+  
+  # App icon generation
+  flutter_launcher_icons: ^0.13.1
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -185,3 +191,23 @@ flutter:
   #
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
+
+# Flutter Launcher Icons configuration
+flutter_launcher_icons:
+  android: "launcher_icon"
+  ios: true
+  image_path: "assets/app-logo.png"
+  remove_alpha_ios: true
+  min_sdk_android: 21 # android min sdk min:16, default 21
+  web:
+    generate: true
+    image_path: "assets/app-logo.png"
+    background_color: "#hexcode"
+    theme_color: "#hexcode"
+  windows:
+    generate: true
+    image_path: "assets/app-logo.png"
+    icon_size: 48 # min:48, max:256, default: 48
+  macos:
+    generate: true
+    image_path: "assets/app-logo.png"

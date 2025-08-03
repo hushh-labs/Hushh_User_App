@@ -57,31 +57,6 @@ class _CreateFirstCardPageState extends State<CreateFirstCardPage> {
             padding: const EdgeInsets.symmetric(horizontal: 32),
             child: Column(
               children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    InkWell(
-                      onTap: () {
-                        Navigator.pop(context);
-                      },
-                      child: Container(
-                        width: 40,
-                        height: 40,
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: const Color(0xFFD8DADC)),
-                        ),
-                        child: const Center(
-                          child: Icon(
-                            Icons.arrow_back_ios_new_sharp,
-                            color: Colors.black,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
                 const SizedBox(height: 40),
                 const Text(
                   'Your Hushh card 🤫',

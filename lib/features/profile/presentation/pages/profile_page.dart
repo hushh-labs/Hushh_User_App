@@ -7,14 +7,14 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:hushh_user_app/shared/constants/app_routes.dart';
 import '../bloc/profile_bloc.dart';
-import '../../domain/entities/profile_entity.dart';
 import 'package:hushh_user_app/features/auth/presentation/bloc/auth_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:hushh_user_app/core/routing/route_paths.dart';
 import 'package:hushh_user_app/core/services/firebase_service.dart';
 import 'package:get_it/get_it.dart';
+import 'package:hushh_user_app/shared/utils/app_local_storage.dart';
+import 'package:hushh_user_app/shared/utils/guest_access_control.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -52,8 +52,10 @@ class _ProfilePageState extends State<ProfilePage>
     _getAppInfo();
     _animationController.forward();
 
-    // Load profile data
-    context.read<ProfileBloc>().add(const GetProfileEvent());
+    // Load profile data only if not in guest mode
+    if (!AppLocalStorage.isGuestMode) {
+      context.read<ProfileBloc>().add(const GetProfileEvent());
+    }
   }
 
   @override
@@ -110,6 +112,54 @@ class _ProfilePageState extends State<ProfilePage>
               }
             },
             builder: (context, state) {
+              // Handle guest mode when profile is in initial state
+              if (AppLocalStorage.isGuestMode && state is ProfileInitial) {
+                return Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.person_outline,
+                        size: 64,
+                        color: Colors.grey[400],
+                      ),
+                      const SizedBox(height: 16),
+                      const Text(
+                        'Guest User',
+                        style: TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black87,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Sign in to unlock full profile features',
+                        style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 16),
+                      ElevatedButton(
+                        onPressed: () {
+                          GuestAccessControl.showGuestAccessPopup(
+                            context,
+                            featureName: 'Profile',
+                          );
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFFA342FF),
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                        child: const Text('Sign In to Unlock'),
+                      ),
+                    ],
+                  ),
+                );
+              }
+
               if (state is ProfileLoading) {
                 return const Center(
                   child: CircularProgressIndicator(
@@ -121,6 +171,58 @@ class _ProfilePageState extends State<ProfilePage>
               }
 
               if (state is ProfileError) {
+                // Check if user is in guest mode
+                if (AppLocalStorage.isGuestMode) {
+                  return Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.person_outline,
+                          size: 64,
+                          color: Colors.grey[400],
+                        ),
+                        const SizedBox(height: 16),
+                        const Text(
+                          'Guest User',
+                          style: TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.black87,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Sign in to unlock full profile features',
+                          style: TextStyle(
+                            fontSize: 16,
+                            color: Colors.grey[600],
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 16),
+                        ElevatedButton(
+                          onPressed: () {
+                            GuestAccessControl.showGuestAccessPopup(
+                              context,
+                              featureName: 'Profile',
+                            );
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFFA342FF),
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                          ),
+                          child: const Text('Sign In to Unlock'),
+                        ),
+                      ],
+                    ),
+                  );
+                }
+
+                // Show normal error for authenticated users
                 return Center(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -214,10 +316,7 @@ class _ProfilePageState extends State<ProfilePage>
     );
   }
 
-  Widget _buildEnhancedProfileHeader(
-    ProfileEntity profile,
-    ProfileState state,
-  ) {
+  Widget _buildEnhancedProfileHeader(profile, ProfileState state) {
     final isLoading = state is ProfileUpdating || state is ImageUploading;
 
     return Container(
@@ -238,7 +337,7 @@ class _ProfilePageState extends State<ProfilePage>
     );
   }
 
-  Widget _buildUserProfileHeader(ProfileEntity profile, bool isLoading) {
+  Widget _buildUserProfileHeader(profile, bool isLoading) {
     final displayName = profile.name.isNotEmpty
         ? profile.name
         : 'Update your name';
@@ -455,30 +554,16 @@ class _ProfilePageState extends State<ProfilePage>
         const SizedBox(height: 12),
         _buildMenuCard([
           _MenuItemData('Notifications', Icons.notifications_outlined, () {
-            try {
-              Navigator.pushNamed(context, AppRoutes.cardWallet.notifications);
-            } catch (e) {
-              _showErrorSnackBar(
-                'Unable to open Notifications: ${e.toString()}',
-              );
-            }
+            _showComingSoonSnackBar('Notifications');
           }),
           _MenuItemData('Permissions', Icons.security_outlined, () {
-            try {
-              Navigator.pushNamed(context, AppRoutes.permissions);
-            } catch (e) {
-              _showErrorSnackBar('Unable to open Permissions');
-            }
+            _showComingSoonSnackBar('Permissions');
           }),
           _MenuItemData(
             'Wallet & Cards',
             Icons.account_balance_wallet_outlined,
             () {
-              try {
-                Navigator.pushNamed(context, AppRoutes.home);
-              } catch (e) {
-                _showErrorSnackBar('Unable to open Wallet & Cards');
-              }
+              _showComingSoonSnackBar('Wallet & Cards');
             },
           ),
         ]),
@@ -489,11 +574,7 @@ class _ProfilePageState extends State<ProfilePage>
         const SizedBox(height: 12),
         _buildMenuCard([
           _MenuItemData('Send Feedback', Icons.rate_review_outlined, () {
-            try {
-              _showErrorSnackBar('Feedback feature coming soon!');
-            } catch (e) {
-              _showErrorSnackBar('Unable to open Send Feedback');
-            }
+            _showComingSoonSnackBar('Send Feedback');
           }),
           if (!kIsWeb) ...[
             _MenuItemData('Delete Account', Icons.delete_outline, () {
@@ -1296,6 +1377,18 @@ class _ProfilePageState extends State<ProfilePage>
         backgroundColor: Colors.green,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ),
+    );
+  }
+
+  void _showComingSoonSnackBar(String featureName) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('$featureName feature coming soon!'),
+        backgroundColor: const Color(0xFFA342FF),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        duration: const Duration(seconds: 2),
       ),
     );
   }

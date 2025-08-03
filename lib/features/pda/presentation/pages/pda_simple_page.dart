@@ -30,13 +30,16 @@ class _PdaSimplePageState extends State<PdaSimplePage> {
   bool _isSendingMessage = false; // Separate loading state for sending
   String? _error;
 
-  // Single source of truth for suggestions - ChatGPT-style options
+  // Single source of truth for suggestions - Hushh app specific options
   final List<Map<String, dynamic>> _suggestions = const [
-    {'text': 'What can you help me with?', 'icon': Icons.help_outline},
-    {'text': 'Summarize my recent activity', 'icon': Icons.analytics_outlined},
-    {'text': 'Help me organize my data', 'icon': Icons.folder_outlined},
-    {'text': 'Show me insights and trends', 'icon': Icons.trending_up_outlined},
-    {'text': 'Explain Hushh features', 'icon': Icons.lightbulb_outline},
+    {'text': 'How do I find products?', 'icon': Icons.search_outlined},
+    {'text': 'Tell me about agents', 'icon': Icons.person_outline},
+    {
+      'text': 'How do I add items to cart?',
+      'icon': Icons.shopping_cart_outlined,
+    },
+    {'text': 'What are Hushh features?', 'icon': Icons.lightbulb_outline},
+    {'text': 'Help me with my account', 'icon': Icons.account_circle_outlined},
   ];
 
   // Define some brand colors
@@ -268,8 +271,6 @@ class _PdaSimplePageState extends State<PdaSimplePage> {
               ),
             ),
             const Spacer(),
-            const UserCoinsElevatedButton(),
-            const SizedBox(width: 8),
             PopupMenuButton<String>(
               onSelected: (value) {
                 if (value == 'clear') {
@@ -559,7 +560,7 @@ class _PdaSimplePageState extends State<PdaSimplePage> {
                 ),
                 const SizedBox(height: 28), // Increased space
                 const Text(
-                  'Your Intelligent Assistant is Here', // More engaging title
+                  'Your Hushh Assistant is Here', // More engaging title
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontSize: 24, // Larger
@@ -569,7 +570,7 @@ class _PdaSimplePageState extends State<PdaSimplePage> {
                 ),
                 const SizedBox(height: 16), // Increased space
                 Text(
-                  'Hushh PDA is designed to simplify your digital life. Ask me anything to get started!', // More direct CTA
+                  'I\'m here to help you navigate Hushh, discover products, connect with agents, and make the most of your shopping experience. Ask me anything about the app!', // More direct CTA
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontSize: 16, // Slightly larger

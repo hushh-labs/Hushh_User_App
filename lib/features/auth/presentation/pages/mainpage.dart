@@ -1,11 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'auth.dart';
 import '../../domain/enums.dart';
 import '../../../../shared/presentation/widgets/clickable_logo.dart';
 import '../../../../shared/presentation/widgets/debug_wrapper.dart';
 import '../../../../core/services/logger_service.dart';
+import '../../../../shared/utils/app_local_storage.dart';
+import '../../../../core/routing/route_paths.dart';
+import '../../../../core/routing/app_router.dart';
 
 class MainAuthPage extends StatefulWidget {
   const MainAuthPage({super.key});
@@ -32,11 +37,6 @@ class _MainAuthPageState extends State<MainAuthPage> {
       'type': 'Phone',
       'icon': 'assets/phone-icon.svg',
       'text': 'Continue as Phone',
-    },
-    {
-      'type': 'Email',
-      'icon': 'assets/mail-icon.svg',
-      'text': 'Continue as Email',
     },
     {'type': 'Guest', 'icon': 'assets/guest.svg', 'text': 'Continue as Guest'},
   ];
@@ -129,7 +129,6 @@ class _MainAuthPageState extends State<MainAuthPage> {
                                               iconPath:
                                                   socialMethods[index]['icon']!,
                                               onTap: () {
-
                                                 // Show bottom sheet based on type
                                                 if (socialMethods[index]['type'] ==
                                                     'Phone') {
@@ -146,15 +145,7 @@ class _MainAuthPageState extends State<MainAuthPage> {
                                                 } else if (socialMethods[index]['type'] ==
                                                     'Guest') {
                                                   // Handle guest login
-                                                  ScaffoldMessenger.of(
-                                                    context,
-                                                  ).showSnackBar(
-                                                    const SnackBar(
-                                                      content: Text(
-                                                        'Guest login tapped',
-                                                      ),
-                                                    ),
-                                                  );
+                                                  _handleGuestLogin(context);
                                                 }
                                               },
                                             )
@@ -189,21 +180,49 @@ class _MainAuthPageState extends State<MainAuthPage> {
                       TextSpan(
                         text: 'Terms of Service',
                         style: const TextStyle(color: Color(0xFFE54D60)),
-                      ),
-                      const TextSpan(text: ', '),
-                      TextSpan(
-                        text: 'Non-discrimination Policy',
-                        style: const TextStyle(color: Color(0xFFE54D60)),
-                      ),
-                      const TextSpan(text: ' and '),
-                      TextSpan(
-                        text: 'Payments Terms of Service',
-                        style: const TextStyle(color: Color(0xFFE54D60)),
+                        recognizer: TapGestureRecognizer()
+                          ..onTap = () async {
+                            // Open Terms of Service on Hushh.ai website
+                            final Uri url = Uri.parse('https://www.hushh.ai');
+                            if (await canLaunchUrl(url)) {
+                              await launchUrl(
+                                url,
+                                mode: LaunchMode.externalApplication,
+                              );
+                            } else {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                    'Could not open Terms of Service',
+                                  ),
+                                ),
+                              );
+                            }
+                          },
                       ),
                       const TextSpan(text: ' and acknowledge the '),
                       TextSpan(
                         text: 'Privacy Policy',
                         style: const TextStyle(color: Color(0xFFE54D60)),
+                        recognizer: TapGestureRecognizer()
+                          ..onTap = () async {
+                            // Open Privacy Policy on Hushh.ai website
+                            final Uri url = Uri.parse('https://www.hushh.ai');
+                            if (await canLaunchUrl(url)) {
+                              await launchUrl(
+                                url,
+                                mode: LaunchMode.externalApplication,
+                              );
+                            } else {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                    'Could not open Privacy Policy',
+                                  ),
+                                ),
+                              );
+                            }
+                          },
                       ),
                       const TextSpan(text: '.'),
                     ],
@@ -225,6 +244,16 @@ class _MainAuthPageState extends State<MainAuthPage> {
       backgroundColor: Colors.transparent,
       builder: (context) => AuthPage(loginMode: loginMode),
     );
+  }
+
+  void _handleGuestLogin(BuildContext context) async {
+    // Set guest mode to true
+    await AppLocalStorage.setGuestMode(true);
+
+    // Navigate to the main app page (dashboard) using GoRouter
+    if (context.mounted) {
+      AppRouter.router.go(RoutePaths.discover);
+    }
   }
 }
 

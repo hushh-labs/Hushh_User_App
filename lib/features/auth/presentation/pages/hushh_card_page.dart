@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'video_recording_page.dart';
+import 'card_created_success_page.dart';
 
 class HushhCardPage extends StatefulWidget {
   const HushhCardPage({super.key});
@@ -161,11 +161,11 @@ class _HushhCardPageState extends State<HushhCardPage> {
               const Spacer(),
               InkWell(
                 onTap: () {
-                  // Navigate to video recording page
+                  // Skip video recording page and go directly to success page
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (context) => const VideoRecordingPage(),
+                      builder: (context) => const CardCreatedSuccessPage(),
                     ),
                   );
                 },

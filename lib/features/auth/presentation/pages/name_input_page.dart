@@ -49,8 +49,8 @@ class _NameInputPageState extends State<NameInputPage> {
     return BlocListener<AuthBloc, AuthState>(
       listener: (context, state) {
         if (state is UserCardCreatedState) {
-          // Navigate to video recording page
-          context.go(RoutePaths.videoRecording);
+          // Skip video recording page and go directly to success page
+          context.go(RoutePaths.cardCreatedSuccess);
         } else if (state is UserCardCreationFailureState) {
           ToastManager(
             Toast(

@@ -63,7 +63,7 @@ class _DeleteAccountPageState extends State<DeleteAccountPage> {
 
             // Title
             const Text(
-              'Delete Your Account',
+              'Delete Account Data',
               style: TextStyle(
                 fontSize: 24,
                 fontWeight: FontWeight.bold,
@@ -76,7 +76,7 @@ class _DeleteAccountPageState extends State<DeleteAccountPage> {
 
             // Warning Text
             Text(
-              'This action cannot be undone. Once you delete your account, all your data will be permanently removed from our servers.',
+              'This action cannot be undone. Once you delete your account data, all your information will be permanently removed from our servers. Your authentication account will remain but will be reset.',
               style: TextStyle(
                 fontSize: 16,
                 color: Colors.grey[700],
@@ -142,7 +142,7 @@ class _DeleteAccountPageState extends State<DeleteAccountPage> {
                         ),
                       )
                     : const Text(
-                        'Delete Account',
+                        'Delete Account Data',
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w600,
@@ -201,9 +201,9 @@ class _DeleteAccountPageState extends State<DeleteAccountPage> {
       context: context,
       builder: (BuildContext context) {
         return CupertinoAlertDialog(
-          title: const Text('Delete Account'),
+          title: const Text('Delete Account Data'),
           content: const Text(
-            'Are you absolutely sure you want to delete your account? This action cannot be undone and all your data will be permanently lost.',
+            'Are you absolutely sure you want to delete your account data? This action cannot be undone and all your data will be permanently lost. Your authentication account will remain but will be reset.',
           ),
           actions: [
             CupertinoDialogAction(
@@ -237,21 +237,11 @@ class _DeleteAccountPageState extends State<DeleteAccountPage> {
         throw Exception('No user is currently signed in');
       }
 
-      // Check if user needs re-authentication before deletion
-      final needsReauth = await firebaseService.needsReauthentication();
-      if (needsReauth) {
-        setState(() {
-          _isDeleting = false;
-        });
-        _showReauthenticationRequiredDialog();
-        return;
-      }
-
-      // Delete user data from Firestore first
+      // Delete user data from Firestore only (keep Firebase Auth account)
       await firebaseService.deleteUserData(currentUser.uid);
 
-      // Delete user from Firebase Auth
-      await firebaseService.deleteUser();
+      // Sign out the user after deleting data
+      await firebaseService.signOut();
 
       // Navigate to auth page
       if (mounted) {
@@ -263,7 +253,7 @@ class _DeleteAccountPageState extends State<DeleteAccountPage> {
       });
 
       if (mounted) {
-        _showErrorDialog('Failed to delete account', e.toString());
+        _showErrorDialog('Failed to delete account data', e.toString());
       }
     }
   }

@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import '../../core/routing/app_router.dart';
+import '../../core/routing/route_paths.dart';
+import '../utils/app_local_storage.dart';
 
 class GuestAccessControl {
   static void showGuestAccessPopup(
@@ -51,9 +54,11 @@ class GuestAccessControl {
                     const SizedBox(width: 16),
                     Expanded(
                       child: ElevatedButton(
-                        onPressed: () {
+                        onPressed: () async {
                           Navigator.of(context).pop();
-                          Navigator.pushReplacementNamed(context, '/main-auth');
+                          // Clear guest mode when signing in
+                          await AppLocalStorage.setGuestMode(false);
+                          AppRouter.router.go(RoutePaths.mainAuth);
                         },
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFF6C63FF),
