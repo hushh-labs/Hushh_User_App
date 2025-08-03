@@ -646,7 +646,8 @@ class _PdaSimplePageState extends State<PdaSimplePage> {
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 16),
         itemCount: suggestions.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 10), // Reduced space
+        separatorBuilder: (context, index) =>
+            const SizedBox(width: 10), // Reduced space
         itemBuilder: (context, i) {
           final s = suggestions[i];
           return InkWell(

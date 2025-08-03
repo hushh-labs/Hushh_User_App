@@ -129,10 +129,6 @@ class _MainAuthPageState extends State<MainAuthPage> {
                                               iconPath:
                                                   socialMethods[index]['icon']!,
                                               onTap: () {
-                                                // TODO: Replace with proper logging
-                                                // print(
-                                                //   '${socialMethods[index]['type']} button tapped',
-                                                // );
 
                                                 // Show bottom sheet based on type
                                                 if (socialMethods[index]['type'] ==

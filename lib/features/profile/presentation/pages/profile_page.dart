@@ -9,6 +9,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:hushh_user_app/shared/constants/app_routes.dart';
 import '../bloc/profile_bloc.dart';
+import '../../domain/entities/profile_entity.dart';
 import 'package:hushh_user_app/features/auth/presentation/bloc/auth_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:hushh_user_app/core/routing/route_paths.dart';
@@ -213,7 +214,10 @@ class _ProfilePageState extends State<ProfilePage>
     );
   }
 
-  Widget _buildEnhancedProfileHeader(profile, ProfileState state) {
+  Widget _buildEnhancedProfileHeader(
+    ProfileEntity profile,
+    ProfileState state,
+  ) {
     final isLoading = state is ProfileUpdating || state is ImageUploading;
 
     return Container(
@@ -234,7 +238,7 @@ class _ProfilePageState extends State<ProfilePage>
     );
   }
 
-  Widget _buildUserProfileHeader(profile, bool isLoading) {
+  Widget _buildUserProfileHeader(ProfileEntity profile, bool isLoading) {
     final displayName = profile.name.isNotEmpty
         ? profile.name
         : 'Update your name';

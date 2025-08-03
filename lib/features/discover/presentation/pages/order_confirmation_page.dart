@@ -215,6 +215,20 @@ class OrderConfirmationPage extends StatelessWidget {
                     // Totals
                     _buildTotalRow('Subtotal', totalPrice),
                     const SizedBox(height: 8),
+                    // Show discount if any items have bids
+                    if (cartItems.any((item) => item.hasValidBid))
+                      Column(
+                        children: [
+                          _buildTotalRow(
+                            'Discount',
+                            -cartItems.fold(
+                              0.0,
+                              (sum, item) => sum + item.discountAmount,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                        ],
+                      ),
                     _buildTotalRow('Tax', tax),
                     const SizedBox(height: 8),
                     _buildTotalRow('Total', finalTotal, isTotal: true),
@@ -319,15 +333,61 @@ class OrderConfirmationPage extends StatelessWidget {
                   'Qty: ${item.quantity}',
                   style: const TextStyle(fontSize: 14, color: Colors.grey),
                 ),
-                Text(
-                  '\$${item.product.price.toStringAsFixed(2)} each',
-                  style: const TextStyle(fontSize: 14, color: Colors.grey),
-                ),
+                if (item.hasValidBid && item.bidAmount != null)
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Text(
+                            '\$${item.product.price.toStringAsFixed(2)} each',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey,
+                              decoration: TextDecoration.lineThrough,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 4,
+                              vertical: 1,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF4CAF50),
+                              borderRadius: BorderRadius.circular(3),
+                            ),
+                            child: const Text(
+                              'HUSHHCOINS',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 8,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      Text(
+                        '\$${item.discountedPrice.toStringAsFixed(2)} each',
+                        style: const TextStyle(
+                          fontSize: 14,
+                          color: Color(0xFF4CAF50),
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  )
+                else
+                  Text(
+                    '\$${item.product.price.toStringAsFixed(2)} each',
+                    style: const TextStyle(fontSize: 14, color: Colors.grey),
+                  ),
               ],
             ),
           ),
           Text(
-            '\$${(item.product.price * item.quantity).toStringAsFixed(2)}',
+            '\$${item.totalPrice.toStringAsFixed(2)}',
             style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
           ),
         ],

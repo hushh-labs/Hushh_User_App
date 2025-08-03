@@ -42,16 +42,12 @@ class AgentProductModel extends Equatable {
         try {
           return DateTime.parse(dateField);
         } catch (e) {
-          print('Failed to parse product date string: $dateField, error: $e');
           return null;
         }
       } else if (dateField is DateTime) {
         return dateField;
       }
 
-      print(
-        'Unknown product date field type: ${dateField.runtimeType}, value: $dateField',
-      );
       return null;
     }
 

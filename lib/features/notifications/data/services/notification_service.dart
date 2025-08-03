@@ -12,11 +12,8 @@ class NotificationService {
   final FlutterLocalNotificationsPlugin _localNotifications =
       FlutterLocalNotificationsPlugin();
   final FCMService _fcmService = FCMService();
-  NotificationRepository? _repository;
 
   Future<void> initialize(NotificationRepository repository) async {
-    _repository = repository;
-
     // Initialize local notifications
     await _initializeLocalNotifications();
 
@@ -48,13 +45,10 @@ class NotificationService {
   }
 
   Future<void> _onNotificationTapped(NotificationResponse response) async {
-    print('Local notification tapped: ${response.payload}');
-
     if (response.payload != null) {
       final data = json.decode(response.payload!);
       if (data.containsKey('route')) {
         // Navigate to specific route
-        print('Navigate to: ${data['route']}');
       }
     }
   }

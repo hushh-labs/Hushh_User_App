@@ -166,8 +166,6 @@ class _OtpVerificationPageState extends State<OtpVerificationPage> {
                       controller: otpController,
                       onCompleted: (String value) {
                         // Handle OTP completion
-                        // TODO: Replace with proper logging
-                        // print('OTP completed: $value');
                       },
                     ),
                   ),
@@ -227,9 +225,6 @@ class _OtpVerificationPageState extends State<OtpVerificationPage> {
                     onPressed: () {
                       if (countDownForResendStartValue.toString() == "60") {
                         countDownForResendFunction();
-                        // TODO: Replace with proper logging
-                        // print('🔥 [OTP_VERIFICATION] Resend OTP for: ${args.emailOrPhone}');
-                        // print('🔥 [OTP_VERIFICATION] Type: ${args.type}');
                       }
                     },
                     child: countDownForResendStartValue.toString().length == 1

@@ -1,3 +1,5 @@
+// ignore_for_file: use_build_context_synchronously
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -298,13 +300,70 @@ class _DiscoverPageState extends State<DiscoverPage> {
                                           ),
                                         ),
                                         const SizedBox(height: 4),
-                                        Text(
-                                          'USD ${item.product.price.toStringAsFixed(2)}',
-                                          style: TextStyle(
-                                            color: Colors.grey[600],
-                                            fontSize: 14,
+                                        if (item.hasValidBid &&
+                                            item.bidAmount != null)
+                                          Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Row(
+                                                children: [
+                                                  Text(
+                                                    'USD ${item.product.price.toStringAsFixed(2)}',
+                                                    style: TextStyle(
+                                                      color: Colors.grey[400],
+                                                      fontSize: 12,
+                                                      decoration: TextDecoration
+                                                          .lineThrough,
+                                                    ),
+                                                  ),
+                                                  const SizedBox(width: 8),
+                                                  Container(
+                                                    padding:
+                                                        const EdgeInsets.symmetric(
+                                                          horizontal: 6,
+                                                          vertical: 2,
+                                                        ),
+                                                    decoration: BoxDecoration(
+                                                      color: const Color(
+                                                        0xFF4CAF50,
+                                                      ),
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                            4,
+                                                          ),
+                                                    ),
+                                                    child: const Text(
+                                                      'HUSHHCOINS',
+                                                      style: TextStyle(
+                                                        color: Colors.white,
+                                                        fontSize: 10,
+                                                        fontWeight:
+                                                            FontWeight.bold,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                              const SizedBox(height: 2),
+                                              Text(
+                                                'USD ${item.discountedPrice.toStringAsFixed(2)}',
+                                                style: const TextStyle(
+                                                  color: Color(0xFF4CAF50),
+                                                  fontSize: 14,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                              ),
+                                            ],
+                                          )
+                                        else
+                                          Text(
+                                            'USD ${item.product.price.toStringAsFixed(2)}',
+                                            style: TextStyle(
+                                              color: Colors.grey[600],
+                                              fontSize: 14,
+                                            ),
                                           ),
-                                        ),
                                       ],
                                     ),
                                   ),
@@ -387,22 +446,52 @@ class _DiscoverPageState extends State<DiscoverPage> {
                           horizontal: 20,
                           vertical: 16,
                         ),
-                        child: Row(
+                        child: Column(
                           children: [
-                            const Text(
-                              'Total',
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 18,
+                            // Show discount if any items have bids
+                            if (cartState.items.any((item) => item.hasValidBid))
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 8),
+                                child: Row(
+                                  children: [
+                                    const Text(
+                                      'Total Savings',
+                                      style: TextStyle(
+                                        color: Color(0xFF4CAF50),
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                    const Spacer(),
+                                    Text(
+                                      'USD ${cartState.items.fold(0.0, (total, item) => total + item.discountAmount).toStringAsFixed(2)}',
+                                      style: const TextStyle(
+                                        color: Color(0xFF4CAF50),
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
-                            ),
-                            const Spacer(),
-                            Text(
-                              'USD ${cartState.totalPrice.toStringAsFixed(2)}',
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 18,
-                              ),
+                            Row(
+                              children: [
+                                const Text(
+                                  'Total',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 18,
+                                  ),
+                                ),
+                                const Spacer(),
+                                Text(
+                                  'USD ${cartState.totalPrice.toStringAsFixed(2)}',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 18,
+                                  ),
+                                ),
+                              ],
                             ),
                           ],
                         ),
@@ -466,13 +555,11 @@ class _DiscoverPageState extends State<DiscoverPage> {
 
                                 // Navigate to order confirmation
                                 if (context.mounted) {
-                                  final navigatorContext = context;
                                   Navigator.push(
-                                    navigatorContext,
+                                    context,
                                     MaterialPageRoute(
                                       builder: (context) => BlocProvider.value(
-                                        value: navigatorContext
-                                            .read<CartBloc>(),
+                                        value: context.read<CartBloc>(),
                                         child: OrderConfirmationPage(
                                           cartItems: cartState.items,
                                           agentName: agentName,
@@ -662,11 +749,11 @@ class _DiscoverPageState extends State<DiscoverPage> {
                         ),
                       ),
                       onChanged: (value) {
-                        // TODO: Implement search functionality
+                        // Search functionality placeholder
                       },
                       onSubmitted: (value) {
                         if (value.isNotEmpty) {
-                          // TODO: Perform search
+                          // Perform search
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
                               content: Text('Searching for: $value'),

@@ -33,7 +33,6 @@ class TokenManager {
 
       return null;
     } catch (e) {
-      print('Error getting valid token: $e');
       return null;
     }
   }
@@ -76,7 +75,6 @@ class TokenManager {
 
       return prefs.getBool(_tokenValidationKey) ?? false;
     } catch (e) {
-      print('Error validating token: $e');
       return false;
     }
   }
@@ -103,7 +101,6 @@ class TokenManager {
       }
       return false;
     } catch (e) {
-      print('Error saving token: $e');
       return false;
     }
   }
@@ -116,7 +113,7 @@ class TokenManager {
       await prefs.remove(_tokenValidationKey);
       await prefs.remove(_lastTokenUpdateKey);
     } catch (e) {
-      print('Error clearing token data: $e');
+      // Handle error silently
     }
   }
 
@@ -143,7 +140,6 @@ class TokenManager {
         'platform': Platform.isIOS ? 'ios' : 'android',
       };
     } catch (e) {
-      print('Error getting token metadata: $e');
       return {};
     }
   }
@@ -162,7 +158,6 @@ class TokenManager {
       // Refresh if older than 25 days (before 30-day expiration)
       return difference.inDays > 25;
     } catch (e) {
-      print('Error checking token refresh: $e');
       return true;
     }
   }
@@ -180,7 +175,6 @@ class TokenManager {
 
       return null;
     } catch (e) {
-      print('Error forcing token refresh: $e');
       return null;
     }
   }
@@ -200,7 +194,6 @@ class TokenManager {
         'fcmInitialized': _fcmService.isInitialized,
       };
     } catch (e) {
-      print('Error getting token stats: $e');
       return {};
     }
   }

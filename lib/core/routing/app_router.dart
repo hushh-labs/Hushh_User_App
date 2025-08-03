@@ -83,7 +83,7 @@ class AppRouter {
         name: RouteNames.deleteAccount,
         builder: (context, state) => const DeleteAccountPage(),
       ),
-      // TODO: Add more auth routes when login/register pages are created
+      // Auth routes for login/register pages
       // GoRoute(
       //   path: RoutePaths.login,
       //   name: RouteNames.login,

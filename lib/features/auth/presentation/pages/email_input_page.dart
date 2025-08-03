@@ -168,16 +168,18 @@ class _EmailInputPageState extends State<EmailInputPage> {
               InkWell(
                 onTap: () async {
                   if (_formKey.currentState!.validate()) {
-                    final navigatorContext = context;
                     // Store the login type as email
-                    await AppLocalStorage.setLoginType(OtpVerificationType.email);
+                    await AppLocalStorage.setLoginType(
+                      OtpVerificationType.email,
+                    );
                     // Navigate to name input page
-                    if (mounted) {
+                    if (context.mounted) {
                       Navigator.push(
-                        navigatorContext,
+                        context,
                         MaterialPageRoute(
-                          builder: (context) =>
-                              NameInputPage(email: _emailController.text.trim()),
+                          builder: (context) => NameInputPage(
+                            email: _emailController.text.trim(),
+                          ),
                         ),
                       );
                     }

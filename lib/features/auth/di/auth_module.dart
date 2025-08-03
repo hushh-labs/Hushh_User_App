@@ -3,12 +3,10 @@ import '../data/repositories/auth_repository_impl.dart';
 import '../domain/repositories/auth_repository.dart';
 import '../domain/usecases/send_phone_otp_usecase.dart';
 import '../domain/usecases/verify_phone_otp_usecase.dart';
-import '../domain/usecases/check_user_card_exists_usecase.dart';
 import '../domain/usecases/create_user_card_usecase.dart';
 import '../domain/usecases/sign_out_usecase.dart';
 import '../presentation/bloc/auth_bloc.dart';
 import '../../notifications/data/services/fcm_service.dart';
-import '../../notifications/domain/repositories/notification_repository.dart';
 
 class AuthModule {
   static bool _isRegistered = false;
@@ -28,9 +26,7 @@ class AuthModule {
     getIt.registerLazySingleton(
       () => VerifyPhoneOtpUseCase(getIt<AuthRepository>()),
     );
-    getIt.registerLazySingleton(
-      () => CheckUserCardExistsUseCase(getIt<AuthRepository>()),
-    );
+
     getIt.registerLazySingleton(
       () => CreateUserCardUseCase(getIt<AuthRepository>()),
     );
@@ -41,11 +37,9 @@ class AuthModule {
       () => AuthBloc(
         sendPhoneOtpUseCase: getIt<SendPhoneOtpUseCase>(),
         verifyPhoneOtpUseCase: getIt<VerifyPhoneOtpUseCase>(),
-        checkUserCardExistsUseCase: getIt<CheckUserCardExistsUseCase>(),
         createUserCardUseCase: getIt<CreateUserCardUseCase>(),
         signOutUseCase: getIt<SignOutUseCase>(),
         fcmService: getIt<FCMService>(),
-        notificationRepository: getIt<NotificationRepository>(),
       ),
     );
 

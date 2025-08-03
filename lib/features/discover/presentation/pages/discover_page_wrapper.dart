@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:get_it/get_it.dart';
 import '../bloc/discover_bloc.dart';
 import '../bloc/card_wallet_bloc.dart';
 import '../bloc/inventory_bloc.dart';
@@ -24,7 +25,7 @@ class DiscoverPageWrapper extends StatelessWidget {
         BlocProvider<LookBookProductBloc>(
           create: (context) => LookBookProductBloc(),
         ),
-        BlocProvider<CartBloc>(create: (context) => CartBloc()),
+        BlocProvider<CartBloc>(create: (context) => GetIt.instance<CartBloc>()),
         BlocProvider<AgentsProductsBloc>(
           create: (context) => AgentsProductsBloc(
             DiscoverRepositoryImpl(FirebaseDiscoverDataSourceImpl()),

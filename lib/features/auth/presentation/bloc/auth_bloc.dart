@@ -7,7 +7,6 @@ import 'package:firebase_auth/firebase_auth.dart' as firebase_auth;
 import '../../data/models/countries_model.dart';
 import '../../domain/usecases/send_phone_otp_usecase.dart';
 import '../../domain/usecases/verify_phone_otp_usecase.dart';
-import '../../domain/usecases/check_user_card_exists_usecase.dart';
 import '../../domain/usecases/create_user_card_usecase.dart';
 import '../../domain/usecases/sign_out_usecase.dart';
 import '../../domain/entities/user_card.dart';
@@ -18,7 +17,6 @@ import '../../../../core/routing/app_router.dart';
 import '../pages/otp_verification.dart';
 import '../../../../shared/utils/app_local_storage.dart';
 import '../../../notifications/data/services/fcm_service.dart';
-import '../../../notifications/domain/repositories/notification_repository.dart';
 import 'package:get_it/get_it.dart';
 import '../../../../core/services/firebase_service.dart';
 
@@ -194,29 +192,23 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   // Use cases
   final SendPhoneOtpUseCase _sendPhoneOtpUseCase;
   final VerifyPhoneOtpUseCase _verifyPhoneOtpUseCase;
-  final CheckUserCardExistsUseCase _checkUserCardExistsUseCase;
   final CreateUserCardUseCase _createUserCardUseCase;
   final SignOutUseCase _signOutUseCase;
 
   // FCM Service
   final FCMService _fcmService;
-  final NotificationRepository _notificationRepository;
 
   AuthBloc({
     required SendPhoneOtpUseCase sendPhoneOtpUseCase,
     required VerifyPhoneOtpUseCase verifyPhoneOtpUseCase,
-    required CheckUserCardExistsUseCase checkUserCardExistsUseCase,
     required CreateUserCardUseCase createUserCardUseCase,
     required SignOutUseCase signOutUseCase,
     required FCMService fcmService,
-    required NotificationRepository notificationRepository,
   }) : _sendPhoneOtpUseCase = sendPhoneOtpUseCase,
        _verifyPhoneOtpUseCase = verifyPhoneOtpUseCase,
-       _checkUserCardExistsUseCase = checkUserCardExistsUseCase,
        _createUserCardUseCase = createUserCardUseCase,
        _signOutUseCase = signOutUseCase,
        _fcmService = fcmService,
-       _notificationRepository = notificationRepository,
        super(AuthInitialState()) {
     on<InitializeEvent>(onInitializeEvent);
     on<OnCountryUpdateEvent>(onCountryUpdateEvent);

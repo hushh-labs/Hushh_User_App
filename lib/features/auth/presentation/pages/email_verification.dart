@@ -129,8 +129,6 @@ class _EmailVerificationPageState extends State<EmailVerificationPage> {
                   controller: controller,
                   onCompleted: (otp) {
                     // Handle OTP verification
-                    // TODO: Replace with proper logging
-                    // print('OTP completed: $otp');
                     if (args.onVerify != null) {
                       args.onVerify!();
                     }
@@ -145,8 +143,6 @@ class _EmailVerificationPageState extends State<EmailVerificationPage> {
                         countDownForResendStartValue = 60;
                       });
                       countDownForResendFunction();
-                      // TODO: Replace with proper logging
-                      // print('Resend OTP for: ${args.email}');
                     },
                     child: const Text(
                       'Resend Code',

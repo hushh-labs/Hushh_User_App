@@ -241,7 +241,7 @@ class _ProductTileState extends State<ProductTile> {
     return GestureDetector(
       onTap: () => widget.onProductClicked(widget.product.id),
       onLongPress: widget.onLongPress,
-      child: Container(
+      child: SizedBox(
         height: widget.specifyDimensions ? 140.0 : 120,
         width: widget.specifyDimensions ? 200.0 : 180,
         child: Card(
@@ -278,7 +278,7 @@ class _ProductTileState extends State<ProductTile> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          SizedBox(height: 6),
+                          const SizedBox(height: 6),
                           // Product Name
                           Text(
                             widget.product.productName,
@@ -289,7 +289,7 @@ class _ProductTileState extends State<ProductTile> {
                               fontWeight: FontWeight.w500,
                             ),
                           ),
-                          SizedBox(height: 6),
+                          const SizedBox(height: 6),
                           // Price with strikethrough
                           RichText(
                             text: TextSpan(
@@ -321,7 +321,7 @@ class _ProductTileState extends State<ProductTile> {
                               ],
                             ),
                           ),
-                          SizedBox(height: 4),
+                          const SizedBox(height: 4),
                         ],
                       ),
                     ),

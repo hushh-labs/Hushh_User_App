@@ -1,6 +1,11 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:equatable/equatable.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../../data/models/agent_product_model.dart';
+import '../../data/models/bid_model.dart';
+import '../../domain/entities/cart_notification_entity.dart';
+import '../../domain/usecases/send_cart_notification_usecase.dart';
+import '../../domain/usecases/get_valid_bid_for_product_usecase.dart';
 
 // Events
 abstract class CartEvent extends Equatable {
@@ -139,6 +144,8 @@ class CartItem extends Equatable {
   final int quantity;
   final String agentId;
   final String agentName;
+  final double? bidAmount;
+  final bool hasValidBid;
 
   const CartItem({
     required this.id,
@@ -146,10 +153,20 @@ class CartItem extends Equatable {
     required this.quantity,
     required this.agentId,
     required this.agentName,
+    this.bidAmount,
+    this.hasValidBid = false,
   });
 
   @override
-  List<Object?> get props => [id, product, quantity, agentId, agentName];
+  List<Object?> get props => [
+    id,
+    product,
+    quantity,
+    agentId,
+    agentName,
+    bidAmount,
+    hasValidBid,
+  ];
 
   CartItem copyWith({
     String? id,
@@ -157,6 +174,8 @@ class CartItem extends Equatable {
     int? quantity,
     String? agentId,
     String? agentName,
+    double? bidAmount,
+    bool? hasValidBid,
   }) {
     return CartItem(
       id: id ?? this.id,
@@ -164,13 +183,40 @@ class CartItem extends Equatable {
       quantity: quantity ?? this.quantity,
       agentId: agentId ?? this.agentId,
       agentName: agentName ?? this.agentName,
+      bidAmount: bidAmount ?? this.bidAmount,
+      hasValidBid: hasValidBid ?? this.hasValidBid,
     );
+  }
+
+  double get discountedPrice {
+    if (hasValidBid && bidAmount != null) {
+      return product.price - bidAmount!;
+    }
+    return product.price;
+  }
+
+  double get totalPrice {
+    return discountedPrice * quantity;
+  }
+
+  double get discountAmount {
+    if (hasValidBid && bidAmount != null) {
+      return (product.price - bidAmount!) * quantity;
+    }
+    return 0.0;
   }
 }
 
 // BLoC
 class CartBloc extends Bloc<CartEvent, CartState> {
-  CartBloc() : super(CartInitial()) {
+  final SendCartNotificationUseCase _sendCartNotificationUseCase;
+  final GetValidBidForProductUseCase _getValidBidForProductUseCase;
+  final FirebaseAuth _auth = FirebaseAuth.instance;
+
+  CartBloc(
+    this._sendCartNotificationUseCase,
+    this._getValidBidForProductUseCase,
+  ) : super(CartInitial()) {
     on<AddToCartEvent>(_onAddToCart);
     on<RemoveFromCartEvent>(_onRemoveFromCart);
     on<UpdateCartItemQuantityEvent>(_onUpdateCartItemQuantity);
@@ -178,8 +224,41 @@ class CartBloc extends Bloc<CartEvent, CartState> {
     on<LoadCartEvent>(_onLoadCart);
   }
 
-  void _onAddToCart(AddToCartEvent event, Emitter<CartState> emit) {
+  Future<void> _onAddToCart(
+    AddToCartEvent event,
+    Emitter<CartState> emit,
+  ) async {
     final currentState = state;
+    final currentUser = _auth.currentUser;
+
+    if (currentUser == null) {
+      emit(const CartError('User not authenticated'));
+      return;
+    }
+
+    // Check for valid bid for this product
+    BidModel? validBid;
+    try {
+      final bidResult = await _getValidBidForProductUseCase(
+        GetValidBidForProductParams(
+          userId: currentUser.uid,
+          agentId: event.agentId,
+          productId: event.product.id,
+        ),
+      );
+
+      bidResult.fold(
+        (failure) => null,
+        (bid) {
+          validBid = bid;
+        },
+      );
+    } catch (e) {
+      // Handle error silently
+    }
+
+    // Check for valid bid from Firebase database
+    // If no valid bid found, no discount will be applied
 
     if (currentState is CartLoaded) {
       // Check if cart is empty or if the product is from the same agent
@@ -191,6 +270,8 @@ class CartBloc extends Bloc<CartEvent, CartState> {
           quantity: 1,
           agentId: event.agentId,
           agentName: event.agentName,
+          bidAmount: validBid?.bidAmount,
+          hasValidBid: validBid != null,
         );
 
         final newItems = [...currentState.items, newItem];
@@ -200,7 +281,7 @@ class CartBloc extends Bloc<CartEvent, CartState> {
         );
         final newTotalPrice = newItems.fold(
           0.0,
-          (sum, item) => sum + (item.product.price * item.quantity),
+          (sum, item) => sum + item.totalPrice,
         );
 
         emit(
@@ -212,6 +293,20 @@ class CartBloc extends Bloc<CartEvent, CartState> {
             totalPrice: newTotalPrice,
           ),
         );
+
+        // Send notification to agent
+        final notification = CartNotificationEntity(
+          productId: event.product.id,
+          productName: event.product.productName,
+          productPrice: event.product.productPrice,
+          productImage: event.product.productImage,
+          agentId: event.agentId,
+          agentName: event.agentName,
+          userId: '', // Will be set by use case
+          userName: '', // Will be set by use case
+          quantity: 1,
+        );
+        await _sendCartNotificationUseCase(notification);
       } else if (currentState.currentAgentId == event.agentId) {
         // Same agent, check if product already exists
         final existingItemIndex = currentState.items.indexWhere(
@@ -232,7 +327,7 @@ class CartBloc extends Bloc<CartEvent, CartState> {
           );
           final newTotalPrice = updatedItems.fold(
             0.0,
-            (sum, item) => sum + (item.product.price * item.quantity),
+            (sum, item) => sum + item.totalPrice,
           );
 
           emit(
@@ -273,6 +368,20 @@ class CartBloc extends Bloc<CartEvent, CartState> {
               totalPrice: newTotalPrice,
             ),
           );
+
+          // Send notification to agent for new item
+          final notification = CartNotificationEntity(
+            productId: event.product.id,
+            productName: event.product.productName,
+            productPrice: event.product.productPrice,
+            productImage: event.product.productImage,
+            agentId: event.agentId,
+            agentName: event.agentName,
+            userId: '', // Will be set by use case
+            userName: '', // Will be set by use case
+            quantity: 1,
+          );
+          await _sendCartNotificationUseCase(notification);
         }
       } else {
         // Different agent, emit conflict state
@@ -303,6 +412,20 @@ class CartBloc extends Bloc<CartEvent, CartState> {
           totalPrice: event.product.price,
         ),
       );
+
+      // Send notification to agent for first item
+      final notification = CartNotificationEntity(
+        productId: event.product.id,
+        productName: event.product.productName,
+        productPrice: event.product.productPrice,
+        productImage: event.product.productImage,
+        agentId: event.agentId,
+        agentName: event.agentName,
+        userId: '', // Will be set by use case
+        userName: '', // Will be set by use case
+        quantity: 1,
+      );
+      await _sendCartNotificationUseCase(notification);
     }
   }
 
@@ -332,7 +455,7 @@ class CartBloc extends Bloc<CartEvent, CartState> {
         );
         final newTotalPrice = updatedItems.fold(
           0.0,
-          (sum, item) => sum + (item.product.price * item.quantity),
+          (sum, item) => sum + item.totalPrice,
         );
 
         emit(
@@ -368,7 +491,7 @@ class CartBloc extends Bloc<CartEvent, CartState> {
       );
       final newTotalPrice = updatedItems.fold(
         0.0,
-        (sum, item) => sum + (item.product.price * item.quantity),
+        (sum, item) => sum + item.totalPrice,
       );
 
       emit(

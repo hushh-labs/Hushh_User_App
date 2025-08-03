@@ -9,12 +9,13 @@ class ProductsListView extends StatefulWidget {
   final Function(AgentProductModel) onDelete;
   final bool shouldDismiss;
 
-  const ProductsListView(
-      {super.key,
-      required this.products,
-      this.shouldSelectProducts = false,
-      required this.onDelete,
-      required this.shouldDismiss});
+  const ProductsListView({
+    super.key,
+    required this.products,
+    this.shouldSelectProducts = false,
+    required this.onDelete,
+    required this.shouldDismiss,
+  });
 
   @override
   State<ProductsListView> createState() => _ProductsListViewState();
@@ -41,7 +42,9 @@ class _ProductsListViewState extends State<ProductsListView> {
                 context: context,
                 builder: (context) => AlertDialog(
                   title: const Text('Delete Product'),
-                  content: const Text('Are you sure you want to delete this product?'),
+                  content: const Text(
+                    'Are you sure you want to delete this product?',
+                  ),
                   actions: [
                     TextButton(
                       onPressed: () => Navigator.pop(context, false),
@@ -49,8 +52,8 @@ class _ProductsListViewState extends State<ProductsListView> {
                     ),
                     TextButton(
                       onPressed: () => Navigator.pop(context, true),
-                      child: const Text('Delete'),
                       style: TextButton.styleFrom(foregroundColor: Colors.red),
+                      child: const Text('Delete'),
                     ),
                   ],
                 ),
@@ -65,10 +68,7 @@ class _ProductsListViewState extends State<ProductsListView> {
               alignment: Alignment.centerRight,
               child: Padding(
                 padding: EdgeInsets.only(right: 16.0),
-                child: Icon(
-                  Icons.delete_outline,
-                  color: Colors.white,
-                ),
+                child: Icon(Icons.delete_outline, color: Colors.white),
               ),
             ),
           ),
@@ -95,4 +95,3 @@ class _ProductsListViewState extends State<ProductsListView> {
     );
   }
 }
-

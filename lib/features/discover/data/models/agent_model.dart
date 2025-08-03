@@ -40,16 +40,12 @@ class AgentModel extends Equatable {
         try {
           return DateTime.parse(dateField);
         } catch (e) {
-          print('Failed to parse date string: $dateField, error: $e');
           return DateTime.now();
         }
       } else if (dateField is DateTime) {
         return dateField;
       }
 
-      print(
-        'Unknown date field type: ${dateField.runtimeType}, value: $dateField',
-      );
       return DateTime.now();
     }
 
