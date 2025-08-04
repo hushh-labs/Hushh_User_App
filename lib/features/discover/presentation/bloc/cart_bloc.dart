@@ -247,12 +247,9 @@ class CartBloc extends Bloc<CartEvent, CartState> {
         ),
       );
 
-      bidResult.fold(
-        (failure) => null,
-        (bid) {
-          validBid = bid;
-        },
-      );
+      bidResult.fold((failure) => null, (bid) {
+        validBid = bid;
+      });
     } catch (e) {
       // Handle error silently
     }

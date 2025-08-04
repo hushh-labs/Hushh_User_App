@@ -8,6 +8,7 @@ class OrderConfirmationPage extends StatelessWidget {
   final String brandName;
   final double totalPrice;
   final String agentPhone;
+  final String customerName;
 
   const OrderConfirmationPage({
     super.key,
@@ -16,14 +17,32 @@ class OrderConfirmationPage extends StatelessWidget {
     required this.brandName,
     required this.totalPrice,
     required this.agentPhone,
+    required this.customerName,
   });
 
   @override
   Widget build(BuildContext context) {
     final orderNumber = _generateOrderNumber();
     final currentDate = DateTime.now();
-    final tax = totalPrice * 0.08; // 8% tax
-    final finalTotal = totalPrice + tax;
+
+    // Calculate the original subtotal (before discounts)
+    final originalSubtotal = cartItems.fold(
+      0.0,
+      (sum, item) => sum + (item.product.price * item.quantity),
+    );
+
+    // Calculate the discounted subtotal (after discounts)
+    final discountedSubtotal = cartItems.fold(
+      0.0,
+      (sum, item) => sum + item.totalPrice,
+    );
+
+    // Calculate total discount
+    final totalDiscount = originalSubtotal - discountedSubtotal;
+
+    // Calculate tax on the discounted subtotal
+    final tax = discountedSubtotal * 0.08; // 8% tax
+    final finalTotal = discountedSubtotal + tax;
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -213,19 +232,13 @@ class OrderConfirmationPage extends StatelessWidget {
                     const Divider(),
                     const SizedBox(height: 16),
                     // Totals
-                    _buildTotalRow('Subtotal', totalPrice),
+                    _buildTotalRow('Subtotal', originalSubtotal),
                     const SizedBox(height: 8),
                     // Show discount if any items have bids
                     if (cartItems.any((item) => item.hasValidBid))
                       Column(
                         children: [
-                          _buildTotalRow(
-                            'Discount',
-                            -cartItems.fold(
-                              0.0,
-                              (sum, item) => sum + item.discountAmount,
-                            ),
-                          ),
+                          _buildTotalRow('Discount', -totalDiscount),
                           const SizedBox(height: 8),
                         ],
                       ),
@@ -271,8 +284,11 @@ class OrderConfirmationPage extends StatelessWidget {
                             ],
                           ),
                           const SizedBox(height: 12),
-                          _buildDetailRow('Name', agentName),
-                          _buildDetailRow('Phone', agentPhone),
+                          _buildDetailRow('Name', customerName),
+                          _buildDetailRow(
+                            'Phone',
+                            agentPhone,
+                          ), // This is now the customer's phone
                           _buildDetailRow('Agent', agentName),
                           _buildDetailRow('Brand', brandName),
                         ],

@@ -30,7 +30,7 @@ class BidDataSourceImpl implements BidDataSource {
       for (final entry in bidsData.entries) {
         final key = entry.key.toString();
         final value = entry.value;
-        
+
         if (value is Map<dynamic, dynamic>) {
           final bidData = Map<String, dynamic>.from(value);
           bidData['id'] = key;

@@ -9,7 +9,6 @@ import 'package:hushh_user_app/features/pda/domain/usecases/get_messages_use_cas
 import 'package:hushh_user_app/features/pda/domain/usecases/clear_messages_use_case.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
-import 'package:hushh_user_app/shared/widgets/user_coins_elevated_button.dart';
 import 'package:hushh_user_app/shared/utils/app_local_storage.dart';
 
 class PdaSimplePage extends StatefulWidget {

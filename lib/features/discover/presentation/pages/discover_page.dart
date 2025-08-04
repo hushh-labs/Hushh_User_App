@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../bloc/discover_bloc.dart';
 import '../bloc/card_wallet_bloc.dart';
 import '../bloc/inventory_bloc.dart';
@@ -98,61 +99,68 @@ class _DiscoverPageState extends State<DiscoverPage> {
   }
 
   void _showCartConflictDialog(CartAgentConflict state) {
+    final cartBloc = context.read<CartBloc>();
     showDialog(
       context: context,
       builder: (BuildContext context) {
-        return AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-          title: const Text(
-            'Cart Conflict',
-            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-          ),
-          content: Text(
-            'You have items from ${state.currentAgentName} in your cart. '
-            'Would you like to clear your cart and add items from ${state.newAgentName} instead?',
-            style: const TextStyle(fontSize: 16),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-              },
-              child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+        return BlocProvider.value(
+          value: cartBloc,
+          child: AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
             ),
-            TextButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-                // Clear cart and add the new item
-                context.read<CartBloc>().add(const ClearCartEvent());
-                context.read<CartBloc>().add(
-                  AddToCartEvent(
-                    product: state.product,
-                    agentId: state.product.id
-                        .split('_')
-                        .first, // Extract agent ID from product ID
-                    agentName: state.newAgentName,
-                  ),
-                );
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(
-                      'Cart cleared and ${state.product.productName} added!',
-                    ),
-                    backgroundColor: primaryPurple,
-                  ),
-                );
-              },
-              child: Text(
-                'Clear & Add',
-                style: TextStyle(
-                  color: primaryPurple,
-                  fontWeight: FontWeight.bold,
+            title: const Text(
+              'Cart Conflict',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+            ),
+            content: Text(
+              'You have items from ${state.currentAgentName} in your cart. '
+              'Would you like to clear your cart and add items from ${state.newAgentName} instead?',
+              style: const TextStyle(fontSize: 16),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.of(context).pop();
+                },
+                child: const Text(
+                  'Cancel',
+                  style: TextStyle(color: Colors.grey),
                 ),
               ),
-            ),
-          ],
+              TextButton(
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  // Clear cart and add the new item
+                  cartBloc.add(const ClearCartEvent());
+                  cartBloc.add(
+                    AddToCartEvent(
+                      product: state.product,
+                      agentId: state.product.id
+                          .split('_')
+                          .first, // Extract agent ID from product ID
+                      agentName: state.newAgentName,
+                    ),
+                  );
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        'Cart cleared and ${state.product.productName} added!',
+                      ),
+                      backgroundColor: primaryPurple,
+                    ),
+                  );
+                },
+                child: Text(
+                  'Clear & Add',
+                  style: TextStyle(
+                    color: primaryPurple,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
         );
       },
     );
@@ -519,7 +527,71 @@ class _DiscoverPageState extends State<DiscoverPage> {
                                 // Get agent details from Firebase using currentAgentId from cart
                                 String agentName = 'Unknown Agent';
                                 String brandName = 'Unknown Brand';
-                                String phone = '+91';
+                                String agentPhone = '+91';
+                                String customerPhone = '+91';
+                                String customerName = 'Customer';
+
+                                // Get current user's profile information
+                                final currentUser =
+                                    FirebaseAuth.instance.currentUser;
+                                if (currentUser != null) {
+                                  customerPhone =
+                                      currentUser.phoneNumber ?? '+91';
+                                  customerName =
+                                      currentUser.displayName ?? 'Customer';
+
+                                  debugPrint(
+                                    'Firebase Auth displayName: ${currentUser.displayName}',
+                                  );
+                                  debugPrint(
+                                    'Firebase Auth phoneNumber: ${currentUser.phoneNumber}',
+                                  );
+
+                                  // Get user profile from Firestore
+                                  try {
+                                    final userDoc = await FirebaseFirestore
+                                        .instance
+                                        .collection('HushUsers')
+                                        .doc(currentUser.uid)
+                                        .get();
+
+                                    if (userDoc.exists) {
+                                      final userData = userDoc.data()!;
+                                      customerPhone =
+                                          userData['phoneNumber'] ??
+                                          customerPhone;
+                                      customerName =
+                                          userData['fullname'] ??
+                                          userData['fullName'] ??
+                                          userData['name'] ??
+                                          customerName;
+
+                                      debugPrint(
+                                        'Firestore userData: $userData',
+                                      );
+                                      debugPrint(
+                                        'Firestore fullname: ${userData['fullname']}',
+                                      );
+                                      debugPrint(
+                                        'Firestore fullName: ${userData['fullName']}',
+                                      );
+                                      debugPrint(
+                                        'Firestore name: ${userData['name']}',
+                                      );
+                                      debugPrint(
+                                        'Firestore phoneNumber: ${userData['phoneNumber']}',
+                                      );
+                                    } else {
+                                      debugPrint(
+                                        'User document does not exist in HushhUsers collection',
+                                      );
+                                    }
+                                  } catch (e) {
+                                    debugPrint(
+                                      'Error fetching user profile: $e',
+                                    );
+                                  }
+                                }
 
                                 if (cartState.currentAgentId != null) {
                                   try {
@@ -536,7 +608,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
                                       brandName =
                                           agentData['brandName'] ??
                                           'Unknown Brand';
-                                      phone = agentData['phone'] ?? '+91';
+                                      agentPhone = agentData['phone'] ?? '+91';
                                     }
                                   } catch (e) {
                                     debugPrint(
@@ -559,13 +631,14 @@ class _DiscoverPageState extends State<DiscoverPage> {
                                     context,
                                     MaterialPageRoute(
                                       builder: (context) => BlocProvider.value(
-                                        value: context.read<CartBloc>(),
+                                        value: cartBloc,
                                         child: OrderConfirmationPage(
                                           cartItems: cartState.items,
                                           agentName: agentName,
                                           brandName: brandName,
                                           totalPrice: cartState.totalPrice,
-                                          agentPhone: phone,
+                                          agentPhone: customerPhone,
+                                          customerName: customerName,
                                         ),
                                       ),
                                     ),
