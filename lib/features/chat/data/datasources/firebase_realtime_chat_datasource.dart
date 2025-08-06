@@ -6,31 +6,73 @@ class FirebaseRealtimeChatDataSource {
   final DatabaseReference _database = FirebaseDatabase.instance.ref();
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
+  FirebaseRealtimeChatDataSource() {
+    print('FirebaseRealtimeChatDataSource initialized');
+    print('Database URL: ${FirebaseDatabase.instance.databaseURL}');
+    print('Database reference path: ${_database.path}');
+
+    // Set up auth state listener for database
+    _auth.authStateChanges().listen((user) {
+      print('Auth state changed - User: ${user?.uid}');
+      if (user != null) {
+        print('User authenticated for database access');
+      } else {
+        print('User not authenticated for database access');
+      }
+    });
+  }
+
   // Get current user ID
-  String? get currentUserId => _auth.currentUser?.uid;
+  String? get currentUserId {
+    final user = _auth.currentUser;
+    print('Current user: ${user?.uid}');
+    print('User is authenticated: ${user != null}');
+    print('User email: ${user?.email}');
+    return user?.uid;
+  }
 
   // Get all chats for current user
   Stream<List<ChatModel>> getUserChats() {
     final userId = currentUserId;
     if (userId == null) return Stream.value([]);
 
-    return _database.child('chats').onValue.map((event) {
-      final data = event.snapshot.value as Map<dynamic, dynamic>?;
-      if (data == null) return [];
+    print('Getting chats for user: $userId');
+    print('Database path: ${_database.child('chats').path}');
 
-      return data.entries
+    return _database.child('chats').onValue.map((event) {
+      print('Stream event received');
+      print('Event snapshot value: ${event.snapshot.value}');
+      print('Event snapshot exists: ${event.snapshot.exists}');
+
+      final data = event.snapshot.value as Map<dynamic, dynamic>?;
+      if (data == null) {
+        print('No data in snapshot, returning empty list');
+        return [];
+      }
+
+      print('Raw data entries: ${data.entries.length}');
+
+      final filteredChats = data.entries
           .where((entry) {
             final chatData = Map<String, dynamic>.from(entry.value as Map);
             final participants = List<String>.from(
               chatData['participants'] ?? [],
             );
-            return participants.contains(userId);
+            final containsUser = participants.contains(userId);
+            print(
+              'Chat ${entry.key} participants: $participants, contains user: $containsUser',
+            );
+            return containsUser;
           })
           .map((entry) {
             final chatData = Map<String, dynamic>.from(entry.value as Map);
+            print('Creating ChatModel for chat: ${entry.key}');
             return ChatModel.fromJson(entry.key.toString(), chatData);
           })
           .toList();
+
+      print('Filtered chats count: ${filteredChats.length}');
+      return filteredChats;
     });
   }
 
@@ -59,6 +101,9 @@ class FirebaseRealtimeChatDataSource {
     String text, {
     MessageType type = MessageType.text,
   }) async {
+    // Wait for auth to be ready
+    await _auth.authStateChanges().first;
+
     final userId = currentUserId;
     if (userId == null) throw Exception('User not authenticated');
 
@@ -66,33 +111,56 @@ class FirebaseRealtimeChatDataSource {
     print('Message text: $text');
     print('User ID: $userId');
 
-    final messageRef = _database
-        .child('chats')
-        .child(chatId)
-        .child('messages')
-        .push();
+    try {
+      // Check if chat exists first
+      final chatSnapshot = await _database.child('chats').child(chatId).get();
+      print('Chat existence check - snapshot value: ${chatSnapshot.value}');
+      print('Chat existence check - snapshot exists: ${chatSnapshot.exists}');
 
-    final message = MessageModel(
-      id: messageRef.key!,
-      text: text,
-      senderId: userId,
-      timestamp: DateTime.now(),
-      type: type,
-      isSeen: false,
-    );
+      final messageRef = _database
+          .child('chats')
+          .child(chatId)
+          .child('messages')
+          .push();
 
-    // Save message
-    await messageRef.set(message.toJson());
-    print('Message saved successfully');
+      print('Message reference path: ${messageRef.path}');
+      print('Message reference key: ${messageRef.key}');
 
-    // Update chat's last message info
-    await _database.child('chats').child(chatId).update({
-      'lastText': text,
-      'lastTextTime': DateTime.now().millisecondsSinceEpoch,
-      'lastTextBy': userId,
-      'isLastTextSeen': false,
-    });
-    print('Chat last message info updated successfully');
+      final message = MessageModel(
+        id: messageRef.key!,
+        text: text,
+        senderId: userId,
+        timestamp: DateTime.now(),
+        type: type,
+        isSeen: false,
+      );
+
+      print('Message data to save: ${message.toJson()}');
+
+      // Save message
+      await messageRef.set(message.toJson());
+      print('Message saved successfully');
+
+      // Update chat's last message info
+      await _database.child('chats').child(chatId).update({
+        'lastText': text,
+        'lastTextTime': DateTime.now().millisecondsSinceEpoch,
+        'lastTextBy': userId,
+        'isLastTextSeen': false,
+      });
+      print('Chat last message info updated successfully');
+
+      // Verify message was saved
+      final messageSnapshot = await messageRef.get();
+      print('Message verification - snapshot value: ${messageSnapshot.value}');
+      print(
+        'Message verification - snapshot exists: ${messageSnapshot.exists}',
+      );
+    } catch (e) {
+      print('Error sending message: $e');
+      print('Error type: ${e.runtimeType}');
+      rethrow;
+    }
   }
 
   // Set typing status
@@ -170,11 +238,34 @@ class FirebaseRealtimeChatDataSource {
 
   // Create a new chat
   Future<String> createChat(List<String> participantIds) async {
+    // Wait for auth to be ready
+    await _auth.authStateChanges().first;
+
     final userId = currentUserId;
     if (userId == null) throw Exception('User not authenticated');
 
     print('Creating chat with participants: $participantIds');
     print('Current user ID: $userId');
+
+    // Test database connection first
+    try {
+      print('Testing database read access...');
+      print('Current user ID: $userId');
+      print('User is authenticated: ${_auth.currentUser != null}');
+
+      // Check if user has a valid token
+      final token = await _auth.currentUser?.getIdToken();
+      print('User has valid token: ${token != null}');
+
+      final testSnapshot = await _database.child('chats').get();
+      print(
+        'Database read test successful - snapshot exists: ${testSnapshot.exists}',
+      );
+    } catch (e) {
+      print('Database read test failed: $e');
+      print('Error details: ${e.toString()}');
+      rethrow;
+    }
 
     // Add current user to participants if not already included
     if (!participantIds.contains(userId)) {
@@ -225,11 +316,30 @@ class FirebaseRealtimeChatDataSource {
     chatData['hasBlocked'] = hasBlocked;
 
     print('Creating chat with data: $chatData');
-    await _database.child('chats').child(chatId).set(chatData);
-    print(
-      'Chat created successfully with typingStatus, deletionFlags, and hasBlocked',
-    );
-    return chatId;
+    print('Database reference: ${_database.child('chats').child(chatId).path}');
+
+    try {
+      print('About to call set() operation...');
+      await _database.child('chats').child(chatId).set(chatData);
+      print('set() operation completed');
+      print(
+        'Chat created successfully with typingStatus, deletionFlags, and hasBlocked',
+      );
+
+      print('About to verify chat creation...');
+      // Verify the chat was created
+      final snapshot = await _database.child('chats').child(chatId).get();
+      print('Verification snapshot value: ${snapshot.value}');
+      print('Verification snapshot exists: ${snapshot.exists}');
+      print('Verification completed');
+
+      return chatId;
+    } catch (e) {
+      print('Error creating chat: $e');
+      print('Error type: ${e.runtimeType}');
+      print('Error stack trace: ${StackTrace.current}');
+      rethrow;
+    }
   }
 
   // Mark message as seen

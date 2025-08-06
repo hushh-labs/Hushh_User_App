@@ -465,6 +465,14 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
 
       if (streamUserChats != null) {
         print('BLoC: Repository available, listening to chats stream');
+
+        // First, emit the initial state with just Hushh Bot to avoid infinite loading
+        _allChats = allChatItems;
+        emit(
+          ChatsLoadedState(chats: allChatItems, filteredChats: allChatItems),
+        );
+
+        // Then listen to the stream for real-time updates
         await emit.onEach<List<ChatEntity>>(
           streamUserChats!(),
           onData: (chatEntities) {
@@ -639,7 +647,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
 
       final newState = ChatMessagesLoadedState(
         chatId: event.chatId,
-        messages: _chatMessages[event.chatId]!,
+        messages: List.from(_chatMessages[event.chatId]!),
         isOtherUserTyping: false,
       );
 
