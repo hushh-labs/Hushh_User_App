@@ -2,6 +2,7 @@
 class FirestoreCollections {
   // Main collections
   static const String users = 'HushUsers';
+  static const String agents = 'Hushhagents';
   static const String auth = 'auth';
   static const String profiles = 'profiles';
   static const String settings = 'settings';
@@ -64,6 +65,7 @@ class FirestoreFields {
   static const String displayName = 'displayName';
   static const String photoUrl = 'photoUrl';
   static const String phoneNumber = 'phoneNumber';
+  static const String phone = 'phone';
   static const String dateOfBirth = 'dateOfBirth';
   static const String gender = 'gender';
   static const String bio = 'bio';

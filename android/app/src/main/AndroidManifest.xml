@@ -4,10 +4,12 @@
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <!-- Contact permission for user discovery -->
+    <uses-permission android:name="android.permission.READ_CONTACTS" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     
     <application
-        android:label="hushh_user_app"
+        android:label="Hushh App"
         android:name="${applicationName}"
         android:icon="@mipmap/launcher_icon">
         <activity

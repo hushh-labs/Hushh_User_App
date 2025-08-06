@@ -1,6 +1,6 @@
 {
-    "name": "hushh_user_app",
-    "short_name": "hushh_user_app",
+    "name": "Hushh App",
+    "short_name": "Hushh App",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#hexcode",

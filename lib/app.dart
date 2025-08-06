@@ -13,6 +13,7 @@ import 'features/pda/di/pda_module.dart';
 import 'features/profile/di/profile_module.dart';
 import 'features/discover/di/discover_module.dart';
 import 'features/notifications/di/notification_module.dart';
+import 'features/chat/di/chat_module.dart';
 import 'shared/di/dependencies.dart';
 import 'shared/utils/app_local_storage.dart';
 
@@ -34,6 +35,7 @@ Future<void> mainApp() async {
   ProfileModule.init();
   DiscoverModule.init();
   NotificationModule.register();
+  ChatModule.init();
   setupDependencies();
 
   runApp(const MyApp());

@@ -7,7 +7,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Hushh User App</string>
+	<string>Hushh App</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -15,7 +15,7 @@
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>hushh_user_app</string>
+	<string>Hushh App</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
@@ -49,6 +49,8 @@
 	<string>Hushh needs camera access to let you take a profile photo directly from your camera</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Hushh needs photo library access to let you choose a profile photo from your existing photos</string>
+	<key>NSContactsUsageDescription</key>
+	<string>Hushh needs access to your contacts to help you find and start conversations with other users in the app. This allows us to match you with people you know.</string>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>UIBackgroundModes</key>

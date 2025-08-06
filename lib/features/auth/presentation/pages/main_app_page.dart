@@ -4,6 +4,7 @@ import '../../../../shared/utils/app_local_storage.dart';
 import '../../../pda/presentation/pages/pda_simple_page.dart';
 import '../../../profile/presentation/pages/profile_page_wrapper.dart';
 import '../../../discover/presentation/pages/discover_page_wrapper.dart';
+import '../../../chat/presentation/pages/chat_page_wrapper.dart';
 import '../../../../shared/presentation/widgets/debug_wrapper.dart';
 import '../../../../shared/utils/guest_access_control.dart';
 
@@ -20,6 +21,7 @@ class _MainAppPageState extends State<MainAppPage> {
   final List<Widget> _pages = [
     const DiscoverPageWrapper(),
     const PdaSimplePage(),
+    const ChatPageWrapper(),
     const ProfilePageWrapper(),
   ];
 
@@ -29,6 +31,11 @@ class _MainAppPageState extends State<MainAppPage> {
       label: 'PDA',
       icon: Icons.psychology_outlined,
       isRestrictedForGuest: true, // User guests cannot access PDA
+    ),
+    BottomNavItem.user(
+      label: 'Chat',
+      iconPath: 'assets/chat_bottom_bar_icon.svg',
+      isRestrictedForGuest: true, // User guests cannot access chat
     ),
     BottomNavItem.user(
       label: 'Profile',
