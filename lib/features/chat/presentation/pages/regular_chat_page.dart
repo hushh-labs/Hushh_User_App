@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'dart:io';
 import 'dart:typed_data';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../bloc/chat_bloc.dart' as chat;
 import '../../domain/entities/chat_entity.dart';
 import '../components/message_bubble.dart';
@@ -25,6 +25,7 @@ class RegularChatPage extends StatefulWidget {
 
 class _RegularChatPageState extends State<RegularChatPage> {
   final TextEditingController _messageController = TextEditingController();
+  late String _currentChatId;
   bool _isTyping = false;
   bool _hasSentFirstMessage = false; // Track if first message has been sent
   Timer? _typingTimer;
@@ -32,9 +33,7 @@ class _RegularChatPageState extends State<RegularChatPage> {
   @override
   void initState() {
     super.initState();
-    // Load chat messages when page opens
-    context.read<chat.ChatBloc>().add(chat.OpenChatEvent(widget.chatId));
-
+    _currentChatId = widget.chatId;
     // Start listening for typing status of the other user
     _startListeningTypingStatus();
   }
@@ -51,11 +50,17 @@ class _RegularChatPageState extends State<RegularChatPage> {
   }
 
   void _startListeningTypingStatus() {
-    // For demo purposes, we'll simulate the other user's ID
-    // In real app, you'd get this from the chat participants
-    final otherUserId = 'other_user_${widget.chatId}';
+    final currentUserId = FirebaseAuth.instance.currentUser?.uid;
+    if (currentUserId == null) return;
+
+    final participants = _currentChatId.split('_');
+    final otherUserId =
+        participants.firstWhere((id) => id != currentUserId, orElse: () => '');
+
+    if (otherUserId.isEmpty) return;
+
     context.read<chat.ChatBloc>().add(
-      chat.ListenTypingStatusEvent(widget.chatId, otherUserId),
+      chat.ListenTypingStatusEvent(_currentChatId, otherUserId),
     );
   }
 
@@ -69,15 +74,18 @@ class _RegularChatPageState extends State<RegularChatPage> {
   void _setTypingStatus(bool isTyping) {
     print('🔍 UI: _setTypingStatus called');
     print('🔍 UI: Is typing: $isTyping');
-    print('🔍 UI: Chat ID: ${widget.chatId}');
+    print('🔍 UI: Chat ID: ${_currentChatId}');
 
-    final currentUserId =
-        FirebaseAuth.instance.currentUser?.uid ??
-        'current_user'; // In real app, get from Firebase Auth
+    final currentUserId = FirebaseAuth.instance.currentUser?.uid;
+    if (currentUserId == null) {
+      print('❌ UI: Current user is null, cannot set typing status');
+      return;
+    }
+
     print('🔍 UI: Current user ID: $currentUserId');
 
     context.read<chat.ChatBloc>().add(
-      chat.SetTypingStatusEvent(widget.chatId, currentUserId, isTyping),
+      chat.SetTypingStatusEvent(_currentChatId, currentUserId, isTyping),
     );
     print('🔍 UI: SetTypingStatusEvent added to BLoC');
   }
@@ -119,7 +127,7 @@ class _RegularChatPageState extends State<RegularChatPage> {
       // Send image message
       context.read<chat.ChatBloc>().add(
         chat.SendMessageEvent(
-          chatId: widget.chatId,
+          chatId: _currentChatId,
           message: 'Image',
           isBot: false,
           messageType: MessageType.image,
@@ -170,7 +178,7 @@ class _RegularChatPageState extends State<RegularChatPage> {
           children: [
             CircleAvatar(
               radius: 20,
-              backgroundColor: _getAvatarColor(widget.chatId),
+              backgroundColor: _getAvatarColor(_currentChatId),
               child: Icon(Icons.person, color: Colors.white, size: 20),
             ),
             const SizedBox(width: 12),
@@ -222,7 +230,11 @@ class _RegularChatPageState extends State<RegularChatPage> {
           ),
         ],
       ),
-      body: BlocListener<chat.ChatBloc, chat.ChatState>(
+      body: BlocConsumer<chat.ChatBloc, chat.ChatState>(
+        buildWhen: (previous, current) {
+          return current is chat.ChatMessagesLoadedState ||
+              current is chat.ChatLoadingState;
+        },
         listener: (context, state) {
           print('🔍 UI: BlocListener called');
           print('🔍 UI: State type: ${state.runtimeType}');
@@ -248,66 +260,46 @@ class _RegularChatPageState extends State<RegularChatPage> {
               print('🔍 UI: Existing messages found - enabling typing status');
               _hasSentFirstMessage = true;
             }
+
+            if (state.chatId != _currentChatId) {
+              setState(() {
+                _currentChatId = state.chatId;
+              });
+            }
           }
         },
-        child: BlocBuilder<chat.ChatBloc, chat.ChatState>(
-          builder: (context, state) {
-            print('🔍 UI: BlocBuilder called');
-            print('🔍 UI: State type: ${state.runtimeType}');
-            print('🔍 UI: State hash: ${state.hashCode}');
-            print('🔍 UI: Current chat ID: ${widget.chatId}');
-            print('🔍 UI: State details: $state');
+        builder: (context, state) {
+          print('🔍 UI: BlocBuilder called');
+          print('🔍 UI: State type: ${state.runtimeType}');
+          print('🔍 UI: State hash: ${state.hashCode}');
+          print('🔍 UI: Current chat ID: ${_currentChatId}');
+          print('🔍 UI: State details: $state');
 
-            List<chat.ChatMessage> messages = [];
-            bool isOtherUserTyping = false;
+          if (state is chat.ChatLoadingState) {
+            return const Center(child: CircularProgressIndicator());
+          }
 
-            if (state is chat.ChatMessagesLoadedState) {
-              messages = state.messages;
-              isOtherUserTyping = state.isOtherUserTyping;
-              print('🔍 UI: ChatMessagesLoadedState received');
-              print('🔍 UI: Messages count: ${messages.length}');
-              print('🔍 UI: Is other user typing: $isOtherUserTyping');
-              print('🔍 UI: Chat ID: ${state.chatId}');
-              print('🔍 UI: Expected chat ID: ${widget.chatId}');
-              print('🔍 UI: Chat IDs match: ${state.chatId == widget.chatId}');
+          if (state is chat.ChatMessagesLoadedState) {
+            final messages = state.messages;
+            final isOtherUserTyping = state.isOtherUserTyping;
 
-              // Log each message
-              for (int i = 0; i < messages.length; i++) {
-                print(
-                  '🔍 UI: Message $i: "${messages[i].text}" (ID: ${messages[i].id})',
-                );
-              }
-            } else {
-              print('🔍 UI: State is not ChatMessagesLoadedState');
-              print('🔍 UI: State type: ${state.runtimeType}');
+            print('🔍 UI: ChatMessagesLoadedState received');
+            print('🔍 UI: Messages count: ${messages.length}');
+            print('🔍 UI: Is other user typing: $isOtherUserTyping');
+            print('🔍 UI: Chat ID: ${state.chatId}');
+            print('🔍 UI: Expected chat ID: ${_currentChatId}');
+            print('🔍 UI: Chat IDs match: ${state.chatId == _currentChatId}');
 
-              // If we have messages in memory but state is not ChatMessagesLoadedState,
-              // we might need to force a rebuild
-              if (context.read<chat.ChatBloc>().state
-                  is chat.ChatMessagesLoadedState) {
-                final currentState =
-                    context.read<chat.ChatBloc>().state
-                        as chat.ChatMessagesLoadedState;
-                if (currentState.chatId == widget.chatId) {
-                  print('🔍 UI: Using cached messages from BLoC state');
-                  messages = currentState.messages;
-                  isOtherUserTyping = currentState.isOtherUserTyping;
-                }
-              }
+            for (int i = 0; i < messages.length; i++) {
+              print(
+                '🔍 UI: Message $i: "${messages[i].text}" (ID: ${messages[i].id})',
+              );
             }
-
-            print(
-              '🔍 UI: Final messages count for display: ${messages.length}',
-            );
-            print('🔍 UI: Final isOtherUserTyping: $isOtherUserTyping');
 
             return Column(
               children: [
-                // Messages
                 Expanded(
-                  child: state is chat.ChatLoadingState
-                      ? const Center(child: CircularProgressIndicator())
-                      : messages.isEmpty
+                  child: messages.isEmpty
                       ? const Center(
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
@@ -353,8 +345,6 @@ class _RegularChatPageState extends State<RegularChatPage> {
                           },
                         ),
                 ),
-
-                // Typing indicator
                 if (isOtherUserTyping)
                   Container(
                     padding: const EdgeInsets.symmetric(
@@ -397,7 +387,6 @@ class _RegularChatPageState extends State<RegularChatPage> {
                     ),
                   ),
 
-                // Message Input
                 MessageInput(
                   controller: _messageController,
                   onSendMessage: _sendMessage,
@@ -405,7 +394,6 @@ class _RegularChatPageState extends State<RegularChatPage> {
                   onImageSelected: _onImageSelected,
                   onFileSelected: _onFileSelected,
                   onAttachFile: () {
-                    // No file upload for regular chats
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
                         content: Text(
@@ -417,8 +405,9 @@ class _RegularChatPageState extends State<RegularChatPage> {
                 ),
               ],
             );
-          },
-        ),
+          }
+          return const Center(child: CircularProgressIndicator());
+        },
       ),
     );
   }
@@ -434,7 +423,7 @@ class _RegularChatPageState extends State<RegularChatPage> {
 
     context.read<chat.ChatBloc>().add(
       chat.SendMessageEvent(
-        chatId: widget.chatId,
+        chatId: _currentChatId,
         message: text.trim(),
         isBot: false,
       ),
@@ -486,12 +475,12 @@ class _RegularChatPageState extends State<RegularChatPage> {
             TextButton(
               onPressed: () {
                 Navigator.pop(context);
+                final currentUserId = FirebaseAuth.instance.currentUser?.uid;
+                if (currentUserId == null) return;
                 context.read<chat.ChatBloc>().add(
                   chat.ClearChatEvent(
-                    chatId: widget.chatId,
-                    userId:
-                        FirebaseAuth.instance.currentUser?.uid ??
-                        'current_user', // TODO: Get from auth
+                    chatId: _currentChatId,
+                    userId: currentUserId,
                   ),
                 );
               },
@@ -520,15 +509,19 @@ class _RegularChatPageState extends State<RegularChatPage> {
             TextButton(
               onPressed: () {
                 Navigator.pop(context);
+                final currentUserId = FirebaseAuth.instance.currentUser?.uid;
+                if (currentUserId == null) return;
+
+                final participants = _currentChatId.split('_');
+                final otherUserId = participants
+                    .firstWhere((id) => id != currentUserId, orElse: () => '');
+
+                if (otherUserId.isEmpty) return;
+
                 context.read<chat.ChatBloc>().add(
                   chat.BlockUserEvent(
-                    userId:
-                        FirebaseAuth.instance.currentUser?.uid ??
-                        'current_user', // TODO: Get from auth
-                    blockedUserId: widget.chatId.replaceAll(
-                      'current_user_',
-                      '',
-                    ),
+                    userId: currentUserId,
+                    blockedUserId: otherUserId,
                   ),
                 );
               },

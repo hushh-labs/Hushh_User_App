@@ -1,6 +1,8 @@
 import 'package:firebase_database/firebase_database.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/chat_model.dart';
+import '../models/user_model.dart';
 
 class FirebaseRealtimeChatDataSource {
   final DatabaseReference _database = FirebaseDatabase.instance.ref();
@@ -400,5 +402,158 @@ class FirebaseRealtimeChatDataSource {
     }
 
     return null;
+  }
+
+  // Get user display name from Firestore
+  Future<String> getUserDisplayName(String userId) async {
+    print('🔍 DataSource: Fetching display name for user: $userId');
+    try {
+      // First try to get user from HushUsers collection
+      final userDoc = await FirebaseFirestore.instance
+          .collection('HushUsers')
+          .doc(userId)
+          .get();
+
+      if (userDoc.exists) {
+        final userData = userDoc.data()!;
+        final userName =
+            userData['fullName'] ??
+            userData['name'] ??
+            userData['displayName'] ??
+            'Unknown User';
+        print('🔍 DataSource: Found user in HushUsers: $userName');
+        return userName;
+      }
+
+      // If not found in HushUsers, try Hushhagents collection
+      print('🔍 DataSource: User not found in HushUsers, trying Hushhagents');
+      final agentDoc = await FirebaseFirestore.instance
+          .collection('Hushhagents')
+          .doc(userId)
+          .get();
+
+      if (agentDoc.exists) {
+        final agentData = agentDoc.data()!;
+        final agentName =
+            agentData['fullName'] ?? agentData['name'] ?? 'Unknown Agent';
+        print('🔍 DataSource: Found user in Hushhagents: $agentName');
+        return agentName;
+      }
+
+      // If not found in either collection, use a shortened user ID
+      print(
+        '🔍 DataSource: User not found in either collection, using fallback',
+      );
+      if (userId.length > 8) {
+        return 'User ${userId.substring(0, 8)}...';
+      }
+      return 'User $userId';
+    } catch (e) {
+      // On error, fallback to shortened user ID
+      print('🔍 DataSource: Error fetching user name: $e');
+      if (userId.length > 8) {
+        return 'User ${userId.substring(0, 8)}...';
+      }
+      return 'User $userId';
+    }
+  }
+
+  // Get all users from Firestore
+  Future<List<ChatUserModel>> getUsers() async {
+    final List<ChatUserModel> allUsers = [];
+    final currentUser = this.currentUserId;
+
+    try {
+      // Get users from HushUsers collection
+      final usersSnapshot = await FirebaseFirestore.instance
+          .collection('HushUsers')
+          .get();
+
+      final usersFromHushUsers = usersSnapshot.docs.map((doc) {
+        final data = doc.data();
+        return ChatUserModel.fromJson(doc.id, data);
+      }).toList();
+
+      allUsers.addAll(usersFromHushUsers);
+
+      // Get users from Hushhagents collection
+      final agentsSnapshot = await FirebaseFirestore.instance
+          .collection('Hushhagents')
+          .get();
+
+      final usersFromHushhagents = agentsSnapshot.docs.map((doc) {
+        final data = doc.data();
+        return ChatUserModel.fromJson(doc.id, data);
+      }).toList();
+
+      allUsers.addAll(usersFromHushhagents);
+
+      // Filter out current user
+      allUsers.removeWhere((user) => user.id == currentUser);
+
+      // Sort by creation date (latest first)
+      allUsers.sort((a, b) {
+        final dateA =
+            a.createdAt ?? DateTime.now().subtract(const Duration(days: 365));
+        final dateB =
+            b.createdAt ?? DateTime.now().subtract(const Duration(days: 365));
+        return dateB.compareTo(dateA);
+      });
+
+      return allUsers;
+    } catch (e) {
+      print('Error fetching users: $e');
+      return [];
+    }
+  }
+
+  // Get current user
+  Future<ChatUserModel?> getCurrentUser() async {
+    final userId = currentUserId;
+    if (userId == null) return null;
+
+    try {
+      // Try to get from HushUsers first
+      final userDoc = await FirebaseFirestore.instance
+          .collection('HushUsers')
+          .doc(userId)
+          .get();
+
+      if (userDoc.exists) {
+        return ChatUserModel.fromJson(userId, userDoc.data()!);
+      }
+
+      // Try to get from Hushhagents
+      final agentDoc = await FirebaseFirestore.instance
+          .collection('Hushhagents')
+          .doc(userId)
+          .get();
+
+      if (agentDoc.exists) {
+        return ChatUserModel.fromJson(userId, agentDoc.data()!);
+      }
+
+      return null;
+    } catch (e) {
+      print('Error fetching current user: $e');
+      return null;
+    }
+  }
+
+  // Search users
+  Future<List<ChatUserModel>> searchUsers(String query) async {
+    final allUsers = await getUsers();
+    if (query.isEmpty) return allUsers;
+
+    final lowercaseQuery = query.toLowerCase();
+    return allUsers.where((user) {
+      final name = user.name?.toLowerCase() ?? '';
+      final email = user.email?.toLowerCase() ?? '';
+      final phone = user.phoneNumber?.toLowerCase() ?? '';
+
+      return name.contains(lowercaseQuery) ||
+          email.contains(lowercaseQuery) ||
+          phone.contains(lowercaseQuery);
+    }).toList();
   }
 }

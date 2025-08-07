@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'dart:io';
 import 'dart:typed_data';
 import '../bloc/chat_bloc.dart';
 import '../../domain/entities/chat_entity.dart';
@@ -100,7 +99,6 @@ class MessageBubble extends StatelessWidget {
       case MessageType.file:
         return _buildFileMessage();
       case MessageType.text:
-      default:
         return _buildTextMessage();
     }
   }

@@ -5,9 +5,10 @@ import '../bloc/chat_bloc.dart' as chat;
 import '../components/chat_search_bar.dart';
 import '../components/chat_list_item.dart';
 import '../components/empty_chat_state.dart';
+import '../components/chat_loading_animation.dart';
 import '../../../../../shared/utils/guest_utils.dart';
 import 'hushh_bot_chat_page.dart';
-import 'user_list_page.dart';
+import 'user_list_page_clean.dart';
 import 'regular_chat_page.dart';
 
 class ChatPage extends StatelessWidget {
@@ -15,10 +16,7 @@ class ChatPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return BlocProvider(
-      create: (context) => chat.ChatBloc()..add(const chat.LoadChatsEvent()),
-      child: const _ChatView(),
-    );
+    return const _ChatView();
   }
 }
 
@@ -31,6 +29,17 @@ class _ChatView extends StatefulWidget {
 
 class _ChatViewState extends State<_ChatView> {
   final TextEditingController _searchController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    // Ensure chats are loaded when the page is first accessed
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        context.read<chat.ChatBloc>().add(const chat.LoadChatsEvent());
+      }
+    });
+  }
 
   @override
   void dispose() {
@@ -60,7 +69,12 @@ class _ChatViewState extends State<_ChatView> {
             GestureDetector(
               onTap: () => Navigator.push(
                 context,
-                MaterialPageRoute(builder: (_) => const UserListPage()),
+                MaterialPageRoute(
+                  builder: (_) => BlocProvider.value(
+                    value: context.read<chat.ChatBloc>(),
+                    child: const UserListPageClean(),
+                  ),
+                ),
               ),
               child: Container(
                 width: 40,
@@ -77,6 +91,13 @@ class _ChatViewState extends State<_ChatView> {
       ),
       body: BlocConsumer<chat.ChatBloc, chat.ChatState>(
         listener: (context, state) {
+          print('🔍 UI: State changed to: ${state.runtimeType}');
+          if (state is chat.ChatsLoadedState) {
+            print('🔍 UI: ChatsLoadedState with ${state.chats.length} chats');
+            print(
+              '🔍 UI: Chat IDs: ${state.chats.map((c) => c.id).join(', ')}',
+            );
+          }
           if (state is chat.ChatErrorState) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
@@ -87,14 +108,31 @@ class _ChatViewState extends State<_ChatView> {
           }
         },
         builder: (context, state) {
+          // Show animation during any loading state
           if (state is chat.ChatLoadingState) {
-            return const Center(child: CircularProgressIndicator());
+            return const ChatLoadingAnimation();
           }
 
           List<chat.ChatItem> chats = [];
 
           if (state is chat.ChatsLoadedState) {
             chats = state.filteredChats;
+          } else if (state is chat.ChatMessagesLoadedState) {
+            // When returning from a chat, show loading state and force reload
+            print(
+              '🔍 UI: In ChatMessagesLoadedState, showing loading and forcing reload',
+            );
+
+            // Force reload chats to get the latest data
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted) {
+                print('🔍 UI: Adding LoadChatsEvent to refresh chat list');
+                context.read<chat.ChatBloc>().add(const chat.LoadChatsEvent());
+              }
+            });
+
+            // Show loading state while reloading
+            return const ChatLoadingAnimation();
           }
 
           return Column(
@@ -125,6 +163,7 @@ class _ChatViewState extends State<_ChatView> {
                         itemCount: chats.length,
                         itemBuilder: (context, index) {
                           final chat = chats[index];
+
                           return Dismissible(
                             key: Key(chat.id),
                             background: Container(
@@ -163,6 +202,7 @@ class _ChatViewState extends State<_ChatView> {
   }
 
   void _openChat(BuildContext context, chat.ChatItem chatItem) {
+    final chatBloc = context.read<chat.ChatBloc>();
     if (chatItem.isBot && chatItem.id == 'hushh_bot') {
       Navigator.push(
         context,
@@ -172,17 +212,12 @@ class _ChatViewState extends State<_ChatView> {
       );
     } else {
       // Navigate to regular chat page for user conversations
+      chatBloc.add(chat.OpenChatEvent(chatItem.id));
       Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (context) => BlocProvider(
-            create: (context) {
-              final bloc = chat.ChatBloc();
-              // Load chats and immediately load the specific chat messages
-              bloc.add(const chat.LoadChatsEvent());
-              bloc.add(chat.OpenChatEvent(chatItem.id));
-              return bloc;
-            },
+          builder: (_) => BlocProvider.value(
+            value: chatBloc,
             child: RegularChatPage(
               chatId: chatItem.id,
               userName: chatItem.title,

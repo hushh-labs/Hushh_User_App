@@ -3,7 +3,9 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:equatable/equatable.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:get_it/get_it.dart';
+import '../../../../core/usecases/usecase.dart';
 import '../../domain/entities/chat_entity.dart';
+import '../../domain/entities/user_entity.dart';
 import '../../domain/repositories/chat_repository.dart';
 import '../../domain/usecases/chat_usecase.dart';
 
@@ -17,6 +19,22 @@ abstract class ChatEvent extends Equatable {
 
 class LoadChatsEvent extends ChatEvent {
   const LoadChatsEvent();
+}
+
+class LoadUsersEvent extends ChatEvent {
+  const LoadUsersEvent();
+}
+
+class SearchUsersEvent extends ChatEvent {
+  final String query;
+  const SearchUsersEvent(this.query);
+
+  @override
+  List<Object> get props => [query];
+}
+
+class GetCurrentUserEvent extends ChatEvent {
+  const GetCurrentUserEvent();
 }
 
 class SearchChatsEvent extends ChatEvent {
@@ -263,8 +281,26 @@ class ChatErrorState extends ChatState {
   List<Object> get props => [message];
 }
 
+class UsersLoadedState extends ChatState {
+  final List<ChatUserEntity> users;
+
+  const UsersLoadedState({required this.users});
+
+  @override
+  List<Object> get props => [users];
+}
+
+class CurrentUserLoadedState extends ChatState {
+  final ChatUserEntity? user;
+
+  const CurrentUserLoadedState({this.user});
+
+  @override
+  List<Object> get props => [user ?? ''];
+}
+
 // Data Models (for UI)
-class ChatItem {
+class ChatItem extends Equatable {
   final String id;
   final String title;
   final String subtitle;
@@ -286,6 +322,19 @@ class ChatItem {
     this.isUnread = false,
     this.isLastMessageSeen,
   });
+
+  @override
+  List<Object?> get props => [
+    id,
+    title,
+    subtitle,
+    avatarIcon,
+    avatarColor,
+    lastMessageTime,
+    isBot,
+    isUnread,
+    isLastMessageSeen,
+  ];
 
   ChatItem copyWith({
     String? id,
@@ -312,7 +361,7 @@ class ChatItem {
   }
 }
 
-class ChatMessage {
+class ChatMessage extends Equatable {
   final String id;
   final String text;
   final bool isBot;
@@ -336,6 +385,20 @@ class ChatMessage {
     this.fileUrl,
     this.isSeen = false,
   });
+
+  @override
+  List<Object?> get props => [
+    id,
+    text,
+    isBot,
+    timestamp,
+    type,
+    imageData,
+    imageUrl,
+    fileName,
+    fileUrl,
+    isSeen,
+  ];
 
   ChatMessage copyWith({
     String? id,
@@ -377,6 +440,18 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   final StreamTypingStatus? streamTypingStatus;
   final ChatRepository? repository;
   final GetChatById? getChatById;
+  final GetUserDisplayName? getUserDisplayName;
+  final GetUsers? getUsers;
+  final GetCurrentUser? getCurrentUser;
+  final SearchUsers? searchUsers;
+
+  // Add cached state for users and chats
+  List<ChatUserEntity> _cachedUsers = [];
+  ChatUserEntity? _cachedCurrentUser;
+  List<ChatItem> _cachedChats = [];
+
+  // Public getter for cached chats
+  List<ChatItem> get cachedChats => _cachedChats;
 
   // Factory constructor for backward compatibility
   factory ChatBloc() {
@@ -395,6 +470,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       streamChatMessages: GetIt.instance.get<StreamChatMessages>(),
       streamTypingStatus: GetIt.instance.get<StreamTypingStatus>(),
       repository: repository,
+      getUserDisplayName: GetIt.instance.get<GetUserDisplayName>(),
+      getUsers: GetIt.instance.get<GetUsers>(),
+      getCurrentUser: GetIt.instance.get<GetCurrentUser>(),
+      searchUsers: GetIt.instance.get<SearchUsers>(),
     );
   }
 
@@ -410,6 +489,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     this.streamChatMessages,
     this.streamTypingStatus,
     this.repository,
+    this.getUserDisplayName,
+    this.getUsers,
+    this.getCurrentUser,
+    this.searchUsers,
   }) : super(const ChatInitialState()) {
     print('🔍 BLoC: ChatBloc._ constructor called');
     on<LoadChatsEvent>(_onLoadChats);
@@ -424,6 +507,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     on<RemoveChatFromListEvent>(_onRemoveChatFromList);
     on<UpdateChatsEvent>(_onUpdateChats);
     on<UpdateMessagesEvent>(_onUpdateMessages);
+    on<LoadUsersEvent>(_onLoadUsers);
+    on<SearchUsersEvent>(_onSearchUsers);
+    on<GetCurrentUserEvent>(_onGetCurrentUser);
     print('🔍 BLoC: Event handlers registered');
   }
 
@@ -447,9 +533,18 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   void _onLoadChats(LoadChatsEvent event, Emitter<ChatState> emit) async {
     try {
       print('BLoC: Loading chats');
+
+      // If we have cached chats and we're not in a loading state, return cached data
+      if (_cachedChats.isNotEmpty && state is! ChatLoadingState) {
+        print('🔍 BLoC: Using cached chats: ${_cachedChats.length}');
+        emit(
+          ChatsLoadedState(chats: _cachedChats, filteredChats: _cachedChats),
+        );
+        return;
+      }
+
       emit(const ChatLoadingState());
 
-      // Always include Hushh Bot
       final List<ChatItem> allChatItems = [
         const ChatItem(
           id: 'hushh_bot',
@@ -466,25 +561,17 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       if (streamUserChats != null) {
         print('BLoC: Repository available, listening to chats stream');
 
-        // First, emit the initial state with just Hushh Bot to avoid infinite loading
-        _allChats = allChatItems;
-        emit(
-          ChatsLoadedState(chats: allChatItems, filteredChats: allChatItems),
-        );
-
-        // Then listen to the stream for real-time updates
         await emit.onEach<List<ChatEntity>>(
           streamUserChats!(),
-          onData: (chatEntities) {
+          onData: (chatEntities) async {
             print('BLoC: Received ${chatEntities.length} chat entities');
 
-            // Convert entities to UI models
             final regularChats = chatEntities
                 .where((entity) => entity.id != 'hushh_bot')
                 .map(
                   (entity) => ChatItem(
                     id: entity.id,
-                    title: _getChatTitle(entity),
+                    title: '', // Will be replaced by real name
                     subtitle: entity.lastText ?? 'No messages yet',
                     avatarIcon: _getAvatarIcon(entity),
                     avatarColor: _getAvatarColor(entity),
@@ -496,34 +583,64 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
                 )
                 .toList();
 
-            // Combine with Hushh Bot
             final combinedChats = [...allChatItems, ...regularChats];
-            _allChats = combinedChats;
+            final updatedChats = <ChatItem>[];
+            final currentUserId = FirebaseAuth.instance.currentUser?.uid;
 
-            print('BLoC: Combined chats: ${combinedChats.length}');
+            for (final chat in combinedChats) {
+              if (chat.id == 'hushh_bot' || currentUserId == null) {
+                updatedChats.add(chat);
+                continue;
+              }
 
-            // Check if BLoC is still active before adding event
+              final participants = chat.id.split('_');
+              String otherUserId = '';
+              if (participants.length >= 2) {
+                otherUserId = participants.firstWhere(
+                  (id) => id != currentUserId,
+                  orElse: () => '',
+                );
+              }
+
+              if (otherUserId.isNotEmpty) {
+                final realName = await _getUserDisplayNameAsync(otherUserId);
+                updatedChats.add(chat.copyWith(title: realName));
+              } else {
+                updatedChats.add(chat.copyWith(title: 'Unknown Chat'));
+              }
+            }
+
+            _allChats = updatedChats;
+            _cachedChats = updatedChats;
+            print('🔍 BLoC: Updated cached chats: ${_cachedChats.length}');
+            print(
+              '🔍 BLoC: Chat IDs: ${_cachedChats.map((c) => c.id).join(', ')}',
+            );
+
             if (!isClosed) {
-              print(
-                'BLoC: Adding UpdateChatsEvent with ${combinedChats.length} chats',
+              emit(
+                ChatsLoadedState(
+                  chats: updatedChats,
+                  filteredChats: updatedChats,
+                ),
               );
-              add(UpdateChatsEvent(combinedChats));
-            } else {
-              print('BLoC: Skipping event - BLoC is closed');
             }
           },
           onError: (error, stackTrace) {
             print('BLoC: Error loading chats: $error');
-            // On error, still show Hushh Bot
             _allChats = allChatItems;
             if (!isClosed) {
-              add(UpdateChatsEvent(allChatItems));
+              emit(
+                ChatsLoadedState(
+                  chats: allChatItems,
+                  filteredChats: allChatItems,
+                ),
+              );
             }
           },
         );
       } else {
         print('BLoC: No repository available, using fallback');
-        // Fallback to just Hushh Bot if no repository available
         _allChats = allChatItems;
         emit(
           ChatsLoadedState(chats: allChatItems, filteredChats: allChatItems),
@@ -531,7 +648,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       }
     } catch (e) {
       print('BLoC: Exception loading chats: $e');
-      // On exception, still show Hushh Bot
       final List<ChatItem> allChatItems = [
         const ChatItem(
           id: 'hushh_bot',
@@ -545,16 +661,26 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         ),
       ];
       _allChats = allChatItems;
+      _cachedChats = allChatItems;
       emit(ChatsLoadedState(chats: allChatItems, filteredChats: allChatItems));
     }
   }
 
   void _onSearchChats(SearchChatsEvent event, Emitter<ChatState> emit) {
+    // Use cached chats if available, otherwise use current state
+    List<ChatItem> chatsToSearch = [];
+
     if (state is ChatsLoadedState) {
       final currentState = state as ChatsLoadedState;
+      chatsToSearch = currentState.chats;
+    } else if (_cachedChats.isNotEmpty) {
+      chatsToSearch = _cachedChats;
+    }
+
+    if (chatsToSearch.isNotEmpty) {
       final filteredChats = event.query.isEmpty
-          ? currentState.chats
-          : currentState.chats
+          ? chatsToSearch
+          : chatsToSearch
                 .where(
                   (chat) =>
                       chat.title.toLowerCase().contains(
@@ -567,10 +693,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
                 .toList();
 
       emit(
-        ChatsLoadedState(
-          chats: currentState.chats,
-          filteredChats: filteredChats,
-        ),
+        ChatsLoadedState(chats: chatsToSearch, filteredChats: filteredChats),
       );
     }
   }
@@ -654,12 +777,29 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       print('🔍 BLoC: About to emit state with chat ID: ${newState.chatId}');
       print('🔍 BLoC: State hash: ${newState.hashCode}');
 
-      emit(newState);
+      if (!isClosed) {
+        emit(newState);
+      }
 
       print('🔍 BLoC: State emitted successfully');
 
       // Send message to Firebase
-      await _sendMessageToFirebase(event.chatId, message);
+      final newChatId = await _sendMessageToFirebase(event.chatId, message);
+
+      if (newChatId != event.chatId) {
+        // The chat ID has changed, so we need to update our local cache
+        // and re-emit the state with the new chat ID.
+        final messages = _chatMessages.remove(event.chatId) ?? [message];
+        _chatMessages[newChatId] = messages;
+
+        emit(
+          ChatMessagesLoadedState(
+            chatId: newChatId,
+            messages: messages,
+            isOtherUserTyping: false,
+          ),
+        );
+      }
     } catch (e) {
       print('❌ BLoC: Error sending message: $e');
       emit(ChatErrorState('Failed to send message: ${e.toString()}'));
@@ -1128,6 +1268,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       emit(ChatClearedState(chatId: event.chatId, userId: event.userId));
 
       // Also emit updated chat list
+      _cachedChats = _allChats;
       emit(ChatsLoadedState(chats: _allChats, filteredChats: _allChats));
     } catch (e) {
       emit(ChatErrorState('Failed to clear chat: ${e.toString()}'));
@@ -1165,6 +1306,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         return timeB.compareTo(timeA);
       });
 
+      _cachedChats = _allChats;
       emit(ChatsLoadedState(chats: _allChats, filteredChats: _allChats));
     } catch (e) {
       emit(ChatErrorState('Failed to remove chat from list: ${e.toString()}'));
@@ -1177,17 +1319,12 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     print('🔍 BLoC: Current state type: ${state.runtimeType}');
 
     _allChats = event.chats;
+    _cachedChats = event.chats;
 
-    // Only emit ChatsLoadedState if we're not currently viewing a specific chat
-    // This prevents chat list updates from overriding individual chat messages
-    if (state is! ChatMessagesLoadedState) {
-      print('🔍 BLoC: Emitting ChatsLoadedState');
-      emit(ChatsLoadedState(chats: _allChats, filteredChats: _allChats));
-    } else {
-      print(
-        '🔍 BLoC: Skipping ChatsLoadedState emission - currently viewing chat messages',
-      );
-    }
+    // Always emit ChatsLoadedState when we have updated chats
+    // This ensures the chat list is updated even when returning from a conversation
+    print('🔍 BLoC: Emitting ChatsLoadedState');
+    emit(ChatsLoadedState(chats: _allChats, filteredChats: _allChats));
   }
 
   void _onUpdateMessages(UpdateMessagesEvent event, Emitter<ChatState> emit) {
@@ -1258,15 +1395,42 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     }
   }
 
-  String _getChatTitle(ChatEntity entity) {
-    if (entity.id == 'hushh_bot') return 'Hushh Bot';
-
-    // For regular chats, generate title from participants
-    // In real app, you'd fetch user names from Firebase
-    if (entity.participants.length >= 2) {
-      return 'User ${entity.participants[1]}'; // Second participant (other user)
+  // Async method to get user display name for updating chat titles
+  Future<String> _getUserDisplayNameAsync(String userId) async {
+    print('🔍 BLoC: Getting display name for user: $userId');
+    if (getUserDisplayName != null) {
+      try {
+        final result = await getUserDisplayName!(userId);
+        return result.fold(
+          (failure) {
+            print('🔍 BLoC: Failed to get user name: $failure');
+            // Fallback to shortened user ID on error
+            if (userId.length > 8) {
+              return 'User ${userId.substring(0, 8)}...';
+            }
+            return 'User $userId';
+          },
+          (userName) {
+            print('🔍 BLoC: Got user name: $userName');
+            return userName;
+          },
+        );
+      } catch (e) {
+        print('🔍 BLoC: Exception getting user name: $e');
+        // Fallback to shortened user ID on exception
+        if (userId.length > 8) {
+          return 'User ${userId.substring(0, 8)}...';
+        }
+        return 'User $userId';
+      }
+    } else {
+      print('🔍 BLoC: getUserDisplayName use case not available');
+      // Fallback if use case is not available
+      if (userId.length > 8) {
+        return 'User ${userId.substring(0, 8)}...';
+      }
+      return 'User $userId';
     }
-    return 'Unknown Chat';
   }
 
   String _getAvatarIcon(ChatEntity entity) {
@@ -1371,7 +1535,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     }
   }
 
-  Future<void> _sendMessageToFirebase(
+  Future<String> _sendMessageToFirebase(
     String chatId,
     ChatMessage message,
   ) async {
@@ -1399,6 +1563,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       final chatExists = await _checkIfChatExists(chatId);
       print('🔍 BLoC: Chat exists: $chatExists');
 
+      String finalChatId = chatId;
+
       if (!chatExists) {
         // Chat doesn't exist - create it first with all proper fields
         print('🔍 BLoC: Creating chat in database with all fields');
@@ -1408,12 +1574,14 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         // Use the CreateChat use case instead of calling repository directly
         if (createChat != null) {
           final result = await createChat!(participantIds);
-          result.fold(
+          finalChatId = result.fold(
             (failure) {
               print('❌ BLoC: Failed to create chat: ${failure.toString()}');
+              return chatId;
             },
-            (chatId) {
-              print('✅ BLoC: Chat created in database: $chatId');
+            (newChatId) {
+              print('✅ BLoC: Chat created in database: $newChatId');
+              return newChatId;
             },
           );
         } else {
@@ -1426,7 +1594,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       if (sendMessage != null) {
         final result = await sendMessage!(
           SendMessageParams(
-            chatId: chatId,
+            chatId: finalChatId,
             text: messageEntity.text,
             type: messageEntity.type,
           ),
@@ -1442,15 +1610,21 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       } else {
         print('❌ BLoC: No sendMessage use case available');
       }
+      return finalChatId;
     } catch (e) {
       print('❌ BLoC: Error sending message to Firebase: $e');
       log('Error sending message to Firebase: $e');
+      return chatId;
       // Don't throw here to avoid breaking the UI
     }
   }
 
   String _getOtherUserId(String chatId, String currentUserId) {
+    if (chatId.startsWith('temp_chat_')) {
+      return chatId.substring('temp_chat_'.length);
+    }
     final participants = chatId.split('_');
+    if (participants.length < 2) return '';
     return participants[0] == currentUserId ? participants[1] : participants[0];
   }
 
@@ -1477,6 +1651,69 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     } catch (e) {
       print('BLoC: Error getting correct chat ID: $e');
       return requestedChatId;
+    }
+  }
+
+  void _onLoadUsers(LoadUsersEvent event, Emitter<ChatState> emit) async {
+    try {
+      // If we have cached users and we're not in a loading state, return cached data
+      if (_cachedUsers.isNotEmpty && state is! ChatLoadingState) {
+        emit(UsersLoadedState(users: _cachedUsers));
+        return;
+      }
+
+      if (getUsers != null) {
+        final result = await getUsers!(const NoParams());
+        result.fold((failure) => emit(ChatErrorState(failure.toString())), (
+          users,
+        ) {
+          _cachedUsers = users;
+          emit(UsersLoadedState(users: users));
+        });
+      }
+    } catch (e) {
+      emit(ChatErrorState(e.toString()));
+    }
+  }
+
+  void _onSearchUsers(SearchUsersEvent event, Emitter<ChatState> emit) async {
+    try {
+      if (searchUsers != null) {
+        final result = await searchUsers!(event.query);
+        result.fold((failure) => emit(ChatErrorState(failure.toString())), (
+          users,
+        ) {
+          // Don't cache search results, but use them for display
+          emit(UsersLoadedState(users: users));
+        });
+      }
+    } catch (e) {
+      emit(ChatErrorState(e.toString()));
+    }
+  }
+
+  void _onGetCurrentUser(
+    GetCurrentUserEvent event,
+    Emitter<ChatState> emit,
+  ) async {
+    try {
+      // If we have cached current user, return it
+      if (_cachedCurrentUser != null && state is! ChatLoadingState) {
+        emit(CurrentUserLoadedState(user: _cachedCurrentUser));
+        return;
+      }
+
+      if (getCurrentUser != null) {
+        final result = await getCurrentUser!(const NoParams());
+        result.fold((failure) => emit(ChatErrorState(failure.toString())), (
+          user,
+        ) {
+          _cachedCurrentUser = user;
+          emit(CurrentUserLoadedState(user: user));
+        });
+      }
+    } catch (e) {
+      emit(ChatErrorState(e.toString()));
     }
   }
 }

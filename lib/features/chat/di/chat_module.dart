@@ -39,6 +39,12 @@ class ChatModule {
     getIt.registerLazySingleton(() => StreamChatMessages(getIt()));
     getIt.registerLazySingleton(() => StreamTypingStatus(getIt()));
 
+    // User information use cases
+    getIt.registerLazySingleton(() => GetUserDisplayName(getIt()));
+    getIt.registerLazySingleton(() => GetUsers(getIt()));
+    getIt.registerLazySingleton(() => GetCurrentUser(getIt()));
+    getIt.registerLazySingleton(() => SearchUsers(getIt()));
+
     // BLoC - Register with factory constructor
     getIt.registerFactory(() => ChatBloc());
   }

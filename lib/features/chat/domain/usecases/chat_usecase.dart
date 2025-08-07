@@ -3,6 +3,7 @@ import 'package:equatable/equatable.dart';
 import '../../../../core/errors/failures.dart';
 import '../../../../core/usecases/usecase.dart';
 import '../entities/chat_entity.dart';
+import '../entities/user_entity.dart';
 import '../repositories/chat_repository.dart';
 
 // Get User Chats Use Case
@@ -203,5 +204,53 @@ class StreamTypingStatus {
 
   Stream<bool> call(String chatId, String otherUserId) {
     return repository.isOtherUserTyping(chatId, otherUserId);
+  }
+}
+
+// Get User Display Name Use Case
+class GetUserDisplayName extends UseCase<String, String> {
+  final ChatRepository repository;
+
+  GetUserDisplayName(this.repository);
+
+  @override
+  Future<Either<Failure, String>> call(String userId) async {
+    return await repository.getUserDisplayName(userId);
+  }
+}
+
+// Get Users Use Case
+class GetUsers extends UseCase<List<ChatUserEntity>, NoParams> {
+  final ChatRepository repository;
+
+  GetUsers(this.repository);
+
+  @override
+  Future<Either<Failure, List<ChatUserEntity>>> call(NoParams params) async {
+    return await repository.getUsers();
+  }
+}
+
+// Get Current User Use Case
+class GetCurrentUser extends UseCase<ChatUserEntity?, NoParams> {
+  final ChatRepository repository;
+
+  GetCurrentUser(this.repository);
+
+  @override
+  Future<Either<Failure, ChatUserEntity?>> call(NoParams params) async {
+    return await repository.getCurrentUser();
+  }
+}
+
+// Search Users Use Case
+class SearchUsers extends UseCase<List<ChatUserEntity>, String> {
+  final ChatRepository repository;
+
+  SearchUsers(this.repository);
+
+  @override
+  Future<Either<Failure, List<ChatUserEntity>>> call(String query) async {
+    return await repository.searchUsers(query);
   }
 }

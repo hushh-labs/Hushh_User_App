@@ -2,9 +2,11 @@ import 'package:dartz/dartz.dart';
 import '../../../../core/errors/failures.dart';
 import '../../../../core/network/network_info.dart';
 import '../../domain/entities/chat_entity.dart';
+import '../../domain/entities/user_entity.dart';
 import '../../domain/repositories/chat_repository.dart';
 import '../datasources/firebase_realtime_chat_datasource.dart';
 import '../models/chat_model.dart' as data;
+import '../models/user_model.dart';
 
 class ChatRepositoryImpl implements ChatRepository {
   final FirebaseRealtimeChatDataSource remoteDataSource;
@@ -257,6 +259,70 @@ class ChatRepositoryImpl implements ChatRepository {
           blockedUserId,
         );
         return Right(result);
+      } catch (e) {
+        return Left(ServerFailure(e.toString()));
+      }
+    } else {
+      return Left(NetworkFailure('No internet connection'));
+    }
+  }
+
+  @override
+  Future<Either<Failure, String>> getUserDisplayName(String userId) async {
+    if (await networkInfo.isConnected) {
+      try {
+        final result = await remoteDataSource.getUserDisplayName(userId);
+        return Right(result);
+      } catch (e) {
+        return Left(ServerFailure(e.toString()));
+      }
+    } else {
+      return Left(NetworkFailure('No internet connection'));
+    }
+  }
+
+  @override
+  Future<Either<Failure, List<ChatUserEntity>>> getUsers() async {
+    if (await networkInfo.isConnected) {
+      try {
+        final userModels = await remoteDataSource.getUsers();
+        final userEntities = userModels
+            .map((model) => model.toEntity())
+            .toList();
+        return Right(userEntities);
+      } catch (e) {
+        return Left(ServerFailure(e.toString()));
+      }
+    } else {
+      return Left(NetworkFailure('No internet connection'));
+    }
+  }
+
+  @override
+  Future<Either<Failure, ChatUserEntity?>> getCurrentUser() async {
+    if (await networkInfo.isConnected) {
+      try {
+        final userModel = await remoteDataSource.getCurrentUser();
+        return Right(userModel?.toEntity());
+      } catch (e) {
+        return Left(ServerFailure(e.toString()));
+      }
+    } else {
+      return Left(NetworkFailure('No internet connection'));
+    }
+  }
+
+  @override
+  Future<Either<Failure, List<ChatUserEntity>>> searchUsers(
+    String query,
+  ) async {
+    if (await networkInfo.isConnected) {
+      try {
+        final userModels = await remoteDataSource.searchUsers(query);
+        final userEntities = userModels
+            .map((model) => model.toEntity())
+            .toList();
+        return Right(userEntities);
       } catch (e) {
         return Left(ServerFailure(e.toString()));
       }

@@ -1,5 +1,6 @@
 import 'package:dartz/dartz.dart';
 import '../entities/chat_entity.dart';
+import '../entities/user_entity.dart';
 import '../../../../core/errors/failures.dart';
 
 abstract class ChatRepository {
@@ -47,4 +48,12 @@ abstract class ChatRepository {
     String userId,
     String blockedUserId,
   );
+
+  // User information operations
+  Future<Either<Failure, String>> getUserDisplayName(String userId);
+
+  // User operations
+  Future<Either<Failure, List<ChatUserEntity>>> getUsers();
+  Future<Either<Failure, ChatUserEntity?>> getCurrentUser();
+  Future<Either<Failure, List<ChatUserEntity>>> searchUsers(String query);
 }

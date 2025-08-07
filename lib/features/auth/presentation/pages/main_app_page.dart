@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../shared/presentation/widgets/google_style_bottom_nav.dart';
 import '../../../../shared/utils/app_local_storage.dart';
 import '../../../pda/presentation/pages/pda_simple_page.dart';
 import '../../../profile/presentation/pages/profile_page_wrapper.dart';
 import '../../../discover/presentation/pages/discover_page_wrapper.dart';
 import '../../../chat/presentation/pages/chat_page_wrapper.dart';
+import '../../../chat/presentation/bloc/chat_bloc.dart' as chat;
 import '../../../../shared/presentation/widgets/debug_wrapper.dart';
 import '../../../../shared/utils/guest_access_control.dart';
 
@@ -62,12 +64,15 @@ class _MainAppPageState extends State<MainAppPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: DebugWrapper(child: _pages[_currentIndex]),
-      bottomNavigationBar: GoogleStyleBottomNav(
-        items: _bottomNavItems,
-        currentIndex: _currentIndex,
-        onTap: _onBottomNavTap,
+    return BlocProvider(
+      create: (context) => chat.ChatBloc()..add(const chat.LoadChatsEvent()),
+      child: Scaffold(
+        body: DebugWrapper(child: _pages[_currentIndex]),
+        bottomNavigationBar: GoogleStyleBottomNav(
+          items: _bottomNavItems,
+          currentIndex: _currentIndex,
+          onTap: _onBottomNavTap,
+        ),
       ),
     );
   }
