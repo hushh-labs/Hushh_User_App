@@ -36,7 +36,7 @@ class _ChatViewState extends State<_ChatView> {
     // Ensure chats are loaded when the page is first accessed
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
-        context.read<chat.ChatBloc>().add(const chat.LoadChatsEvent());
+        context.read<chat.ChatBloc>().add(const chat.RefreshChatsEvent());
       }
     });
   }
@@ -49,154 +49,148 @@ class _ChatViewState extends State<_ChatView> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
+    return WillPopScope(
+      onWillPop: () async => false,
+      child: Scaffold(
         backgroundColor: Colors.white,
-        elevation: 0,
-        automaticallyImplyLeading: false,
-        title: Row(
-          children: [
-            const Text(
-              'Chats',
-              style: TextStyle(
-                color: Colors.black,
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const Spacer(),
-            GestureDetector(
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => BlocProvider.value(
-                    value: context.read<chat.ChatBloc>(),
-                    child: const UserListPageClean(),
-                  ),
-                ),
-              ),
-              child: Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: Colors.grey[100],
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Icon(Icons.add, color: Colors.black, size: 24),
-              ),
-            ),
-          ],
-        ),
-      ),
-      body: BlocConsumer<chat.ChatBloc, chat.ChatState>(
-        listener: (context, state) {
-          print('🔍 UI: State changed to: ${state.runtimeType}');
-          if (state is chat.ChatsLoadedState) {
-            print('🔍 UI: ChatsLoadedState with ${state.chats.length} chats');
-            print(
-              '🔍 UI: Chat IDs: ${state.chats.map((c) => c.id).join(', ')}',
-            );
-          }
-          if (state is chat.ChatErrorState) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(state.message),
-                backgroundColor: Colors.red,
-              ),
-            );
-          }
-        },
-        builder: (context, state) {
-          // Show animation during any loading state
-          if (state is chat.ChatLoadingState) {
-            return const ChatLoadingAnimation();
-          }
-
-          List<chat.ChatItem> chats = [];
-
-          if (state is chat.ChatsLoadedState) {
-            chats = state.filteredChats;
-          } else if (state is chat.ChatMessagesLoadedState) {
-            // When returning from a chat, show loading state and force reload
-            print(
-              '🔍 UI: In ChatMessagesLoadedState, showing loading and forcing reload',
-            );
-
-            // Force reload chats to get the latest data
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (mounted) {
-                print('🔍 UI: Adding LoadChatsEvent to refresh chat list');
-                context.read<chat.ChatBloc>().add(const chat.LoadChatsEvent());
-              }
-            });
-
-            // Show loading state while reloading
-            return const ChatLoadingAnimation();
-          }
-
-          return Column(
+        appBar: AppBar(
+          backgroundColor: Colors.white,
+          elevation: 0,
+          automaticallyImplyLeading: false,
+          title: Row(
             children: [
-              // Search Bar
-              ChatSearchBar(
-                controller: _searchController,
-                onChanged: (query) {
-                  GuestUtils.executeWithGuestCheck(
-                    context,
-                    'Chat Search',
-                    () => context.read<chat.ChatBloc>().add(
-                      chat.SearchChatsEvent(query),
-                    ),
-                  );
-                },
+              const Text(
+                'Chats',
+                style: TextStyle(
+                  color: Colors.black,
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
-
-              // Chat List
-              Expanded(
-                child: chats.isEmpty
-                    ? const Padding(
-                        padding: EdgeInsets.only(top: 100),
-                        child: EmptyChatState(),
-                      )
-                    : ListView.builder(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        itemCount: chats.length,
-                        itemBuilder: (context, index) {
-                          final chat = chats[index];
-
-                          return Dismissible(
-                            key: Key(chat.id),
-                            background: Container(
-                              color: Colors.red,
-                              alignment: Alignment.centerRight,
-                              padding: const EdgeInsets.only(right: 20),
-                              child: const Icon(
-                                Icons.delete,
-                                color: Colors.white,
-                              ),
-                            ),
-                            direction: DismissDirection.endToStart,
-                            confirmDismiss: (direction) async {
-                              return await _showDeleteChatDialog(context, chat);
-                            },
-                            onDismissed: (direction) {
-                              _deleteChat(chat);
-                            },
-                            child: ChatListItem(
-                              chatItem: chat,
-                              onTap: () => GuestUtils.executeWithGuestCheck(
-                                context,
-                                'Chat Messages',
-                                () => _openChat(context, chat),
-                              ),
-                            ),
-                          );
-                        },
+              const Spacer(),
+              GestureDetector(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => BlocProvider.value(
+                        value: context.read<chat.ChatBloc>(),
+                        child: const UserListPageClean(),
                       ),
+                    ),
+                  ).then((_) {
+                    context
+                        .read<chat.ChatBloc>()
+                        .add(const chat.RefreshChatsEvent());
+                  });
+                },
+                child: Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: Colors.grey[100],
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(Icons.add, color: Colors.black, size: 24),
+                ),
               ),
             ],
-          );
-        },
+          ),
+        ),
+        body: BlocConsumer<chat.ChatBloc, chat.ChatState>(
+          buildWhen: (previous, current) {
+            return current is chat.ChatLoadingState ||
+                current is chat.ChatsLoadedState;
+          },
+          listener: (context, state) {
+            print('🔍 UI: State changed to: ${state.runtimeType}');
+            if (state is chat.ChatsLoadedState) {
+              print('🔍 UI: ChatsLoadedState with ${state.chats.length} chats');
+              print(
+                '🔍 UI: Chat IDs: ${state.chats.map((c) => c.id).join(', ')}',
+              );
+            }
+            if (state is chat.ChatErrorState) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(state.message),
+                  backgroundColor: Colors.red,
+                ),
+              );
+            }
+          },
+          builder: (context, state) {
+            if (state is chat.ChatLoadingState) {
+              return const ChatLoadingAnimation();
+            }
+
+            List<chat.ChatItem> chats = [];
+
+            if (state is chat.ChatsLoadedState) {
+              chats = state.filteredChats;
+            }
+
+            return Column(
+              children: [
+                ChatSearchBar(
+                  controller: _searchController,
+                  onChanged: (query) {
+                    GuestUtils.executeWithGuestCheck(
+                      context,
+                      'Chat Search',
+                      () => context.read<chat.ChatBloc>().add(
+                        chat.SearchChatsEvent(query),
+                      ),
+                    );
+                  },
+                ),
+                Expanded(
+                  child: chats.isEmpty
+                      ? const Padding(
+                          padding: EdgeInsets.only(top: 100),
+                          child: EmptyChatState(),
+                        )
+                      : ListView.builder(
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          itemCount: chats.length,
+                          itemBuilder: (context, index) {
+                            final chatItem = chats[index];
+
+                            return Dismissible(
+                              key: Key(chatItem.id),
+                              background: Container(
+                                color: Colors.red,
+                                alignment: Alignment.centerRight,
+                                padding: const EdgeInsets.only(right: 20),
+                                child: const Icon(
+                                  Icons.delete,
+                                  color: Colors.white,
+                                ),
+                              ),
+                              direction: DismissDirection.endToStart,
+                              confirmDismiss: (direction) async {
+                                return await _showDeleteChatDialog(
+                                    context, chatItem);
+                              },
+                              onDismissed: (direction) {
+                                _deleteChat(chatItem);
+                              },
+                              child: ChatListItem(
+                                chatItem: chatItem,
+                                onTap: () => GuestUtils.executeWithGuestCheck(
+                                  context,
+                                  'Chat Messages',
+                                  () => _openChat(context, chatItem),
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                ),
+              ],
+            );
+          },
+        ),
       ),
     );
   }

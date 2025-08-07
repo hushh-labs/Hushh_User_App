@@ -21,6 +21,10 @@ class LoadChatsEvent extends ChatEvent {
   const LoadChatsEvent();
 }
 
+class RefreshChatsEvent extends ChatEvent {
+  const RefreshChatsEvent();
+}
+
 class LoadUsersEvent extends ChatEvent {
   const LoadUsersEvent();
 }
@@ -496,6 +500,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   }) : super(const ChatInitialState()) {
     print('🔍 BLoC: ChatBloc._ constructor called');
     on<LoadChatsEvent>(_onLoadChats);
+    on<RefreshChatsEvent>(_onRefreshChats);
     on<SearchChatsEvent>(_onSearchChats);
     on<SendMessageEvent>(_onSendMessage);
     on<OpenChatEvent>(_onOpenChat);
@@ -534,33 +539,25 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     try {
       print('BLoC: Loading chats');
 
-      // If we have cached chats and we're not in a loading state, return cached data
-      if (_cachedChats.isNotEmpty && state is! ChatLoadingState) {
-        print('🔍 BLoC: Using cached chats: ${_cachedChats.length}');
-        emit(
-          ChatsLoadedState(chats: _cachedChats, filteredChats: _cachedChats),
-        );
-        return;
-      }
+      // Force fresh query for debugging - always clear cache
+      print('🔍 BLoC: Clearing cache and forcing fresh query');
+      _cachedChats.clear();
 
       emit(const ChatLoadingState());
 
-      final List<ChatItem> allChatItems = [
-        const ChatItem(
-          id: 'hushh_bot',
-          title: 'Hushh Bot',
-          subtitle: 'Talk to Hushh Bot / upload bills for Insights',
-          avatarIcon: 'smart_toy',
-          avatarColor: '#A342FF',
-          isBot: true,
-          isUnread: false,
-          isLastMessageSeen: null,
-        ),
-      ];
+      final hushhBotChat = const ChatItem(
+        id: 'hushh_bot',
+        title: 'Hushh Bot',
+        subtitle: 'Talk to Hushh Bot / upload bills for Insights',
+        avatarIcon: 'smart_toy',
+        avatarColor: '#A342FF',
+        isBot: true,
+        isUnread: false,
+        isLastMessageSeen: null,
+      );
 
       if (streamUserChats != null) {
         print('BLoC: Repository available, listening to chats stream');
-
         await emit.onEach<List<ChatEntity>>(
           streamUserChats!(),
           onData: (chatEntities) async {
@@ -583,12 +580,11 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
                 )
                 .toList();
 
-            final combinedChats = [...allChatItems, ...regularChats];
-            final updatedChats = <ChatItem>[];
+            final updatedChats = <ChatItem>[hushhBotChat];
             final currentUserId = FirebaseAuth.instance.currentUser?.uid;
 
-            for (final chat in combinedChats) {
-              if (chat.id == 'hushh_bot' || currentUserId == null) {
+            for (final chat in regularChats) {
+              if (currentUserId == null) {
                 updatedChats.add(chat);
                 continue;
               }
@@ -628,41 +624,56 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           },
           onError: (error, stackTrace) {
             print('BLoC: Error loading chats: $error');
-            _allChats = allChatItems;
+            _allChats = [hushhBotChat];
             if (!isClosed) {
               emit(
-                ChatsLoadedState(
-                  chats: allChatItems,
-                  filteredChats: allChatItems,
-                ),
+                ChatsLoadedState(chats: _allChats, filteredChats: _allChats),
               );
             }
           },
         );
       } else {
         print('BLoC: No repository available, using fallback');
-        _allChats = allChatItems;
-        emit(
-          ChatsLoadedState(chats: allChatItems, filteredChats: allChatItems),
-        );
+        _allChats = [hushhBotChat];
+        emit(ChatsLoadedState(chats: _allChats, filteredChats: _allChats));
       }
     } catch (e) {
       print('BLoC: Exception loading chats: $e');
-      final List<ChatItem> allChatItems = [
-        const ChatItem(
-          id: 'hushh_bot',
-          title: 'Hushh Bot',
-          subtitle: 'Talk to Hushh Bot / upload bills for Insights',
-          avatarIcon: 'smart_toy',
-          avatarColor: '#A342FF',
-          isBot: true,
-          isUnread: false,
-          isLastMessageSeen: null,
-        ),
-      ];
-      _allChats = allChatItems;
-      _cachedChats = allChatItems;
-      emit(ChatsLoadedState(chats: allChatItems, filteredChats: allChatItems));
+      final hushhBotChat = const ChatItem(
+        id: 'hushh_bot',
+        title: 'Hushh Bot',
+        subtitle: 'Talk to Hushh Bot / upload bills for Insights',
+        avatarIcon: 'smart_toy',
+        avatarColor: '#A342FF',
+        isBot: true,
+        isUnread: false,
+        isLastMessageSeen: null,
+      );
+      _allChats = [hushhBotChat];
+      _cachedChats = [hushhBotChat];
+      emit(ChatsLoadedState(chats: _allChats, filteredChats: _allChats));
+    }
+  }
+
+  void _onRefreshChats(RefreshChatsEvent event, Emitter<ChatState> emit) async {
+    try {
+      print('🔍 BLoC: Refreshing chats - clearing cache and forcing reload');
+
+      // Clear cache to force fresh reload
+      _cachedChats.clear();
+      _allChats.clear();
+
+      // If we're currently in ChatMessagesLoadedState, transition to loading first
+      if (state is ChatMessagesLoadedState) {
+        print('🔍 BLoC: Transitioning from ChatMessagesLoadedState to loading');
+        emit(const ChatLoadingState());
+      }
+
+      // Force reload from database
+      _onLoadChats(const LoadChatsEvent(), emit);
+    } catch (e) {
+      print('BLoC: Exception refreshing chats: $e');
+      emit(ChatErrorState('Failed to refresh chats: ${e.toString()}'));
     }
   }
 

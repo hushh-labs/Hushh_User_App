@@ -65,7 +65,7 @@ class _MainAppPageState extends State<MainAppPage> {
   @override
   Widget build(BuildContext context) {
     return BlocProvider(
-      create: (context) => chat.ChatBloc()..add(const chat.LoadChatsEvent()),
+      create: (context) => chat.ChatBloc()..add(const chat.RefreshChatsEvent()),
       child: Scaffold(
         body: DebugWrapper(child: _pages[_currentIndex]),
         bottomNavigationBar: GoogleStyleBottomNav(

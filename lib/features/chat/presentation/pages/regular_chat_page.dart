@@ -54,8 +54,10 @@ class _RegularChatPageState extends State<RegularChatPage> {
     if (currentUserId == null) return;
 
     final participants = _currentChatId.split('_');
-    final otherUserId =
-        participants.firstWhere((id) => id != currentUserId, orElse: () => '');
+    final otherUserId = participants.firstWhere(
+      (id) => id != currentUserId,
+      orElse: () => '',
+    );
 
     if (otherUserId.isEmpty) return;
 
@@ -165,249 +167,260 @@ class _RegularChatPageState extends State<RegularChatPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
+    return WillPopScope(
+      onWillPop: () async {
+        context.read<chat.ChatBloc>().add(const chat.RefreshChatsEvent());
+        return true;
+      },
+      child: Scaffold(
         backgroundColor: Colors.white,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Row(
-          children: [
-            CircleAvatar(
-              radius: 20,
-              backgroundColor: _getAvatarColor(_currentChatId),
-              child: Icon(Icons.person, color: Colors.white, size: 20),
-            ),
-            const SizedBox(width: 12),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  widget.userName,
-                  style: const TextStyle(
-                    color: Colors.black,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
+        appBar: AppBar(
+          backgroundColor: Colors.white,
+          elevation: 0,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back, color: Colors.black),
+            onPressed: () {
+              context.read<chat.ChatBloc>().add(const chat.RefreshChatsEvent());
+              // Navigate back to the chat list
+              Navigator.of(context).pop();
+            },
+          ),
+          title: Row(
+            children: [
+              CircleAvatar(
+                radius: 20,
+                backgroundColor: _getAvatarColor(_currentChatId),
+                child: Icon(Icons.person, color: Colors.white, size: 20),
+              ),
+              const SizedBox(width: 12),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    widget.userName,
+                    style: const TextStyle(
+                      color: Colors.black,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const Text(
+                    'Online',
+                    style: TextStyle(color: Colors.green, fontSize: 12),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          actions: [
+            PopupMenuButton<String>(
+              icon: const Icon(Icons.more_vert),
+              onSelected: (value) => _handleChatOption(context, value),
+              itemBuilder: (context) => [
+                const PopupMenuItem(
+                  value: 'clear_chat',
+                  child: Row(
+                    children: [
+                      Icon(Icons.clear_all, color: Colors.grey),
+                      SizedBox(width: 8),
+                      Text('Clear Chat'),
+                    ],
                   ),
                 ),
-                const Text(
-                  'Online',
-                  style: TextStyle(color: Colors.green, fontSize: 12),
+                const PopupMenuItem(
+                  value: 'block_user',
+                  child: Row(
+                    children: [
+                      Icon(Icons.block, color: Colors.red),
+                      SizedBox(width: 8),
+                      Text('Block User'),
+                    ],
+                  ),
                 ),
               ],
             ),
           ],
         ),
-        actions: [
-          PopupMenuButton<String>(
-            icon: const Icon(Icons.more_vert),
-            onSelected: (value) => _handleChatOption(context, value),
-            itemBuilder: (context) => [
-              const PopupMenuItem(
-                value: 'clear_chat',
-                child: Row(
-                  children: [
-                    Icon(Icons.clear_all, color: Colors.grey),
-                    SizedBox(width: 8),
-                    Text('Clear Chat'),
-                  ],
+        body: BlocConsumer<chat.ChatBloc, chat.ChatState>(
+          buildWhen: (previous, current) {
+            return current is chat.ChatMessagesLoadedState ||
+                current is chat.ChatLoadingState;
+          },
+          listener: (context, state) {
+            print('🔍 UI: BlocListener called');
+            print('🔍 UI: State type: ${state.runtimeType}');
+
+            if (state is chat.ChatErrorState) {
+              print('❌ UI: ChatErrorState received: ${state.message}');
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(state.message),
+                  backgroundColor: Colors.red,
                 ),
-              ),
-              const PopupMenuItem(
-                value: 'block_user',
-                child: Row(
-                  children: [
-                    Icon(Icons.block, color: Colors.red),
-                    SizedBox(width: 8),
-                    Text('Block User'),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-      body: BlocConsumer<chat.ChatBloc, chat.ChatState>(
-        buildWhen: (previous, current) {
-          return current is chat.ChatMessagesLoadedState ||
-              current is chat.ChatLoadingState;
-        },
-        listener: (context, state) {
-          print('🔍 UI: BlocListener called');
-          print('🔍 UI: State type: ${state.runtimeType}');
-
-          if (state is chat.ChatErrorState) {
-            print('❌ UI: ChatErrorState received: ${state.message}');
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(state.message),
-                backgroundColor: Colors.red,
-              ),
-            );
-          }
-
-          // Enable typing status if messages are loaded and there are existing messages
-          if (state is chat.ChatMessagesLoadedState) {
-            print('🔍 UI: ChatMessagesLoadedState received in listener');
-            print('🔍 UI: Messages count: ${state.messages.length}');
-            print('🔍 UI: Is other user typing: ${state.isOtherUserTyping}');
-            print('🔍 UI: Has sent first message: $_hasSentFirstMessage');
-
-            if (state.messages.isNotEmpty && !_hasSentFirstMessage) {
-              print('🔍 UI: Existing messages found - enabling typing status');
-              _hasSentFirstMessage = true;
-            }
-
-            if (state.chatId != _currentChatId) {
-              setState(() {
-                _currentChatId = state.chatId;
-              });
-            }
-          }
-        },
-        builder: (context, state) {
-          print('🔍 UI: BlocBuilder called');
-          print('🔍 UI: State type: ${state.runtimeType}');
-          print('🔍 UI: State hash: ${state.hashCode}');
-          print('🔍 UI: Current chat ID: ${_currentChatId}');
-          print('🔍 UI: State details: $state');
-
-          if (state is chat.ChatLoadingState) {
-            return const Center(child: CircularProgressIndicator());
-          }
-
-          if (state is chat.ChatMessagesLoadedState) {
-            final messages = state.messages;
-            final isOtherUserTyping = state.isOtherUserTyping;
-
-            print('🔍 UI: ChatMessagesLoadedState received');
-            print('🔍 UI: Messages count: ${messages.length}');
-            print('🔍 UI: Is other user typing: $isOtherUserTyping');
-            print('🔍 UI: Chat ID: ${state.chatId}');
-            print('🔍 UI: Expected chat ID: ${_currentChatId}');
-            print('🔍 UI: Chat IDs match: ${state.chatId == _currentChatId}');
-
-            for (int i = 0; i < messages.length; i++) {
-              print(
-                '🔍 UI: Message $i: "${messages[i].text}" (ID: ${messages[i].id})',
               );
             }
 
-            return Column(
-              children: [
-                Expanded(
-                  child: messages.isEmpty
-                      ? const Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(
-                                Icons.chat_bubble_outline,
-                                size: 64,
-                                color: Colors.grey,
-                              ),
-                              SizedBox(height: 16),
-                              Text(
-                                'No messages yet',
-                                style: TextStyle(
-                                  fontSize: 16,
+            if (state is chat.ChatMessagesLoadedState) {
+              print('🔍 UI: ChatMessagesLoadedState received in listener');
+              print('🔍 UI: Messages count: ${state.messages.length}');
+              print('🔍 UI: Is other user typing: ${state.isOtherUserTyping}');
+              print('🔍 UI: Has sent first message: $_hasSentFirstMessage');
+
+              if (state.messages.isNotEmpty && !_hasSentFirstMessage) {
+                print(
+                  '🔍 UI: Existing messages found - enabling typing status',
+                );
+                _hasSentFirstMessage = true;
+              }
+
+              if (state.chatId != _currentChatId) {
+                setState(() {
+                  _currentChatId = state.chatId;
+                });
+              }
+            }
+          },
+          builder: (context, state) {
+            print('🔍 UI: BlocBuilder called');
+            print('🔍 UI: State type: ${state.runtimeType}');
+            print('🔍 UI: State hash: ${state.hashCode}');
+            print('🔍 UI: Current chat ID: ${_currentChatId}');
+            print('🔍 UI: State details: $state');
+
+            if (state is chat.ChatLoadingState) {
+              return const Center(child: CircularProgressIndicator());
+            }
+
+            if (state is chat.ChatMessagesLoadedState) {
+              final messages = state.messages;
+              final isOtherUserTyping = state.isOtherUserTyping;
+
+              print('🔍 UI: ChatMessagesLoadedState received');
+              print('🔍 UI: Messages count: ${messages.length}');
+              print('🔍 UI: Is other user typing: $isOtherUserTyping');
+              print('🔍 UI: Chat ID: ${state.chatId}');
+              print('🔍 UI: Expected chat ID: ${_currentChatId}');
+              print('🔍 UI: Chat IDs match: ${state.chatId == _currentChatId}');
+
+              for (int i = 0; i < messages.length; i++) {
+                print(
+                  '🔍 UI: Message $i: "${messages[i].text}" (ID: ${messages[i].id})',
+                );
+              }
+
+              return Column(
+                children: [
+                  Expanded(
+                    child: messages.isEmpty
+                        ? const Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  Icons.chat_bubble_outline,
+                                  size: 64,
                                   color: Colors.grey,
                                 ),
-                              ),
-                              SizedBox(height: 8),
-                              Text(
-                                'Send the first message to start the conversation!',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  color: Colors.grey,
-                                ),
-                                textAlign: TextAlign.center,
-                              ),
-                            ],
-                          ),
-                        )
-                      : ListView.builder(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 16,
-                          ),
-                          itemCount: messages.length,
-                          itemBuilder: (context, index) {
-                            final message = messages[index];
-                            final isLastMessage = index == messages.length - 1;
-                            return MessageBubble(
-                              message: message,
-                              isLastMessage: isLastMessage,
-                            );
-                          },
-                        ),
-                ),
-                if (isOtherUserTyping)
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 8,
-                    ),
-                    child: Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: Colors.grey[200],
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                '${widget.userName} is typing',
-                                style: TextStyle(
-                                  color: Colors.grey[600],
-                                  fontSize: 12,
-                                ),
-                              ),
-                              const SizedBox(width: 4),
-                              SizedBox(
-                                width: 12,
-                                height: 12,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  valueColor: AlwaysStoppedAnimation<Color>(
-                                    Colors.grey[600]!,
+                                SizedBox(height: 16),
+                                Text(
+                                  'No messages yet',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    color: Colors.grey,
                                   ),
                                 ),
-                              ),
-                            ],
+                                SizedBox(height: 8),
+                                Text(
+                                  'Send the first message to start the conversation!',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: Colors.grey,
+                                  ),
+                                  textAlign: TextAlign.center,
+                                ),
+                              ],
+                            ),
+                          )
+                        : ListView.builder(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 16,
+                            ),
+                            itemCount: messages.length,
+                            itemBuilder: (context, index) {
+                              final message = messages[index];
+                              final isLastMessage =
+                                  index == messages.length - 1;
+                              return MessageBubble(
+                                message: message,
+                                isLastMessage: isLastMessage,
+                              );
+                            },
+                          ),
+                  ),
+                  if (isOtherUserTyping)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 8,
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: Colors.grey[200],
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  '${widget.userName} is typing',
+                                  style: TextStyle(
+                                    color: Colors.grey[600],
+                                    fontSize: 12,
+                                  ),
+                                ),
+                                const SizedBox(width: 4),
+                                SizedBox(
+                                  width: 12,
+                                  height: 12,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    valueColor: AlwaysStoppedAnimation<Color>(
+                                      Colors.grey[600]!,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  MessageInput(
+                    controller: _messageController,
+                    onSendMessage: _sendMessage,
+                    onTextChanged: _onTextChanged,
+                    onImageSelected: _onImageSelected,
+                    onFileSelected: _onFileSelected,
+                    onAttachFile: () {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                            'File upload not available for regular chats',
                           ),
                         ),
-                      ],
-                    ),
+                      );
+                    },
                   ),
-
-                MessageInput(
-                  controller: _messageController,
-                  onSendMessage: _sendMessage,
-                  onTextChanged: _onTextChanged,
-                  onImageSelected: _onImageSelected,
-                  onFileSelected: _onFileSelected,
-                  onAttachFile: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text(
-                          'File upload not available for regular chats',
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ],
-            );
-          }
-          return const Center(child: CircularProgressIndicator());
-        },
+                ],
+              );
+            }
+            return const Center(child: CircularProgressIndicator());
+          },
+        ),
       ),
     );
   }
@@ -513,8 +526,10 @@ class _RegularChatPageState extends State<RegularChatPage> {
                 if (currentUserId == null) return;
 
                 final participants = _currentChatId.split('_');
-                final otherUserId = participants
-                    .firstWhere((id) => id != currentUserId, orElse: () => '');
+                final otherUserId = participants.firstWhere(
+                  (id) => id != currentUserId,
+                  orElse: () => '',
+                );
 
                 if (otherUserId.isEmpty) return;
 

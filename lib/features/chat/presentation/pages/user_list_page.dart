@@ -168,7 +168,7 @@ class _UserListPageState extends State<UserListPage> {
         builder: (context) => BlocProvider(
           create: (context) {
             final bloc = chat.ChatBloc();
-            bloc.add(const chat.LoadChatsEvent());
+            bloc.add(const chat.RefreshChatsEvent());
             bloc.add(
               chat.OpenChatEvent(sortedChatId),
             ); // Add the missing OpenChatEvent
