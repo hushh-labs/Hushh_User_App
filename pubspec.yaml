@@ -61,7 +61,7 @@ dependencies:
   flutter_sound: ^9.2.13
   path_provider: ^2.1.2
   
-  # Permission and Device dependencies
+  # Permission and Device dependenciesS
   permission_handler: ^12.0.1
   
   # Animation and UI dependencies
@@ -164,6 +164,8 @@ flutter:
     - assets/
     - assets/flags/
     - assets/fonts/
+    - assets/logos/
+    - assets/banner/
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images
