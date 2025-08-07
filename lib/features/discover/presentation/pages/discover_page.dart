@@ -41,48 +41,42 @@ class _DiscoverPageState extends State<DiscoverPage> {
   Timer? _carouselTimer;
   int _currentCarouselIndex = 0;
 
+  // Brand logos marquee controller and timer
+  late ScrollController _brandMarqueeController;
+  Timer? _brandMarqueeTimer;
+
   // Banner advertisements data
   final List<Map<String, dynamic>> _bannerAds = [
     {
-      'title': 'APPLE',
-      'subtitle': 'Premium Tech & Lifestyle',
-      'backgroundColor': const Color(0xFF000000),
-      'textColor': Colors.white,
-      'icon': Icons.apple,
-      'actionText': 'Explore Apple',
+      'imagePath': 'assets/banner/1.png',
+      'title': 'Premium Collection',
+      'subtitle': 'Discover Luxury Brands',
     },
     {
-      'title': 'LVMH',
-      'subtitle': 'Luxury Fashion & Accessories',
-      'backgroundColor': const Color(0xFF8B4513),
-      'textColor': Colors.white,
-      'icon': Icons.diamond,
-      'actionText': 'Discover Luxury',
+      'imagePath': 'assets/banner/2.jpg',
+      'title': 'Exclusive Offers',
+      'subtitle': 'Limited Time Deals',
     },
     {
-      'title': 'ROLEX',
-      'subtitle': 'Timeless Elegance & Precision',
-      'backgroundColor': const Color(0xFF2F4F4F),
-      'textColor': Colors.white,
-      'icon': Icons.watch,
-      'actionText': 'View Collection',
+      'imagePath': 'assets/banner/3.webp',
+      'title': 'New Arrivals',
+      'subtitle': 'Latest Products',
     },
     {
-      'title': 'CHANEL',
-      'subtitle': 'Haute Couture & Fragrances',
-      'backgroundColor': const Color(0xFFF5F5DC),
-      'textColor': const Color(0xFF000000),
-      'icon': Icons.style,
-      'actionText': 'Shop Chanel',
+      'imagePath': 'assets/banner/5.jpg',
+      'title': 'Featured Brands',
+      'subtitle': 'Top Luxury Partners',
     },
-    {
-      'title': 'HERMÈS',
-      'subtitle': 'Artisan Craftsmanship',
-      'backgroundColor': const Color(0xFFFF6B35),
-      'textColor': Colors.white,
-      'icon': Icons.shopping_bag,
-      'actionText': 'Browse Hermès',
-    },
+  ];
+
+  // Brand logos for carousel
+  final List<Map<String, String>> _brandLogos = [
+    {'name': 'Apple', 'path': 'assets/logos/apple.png'},
+    {'name': 'Costco', 'path': 'assets/logos/costco.png'},
+    {'name': 'Dior', 'path': 'assets/logos/dior.png'},
+    {'name': 'Louis Vuitton', 'path': 'assets/logos/lv.png'},
+    {'name': 'Reliance', 'path': 'assets/logos/relaince.png'},
+    {'name': 'Loro Piana', 'path': 'assets/logos/loro.png'},
   ];
 
   // Theme colors matching other pages
@@ -104,14 +98,18 @@ class _DiscoverPageState extends State<DiscoverPage> {
 
     // Initialize carousel
     _carouselController = PageController();
+    _brandMarqueeController = ScrollController();
     _startCarouselTimer();
+    _startBrandMarqueeTimer();
   }
 
   @override
   void dispose() {
     _scrollController.dispose();
     _carouselController.dispose();
+    _brandMarqueeController.dispose();
     _carouselTimer?.cancel();
+    _brandMarqueeTimer?.cancel();
     super.dispose();
   }
 
@@ -128,6 +126,30 @@ class _DiscoverPageState extends State<DiscoverPage> {
           duration: const Duration(milliseconds: 500),
           curve: Curves.easeInOut,
         );
+      }
+    });
+  }
+
+  void _startBrandMarqueeTimer() {
+    _brandMarqueeTimer = Timer.periodic(const Duration(milliseconds: 30), (
+      timer,
+    ) {
+      if (mounted && _brandMarqueeController.hasClients) {
+        final maxScroll = _brandMarqueeController.position.maxScrollExtent;
+        final currentScroll = _brandMarqueeController.offset;
+        final singleSetWidth = maxScroll / 2; // Width of one complete set
+
+        if (currentScroll >= singleSetWidth) {
+          // Jump back to start of first set without animation for seamless loop
+          _brandMarqueeController.jumpTo(0);
+        } else {
+          // Continue scrolling smoothly
+          _brandMarqueeController.animateTo(
+            currentScroll + 1,
+            duration: const Duration(milliseconds: 30),
+            curve: Curves.linear,
+          );
+        }
       }
     });
   }
@@ -160,6 +182,16 @@ class _DiscoverPageState extends State<DiscoverPage> {
         _isSearchVisible = true;
       });
     }
+  }
+
+  void _onBrandTap(String brandName) {
+    // Handle brand tap - you can add navigation or other actions here
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Selected: $brandName'),
+        duration: const Duration(seconds: 2),
+      ),
+    );
   }
 
   void _showCartConflictDialog(CartAgentConflict state) {
@@ -897,7 +929,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
 
                 // Carousel Banner Section
                 Container(
-                  height: 120,
+                  height: 200,
                   margin: const EdgeInsets.symmetric(vertical: 16),
                   child: PageView.builder(
                     controller: _carouselController,
@@ -912,84 +944,37 @@ class _DiscoverPageState extends State<DiscoverPage> {
                       return Container(
                         margin: const EdgeInsets.symmetric(horizontal: 16),
                         decoration: BoxDecoration(
-                          color: banner['backgroundColor'] as Color,
                           borderRadius: BorderRadius.circular(12),
                           boxShadow: [
                             BoxShadow(
-                              color: (banner['backgroundColor'] as Color)
-                                  .withValues(alpha: 0.3),
+                              color: Colors.black.withValues(alpha: 0.1),
                               blurRadius: 8,
                               offset: const Offset(0, 2),
                             ),
                           ],
                         ),
-                        child: Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: Row(
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: Stack(
                             children: [
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Text(
-                                      banner['title'],
-                                      style: TextStyle(
-                                        color: banner['textColor'] as Color,
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w600,
+                              // Banner Image
+                              Image.asset(
+                                banner['imagePath'],
+                                width: double.infinity,
+                                height: double.infinity,
+                                fit: BoxFit.cover,
+                                errorBuilder: (context, error, stackTrace) {
+                                  return Container(
+                                    color: Colors.grey[300],
+                                    child: const Center(
+                                      child: Icon(
+                                        Icons.image_not_supported,
+                                        size: 40,
+                                        color: Colors.grey,
                                       ),
                                     ),
-                                    const SizedBox(height: 4),
-                                    Row(
-                                      children: [
-                                        Expanded(
-                                          child: Text(
-                                            banner['subtitle'],
-                                            style: TextStyle(
-                                              color:
-                                                  banner['textColor'] as Color,
-                                              fontSize: 16,
-                                              fontWeight: FontWeight.bold,
-                                            ),
-                                          ),
-                                        ),
-                                        Icon(
-                                          Icons.star,
-                                          color: Colors.amber,
-                                          size: 20,
-                                        ),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 8),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 12,
-                                        vertical: 6,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: Colors.white.withValues(
-                                          alpha: 0.2,
-                                        ),
-                                        borderRadius: BorderRadius.circular(16),
-                                      ),
-                                      child: Text(
-                                        banner['actionText'],
-                                        style: TextStyle(
-                                          color: banner['textColor'] as Color,
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(width: 16),
-                              Icon(
-                                banner['icon'] as IconData,
-                                color: Colors.white.withValues(alpha: 0.8),
-                                size: 40,
+                                  );
+                                },
                               ),
                             ],
                           ),
@@ -1042,151 +1027,162 @@ class _DiscoverPageState extends State<DiscoverPage> {
                             ),
                             const SizedBox(width: 12),
                             const Text(
-                              'Popular Brands',
+                              'Partner Brands',
                               style: TextStyle(
                                 fontSize: 20,
                                 fontWeight: FontWeight.bold,
                                 color: Colors.black87,
                               ),
                             ),
-                            const Spacer(),
-                            GestureDetector(
-                              onTap: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) => const AllBrandsPage(),
-                                  ),
-                                );
-                              },
-                              child: Text(
-                                'Show More',
-                                style: TextStyle(
-                                  color: primaryPurple,
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ),
+                            // const Spacer(),
+                            // GestureDetector(
+                            //   onTap: () {
+                            //     Navigator.push(
+                            //       context,
+                            //       MaterialPageRoute(
+                            //         builder: (context) => const AllBrandsPage(),
+                            //       ),
+                            //     );
+                            //   },
+                            //   child: Text(
+                            //     'Show More',
+                            //     style: TextStyle(
+                            //       color: primaryPurple,
+                            //       fontSize: 16,
+                            //       fontWeight: FontWeight.w600,
+                            //     ),
+                            //   ),
+                            // ),
                           ],
                         ),
                       ),
                       const SizedBox(height: 16),
-                      BlocBuilder<BrandBloc, BrandState>(
-                        builder: (context, brandState) {
-                          if (brandState is BrandLoading) {
-                            return const Center(
-                              child: CircularProgressIndicator(),
-                            );
-                          } else if (brandState is BrandLoaded) {
-                            return GridView.count(
-                              shrinkWrap: true,
-                              physics: const NeverScrollableScrollPhysics(),
-                              crossAxisCount: 3,
-                              crossAxisSpacing: 12,
-                              mainAxisSpacing: 12,
-                              childAspectRatio: 1.2,
-                              children: brandState.brands.map((brand) {
-                                return BrandCard(
-                                  brand: brand,
-                                  onTap: () {
-                                    // Handle brand selection
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                        content: Text(
-                                          'Selected: ${brand.brandName}',
-                                        ),
-                                        duration: const Duration(seconds: 1),
+                      // Auto-scrolling marquee for brand logos
+                      Container(
+                        height: 120,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(12),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.grey.withValues(alpha: 0.1),
+                              spreadRadius: 1,
+                              blurRadius: 10,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: SingleChildScrollView(
+                          controller: _brandMarqueeController,
+                          scrollDirection: Axis.horizontal,
+                          physics:
+                              const NeverScrollableScrollPhysics(), // Disable manual scrolling
+                          child: Row(
+                            children: [
+                              // First set of logos
+                              ..._brandLogos
+                                  .map(
+                                    (logo) => Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 8.0,
                                       ),
-                                    );
-                                  },
-                                );
-                              }).toList(),
-                            );
-                          } else if (brandState is BrandError) {
-                            return Center(
-                              child: Column(
-                                children: [
-                                  Icon(
-                                    Icons.error_outline,
-                                    size: 48,
-                                    color: Colors.grey[400],
-                                  ),
-                                  const SizedBox(height: 8),
-                                  Text(
-                                    'Failed to load brands',
-                                    style: TextStyle(
-                                      color: Colors.grey[600],
-                                      fontSize: 16,
+                                      child: GestureDetector(
+                                        onTap: () => _onBrandTap(logo['name']!),
+                                        child: Container(
+                                          width: 100,
+                                          height: 100,
+                                          decoration: BoxDecoration(
+                                            color: Colors.transparent,
+                                            borderRadius: BorderRadius.circular(
+                                              12,
+                                            ),
+                                          ),
+                                          child: ClipRRect(
+                                            borderRadius: BorderRadius.circular(
+                                              12,
+                                            ),
+                                            child: Image.asset(
+                                              logo['path']!,
+                                              fit: BoxFit.contain,
+                                              errorBuilder:
+                                                  (context, error, stackTrace) {
+                                                    return Container(
+                                                      decoration: BoxDecoration(
+                                                        color: Colors.grey[100],
+                                                        borderRadius:
+                                                            BorderRadius.circular(
+                                                              12,
+                                                            ),
+                                                      ),
+                                                      child: const Center(
+                                                        child: Icon(
+                                                          Icons
+                                                              .image_not_supported,
+                                                          size: 40,
+                                                          color: Colors.grey,
+                                                        ),
+                                                      ),
+                                                    );
+                                                  },
+                                            ),
+                                          ),
+                                        ),
+                                      ),
                                     ),
-                                  ),
-                                  const SizedBox(height: 8),
-                                  ElevatedButton(
-                                    onPressed: () {
-                                      context.read<BrandBloc>().add(
-                                        const LoadRandomBrands(limit: 6),
-                                      );
-                                    },
-                                    child: const Text('Retry'),
-                                  ),
-                                ],
-                              ),
-                            );
-                          } else {
-                            return const SizedBox.shrink();
-                          }
-                        },
-                      ),
-                      const SizedBox(height: 20),
-                      Center(
-                        child: GestureDetector(
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => const AllBrandsPage(),
-                              ),
-                            );
-                          },
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 24,
-                              vertical: 12,
-                            ),
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                colors: [primaryPurple, primaryPink],
-                                begin: Alignment.centerLeft,
-                                end: Alignment.centerRight,
-                              ),
-                              borderRadius: BorderRadius.circular(25),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: primaryPurple.withValues(alpha: 0.3),
-                                  blurRadius: 8,
-                                  offset: const Offset(0, 4),
-                                ),
-                              ],
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text(
-                                  'Show More',
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                const Icon(
-                                  Icons.arrow_forward,
-                                  color: Colors.white,
-                                  size: 18,
-                                ),
-                              ],
-                            ),
+                                  )
+                                  .toList(),
+                              // Duplicate set for seamless loop
+                              ..._brandLogos
+                                  .map(
+                                    (logo) => Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 8.0,
+                                      ),
+                                      child: GestureDetector(
+                                        onTap: () => _onBrandTap(logo['name']!),
+                                        child: Container(
+                                          width: 100,
+                                          height: 100,
+                                          decoration: BoxDecoration(
+                                            color: Colors.transparent,
+                                            borderRadius: BorderRadius.circular(
+                                              12,
+                                            ),
+                                          ),
+                                          child: ClipRRect(
+                                            borderRadius: BorderRadius.circular(
+                                              12,
+                                            ),
+                                            child: Image.asset(
+                                              logo['path']!,
+                                              fit: BoxFit.contain,
+                                              errorBuilder:
+                                                  (context, error, stackTrace) {
+                                                    return Container(
+                                                      decoration: BoxDecoration(
+                                                        color: Colors.grey[100],
+                                                        borderRadius:
+                                                            BorderRadius.circular(
+                                                              12,
+                                                            ),
+                                                      ),
+                                                      child: const Center(
+                                                        child: Icon(
+                                                          Icons
+                                                              .image_not_supported,
+                                                          size: 40,
+                                                          color: Colors.grey,
+                                                        ),
+                                                      ),
+                                                    );
+                                                  },
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  )
+                                  .toList(),
+                            ],
                           ),
                         ),
                       ),
