@@ -7,8 +7,10 @@ import '../bloc/inventory_bloc.dart';
 import '../bloc/lookbook_product_bloc.dart';
 import '../bloc/cart_bloc.dart';
 import '../bloc/agents_products_bloc.dart';
+import '../bloc/brand_bloc.dart';
 import '../../data/datasources/firebase_discover_datasource.dart';
 import '../../data/repositories/discover_repository_impl.dart';
+import '../../data/repositories/brand_repository.dart';
 import 'discover_page.dart';
 import '../../../../shared/presentation/widgets/debug_wrapper.dart';
 
@@ -30,6 +32,10 @@ class DiscoverPageWrapper extends StatelessWidget {
           create: (context) => AgentsProductsBloc(
             DiscoverRepositoryImpl(FirebaseDiscoverDataSourceImpl()),
           ),
+        ),
+        BlocProvider<BrandBloc>(
+          create: (context) =>
+              BrandBloc(BrandRepositoryImpl(FirebaseDiscoverDataSourceImpl())),
         ),
       ],
       child: const DebugWrapper(child: DiscoverPage()),

@@ -3,8 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../bloc/cart_bloc.dart';
-import '../../data/models/agent_product_model.dart';
-import '../pages/order_confirmation_page.dart';
+import '../pages/order_success_page.dart';
 
 class DiscoverCartDialog extends StatelessWidget {
   final CartBloc cartBloc;
@@ -507,21 +506,19 @@ class DiscoverCartDialog extends StatelessWidget {
                               const Duration(milliseconds: 100),
                             );
 
-                            // Navigate to order confirmation
+                            // Navigate to order success page first (with animation)
                             if (context.mounted) {
                               Navigator.push(
                                 context,
                                 MaterialPageRoute(
-                                  builder: (context) => BlocProvider.value(
-                                    value: cartBloc,
-                                    child: OrderConfirmationPage(
-                                      cartItems: cartState.items,
-                                      agentName: agentName,
-                                      brandName: brandName,
-                                      totalPrice: cartState.totalPrice,
-                                      agentPhone: customerPhone,
-                                      customerName: customerName,
-                                    ),
+                                  builder: (context) => OrderSuccessPage(
+                                    cartItems: cartState.items,
+                                    agentName: agentName,
+                                    brandName: brandName,
+                                    totalPrice: cartState.totalPrice,
+                                    agentPhone: customerPhone,
+                                    customerName: customerName,
+                                    cartBloc: cartBloc,
                                   ),
                                 ),
                               );

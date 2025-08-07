@@ -4,16 +4,21 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+
+import 'dart:async';
 import '../bloc/discover_bloc.dart';
 import '../bloc/card_wallet_bloc.dart';
 import '../bloc/inventory_bloc.dart';
 import '../bloc/cart_bloc.dart';
 import '../bloc/agents_products_bloc.dart';
+import '../bloc/brand_bloc.dart';
 import '../../domain/entities/enums.dart';
 import '../../data/models/agent_product_model.dart';
 import '../widgets/product_tile.dart';
+import '../widgets/brand_card.dart';
 import 'agent_profile.dart';
-import 'order_confirmation_page.dart';
+import 'order_success_page.dart';
+import 'all_brands_page.dart';
 
 final RouteObserver<ModalRoute<void>> routeObserver =
     RouteObserver<ModalRoute<void>>();
@@ -29,8 +34,50 @@ class _DiscoverPageState extends State<DiscoverPage> {
   TextEditingController searchController = TextEditingController();
   FocusNode searchFocusNode = FocusNode();
   final ScrollController _scrollController = ScrollController();
-  bool _isSearchExpanded = false;
   bool _isSearchVisible = true;
+
+  // Carousel controller and timer
+  late PageController _carouselController;
+  Timer? _carouselTimer;
+  int _currentCarouselIndex = 0;
+
+  // Brand logos marquee controller and timer
+  late ScrollController _brandMarqueeController;
+  Timer? _brandMarqueeTimer;
+
+  // Banner advertisements data
+  final List<Map<String, dynamic>> _bannerAds = [
+    {
+      'imagePath': 'assets/banner/1.png',
+      'title': 'Premium Collection',
+      'subtitle': 'Discover Luxury Brands',
+    },
+    {
+      'imagePath': 'assets/banner/2.jpg',
+      'title': 'Exclusive Offers',
+      'subtitle': 'Limited Time Deals',
+    },
+    {
+      'imagePath': 'assets/banner/3.webp',
+      'title': 'New Arrivals',
+      'subtitle': 'Latest Products',
+    },
+    {
+      'imagePath': 'assets/banner/5.jpg',
+      'title': 'Featured Brands',
+      'subtitle': 'Top Luxury Partners',
+    },
+  ];
+
+  // Brand logos for carousel
+  final List<Map<String, String>> _brandLogos = [
+    {'name': 'Apple', 'path': 'assets/logos/apple.png'},
+    {'name': 'Costco', 'path': 'assets/logos/costco.png'},
+    {'name': 'Dior', 'path': 'assets/logos/dior.png'},
+    {'name': 'Louis Vuitton', 'path': 'assets/logos/lv.png'},
+    {'name': 'Reliance', 'path': 'assets/logos/relaince.png'},
+    {'name': 'Loro Piana', 'path': 'assets/logos/loro.png'},
+  ];
 
   // Theme colors matching other pages
   static const Color primaryPurple = Color(0xFFA342FF);
@@ -46,13 +93,65 @@ class _DiscoverPageState extends State<DiscoverPage> {
     context.read<CardWalletBloc>().add(const LoadProducts());
     context.read<CartBloc>().add(const LoadCartEvent());
     context.read<AgentsProductsBloc>().add(const LoadAgentsAndProducts());
+    context.read<BrandBloc>().add(const LoadRandomBrands(limit: 6));
     _scrollController.addListener(_onScroll);
+
+    // Initialize carousel
+    _carouselController = PageController();
+    _brandMarqueeController = ScrollController();
+    _startCarouselTimer();
+    _startBrandMarqueeTimer();
   }
 
   @override
   void dispose() {
     _scrollController.dispose();
+    _carouselController.dispose();
+    _brandMarqueeController.dispose();
+    _carouselTimer?.cancel();
+    _brandMarqueeTimer?.cancel();
     super.dispose();
+  }
+
+  void _startCarouselTimer() {
+    _carouselTimer = Timer.periodic(const Duration(seconds: 3), (timer) {
+      if (_currentCarouselIndex < _bannerAds.length - 1) {
+        _currentCarouselIndex++;
+      } else {
+        _currentCarouselIndex = 0;
+      }
+      if (mounted) {
+        _carouselController.animateToPage(
+          _currentCarouselIndex,
+          duration: const Duration(milliseconds: 500),
+          curve: Curves.easeInOut,
+        );
+      }
+    });
+  }
+
+  void _startBrandMarqueeTimer() {
+    _brandMarqueeTimer = Timer.periodic(const Duration(milliseconds: 30), (
+      timer,
+    ) {
+      if (mounted && _brandMarqueeController.hasClients) {
+        final maxScroll = _brandMarqueeController.position.maxScrollExtent;
+        final currentScroll = _brandMarqueeController.offset;
+        final singleSetWidth = maxScroll / 2; // Width of one complete set
+
+        if (currentScroll >= singleSetWidth) {
+          // Jump back to start of first set without animation for seamless loop
+          _brandMarqueeController.jumpTo(0);
+        } else {
+          // Continue scrolling smoothly
+          _brandMarqueeController.animateTo(
+            currentScroll + 1,
+            duration: const Duration(milliseconds: 30),
+            curve: Curves.linear,
+          );
+        }
+      }
+    });
   }
 
   Future<void> _onRefresh() async {
@@ -77,7 +176,6 @@ class _DiscoverPageState extends State<DiscoverPage> {
     if (_scrollController.position.pixels > 50 && _isSearchVisible) {
       setState(() {
         _isSearchVisible = false;
-        _isSearchExpanded = false;
       });
     } else if (_scrollController.position.pixels <= 50 && !_isSearchVisible) {
       setState(() {
@@ -86,16 +184,14 @@ class _DiscoverPageState extends State<DiscoverPage> {
     }
   }
 
-  void _toggleSearch() {
-    setState(() {
-      _isSearchExpanded = !_isSearchExpanded;
-      if (_isSearchExpanded) {
-        searchFocusNode.requestFocus();
-      } else {
-        searchFocusNode.unfocus();
-        searchController.clear();
-      }
-    });
+  void _onBrandTap(String brandName) {
+    // Handle brand tap - you can add navigation or other actions here
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Selected: $brandName'),
+        duration: const Duration(seconds: 2),
+      ),
+    );
   }
 
   void _showCartConflictDialog(CartAgentConflict state) {
@@ -625,21 +721,19 @@ class _DiscoverPageState extends State<DiscoverPage> {
                                   const Duration(milliseconds: 100),
                                 );
 
-                                // Navigate to order confirmation
+                                // Navigate to order success page first (with animation)
                                 if (context.mounted) {
                                   Navigator.push(
                                     context,
                                     MaterialPageRoute(
-                                      builder: (context) => BlocProvider.value(
-                                        value: cartBloc,
-                                        child: OrderConfirmationPage(
-                                          cartItems: cartState.items,
-                                          agentName: agentName,
-                                          brandName: brandName,
-                                          totalPrice: cartState.totalPrice,
-                                          agentPhone: customerPhone,
-                                          customerName: customerName,
-                                        ),
+                                      builder: (context) => OrderSuccessPage(
+                                        cartItems: cartState.items,
+                                        agentName: agentName,
+                                        brandName: brandName,
+                                        totalPrice: cartState.totalPrice,
+                                        agentPhone: customerPhone,
+                                        customerName: customerName,
+                                        cartBloc: cartBloc,
                                       ),
                                     ),
                                   );
@@ -776,45 +870,39 @@ class _DiscoverPageState extends State<DiscoverPage> {
                 );
               },
             ),
-            const SizedBox(width: 8),
-            // Search icon
-            IconButton(
-              onPressed: _toggleSearch,
-              icon: Icon(
-                _isSearchExpanded ? Icons.close : Icons.search,
-                color: Colors.black54,
-                size: 24,
-              ),
-            ),
           ],
         ),
-        bottom: _isSearchExpanded
-            ? PreferredSize(
-                preferredSize: const Size.fromHeight(60),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 8,
-                  ),
+      ),
+      body: BlocListener<CartBloc, CartState>(
+        listener: (context, state) {
+          if (state is CartAgentConflict) {
+            _showCartConflictDialog(state);
+          }
+        },
+        child: RefreshIndicator(
+          onRefresh: _onRefresh,
+          color: primaryPurple,
+          child: SingleChildScrollView(
+            controller: _scrollController,
+            child: Column(
+              children: [
+                // Search Bar Section
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  color: Colors.white,
                   child: Container(
                     decoration: BoxDecoration(
-                      color: Colors.white,
+                      color: Colors.grey[100],
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(color: borderColor),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.05),
-                          blurRadius: 8,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
                     ),
                     child: TextField(
                       controller: searchController,
                       focusNode: searchFocusNode,
                       decoration: const InputDecoration(
-                        hintText: 'Search for anything...',
-                        prefixIcon: Icon(Icons.search, color: primaryPurple),
+                        hintText: "Search Luxury Brands & Agents",
+                        prefixIcon: Icon(Icons.search, color: Colors.grey),
+                        suffixIcon: Icon(Icons.search, color: Colors.grey),
                         border: InputBorder.none,
                         contentPadding: EdgeInsets.symmetric(
                           horizontal: 16,
@@ -838,240 +926,546 @@ class _DiscoverPageState extends State<DiscoverPage> {
                     ),
                   ),
                 ),
-              )
-            : null,
-      ),
-      body: BlocListener<CartBloc, CartState>(
-        listener: (context, state) {
-          if (state is CartAgentConflict) {
-            _showCartConflictDialog(state);
-          }
-        },
-        child: RefreshIndicator(
-          onRefresh: _onRefresh,
-          color: primaryPurple,
-          child: BlocBuilder<AgentsProductsBloc, AgentsProductsState>(
-            builder: (context, agentsProductsState) {
-              if (agentsProductsState is AgentsProductsLoading) {
-                return ListView.builder(
-                  controller: _scrollController,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 12,
-                  ),
-                  itemCount: 3,
-                  itemBuilder: (context, index) => const DiscoverItemShimmer(),
-                );
-              }
 
-              if (agentsProductsState is AgentsProductsLoaded) {
-                if (agentsProductsState.agents.isEmpty) {
-                  return Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Container(
-                          width: 80,
-                          height: 80,
-                          decoration: BoxDecoration(
-                            gradient: const LinearGradient(
-                              colors: [primaryPurple, primaryPink],
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                            ),
-                            borderRadius: BorderRadius.circular(40),
-                          ),
-                          child: const Icon(
-                            Icons.search_off,
-                            color: Colors.white,
-                            size: 40,
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          'No agents found',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.grey[700],
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Try refreshing the page',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.grey[600],
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                }
-
-                // Filter agents with products
-                final agentsWithProducts = agentsProductsState.agents.where((
-                  agent,
-                ) {
-                  final products =
-                      agentsProductsState.agentProducts[agent.agentId] ?? [];
-                  return products.isNotEmpty;
-                }).toList();
-
-                return ListView.builder(
-                  controller: _scrollController,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 12,
-                  ),
-                  itemCount:
-                      agentsWithProducts.length +
-                      (agentsProductsState.hasMoreAgents ? 1 : 0),
-                  itemBuilder: (context, index) {
-                    // Show loading indicator at the end for infinite scroll
-                    if (index == agentsWithProducts.length) {
+                // Carousel Banner Section
+                Container(
+                  height: 200,
+                  margin: const EdgeInsets.symmetric(vertical: 16),
+                  child: PageView.builder(
+                    controller: _carouselController,
+                    onPageChanged: (index) {
+                      setState(() {
+                        _currentCarouselIndex = index;
+                      });
+                    },
+                    itemCount: _bannerAds.length,
+                    itemBuilder: (context, index) {
+                      final banner = _bannerAds[index];
                       return Container(
-                        height: 100,
-                        margin: const EdgeInsets.only(bottom: 16),
+                        margin: const EdgeInsets.symmetric(horizontal: 16),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(12),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.1),
+                              blurRadius: 8,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: Stack(
+                            children: [
+                              // Banner Image
+                              Image.asset(
+                                banner['imagePath'],
+                                width: double.infinity,
+                                height: double.infinity,
+                                fit: BoxFit.cover,
+                                errorBuilder: (context, error, stackTrace) {
+                                  return Container(
+                                    color: Colors.grey[300],
+                                    child: const Center(
+                                      child: Icon(
+                                        Icons.image_not_supported,
+                                        size: 40,
+                                        color: Colors.grey,
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+
+                // Carousel Indicators
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: List.generate(
+                    _bannerAds.length,
+                    (index) => Container(
+                      width: 8,
+                      height: 8,
+                      margin: const EdgeInsets.symmetric(horizontal: 4),
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: _currentCarouselIndex == index
+                            ? primaryPurple
+                            : Colors.grey[300],
+                      ),
+                    ),
+                  ),
+                ),
+
+                // Brand Categories Section
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        margin: const EdgeInsets.only(bottom: 8),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 6,
+                              height: 24,
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  colors: [primaryPurple, primaryPink],
+                                  begin: Alignment.topCenter,
+                                  end: Alignment.bottomCenter,
+                                ),
+                                borderRadius: BorderRadius.circular(3),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            const Text(
+                              'Partner Brands',
+                              style: TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.black87,
+                              ),
+                            ),
+                            // const Spacer(),
+                            // GestureDetector(
+                            //   onTap: () {
+                            //     Navigator.push(
+                            //       context,
+                            //       MaterialPageRoute(
+                            //         builder: (context) => const AllBrandsPage(),
+                            //       ),
+                            //     );
+                            //   },
+                            //   child: Text(
+                            //     'Show More',
+                            //     style: TextStyle(
+                            //       color: primaryPurple,
+                            //       fontSize: 16,
+                            //       fontWeight: FontWeight.w600,
+                            //     ),
+                            //   ),
+                            // ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      // Auto-scrolling marquee for brand logos
+                      Container(
+                        height: 120,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(12),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.grey.withValues(alpha: 0.1),
+                              spreadRadius: 1,
+                              blurRadius: 10,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: SingleChildScrollView(
+                          controller: _brandMarqueeController,
+                          scrollDirection: Axis.horizontal,
+                          physics:
+                              const NeverScrollableScrollPhysics(), // Disable manual scrolling
+                          child: Row(
+                            children: [
+                              // First set of logos
+                              ..._brandLogos
+                                  .map(
+                                    (logo) => Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 8.0,
+                                      ),
+                                      child: GestureDetector(
+                                        onTap: () => _onBrandTap(logo['name']!),
+                                        child: Container(
+                                          width: 100,
+                                          height: 100,
+                                          decoration: BoxDecoration(
+                                            color: Colors.transparent,
+                                            borderRadius: BorderRadius.circular(
+                                              12,
+                                            ),
+                                          ),
+                                          child: ClipRRect(
+                                            borderRadius: BorderRadius.circular(
+                                              12,
+                                            ),
+                                            child: Image.asset(
+                                              logo['path']!,
+                                              fit: BoxFit.contain,
+                                              errorBuilder:
+                                                  (context, error, stackTrace) {
+                                                    return Container(
+                                                      decoration: BoxDecoration(
+                                                        color: Colors.grey[100],
+                                                        borderRadius:
+                                                            BorderRadius.circular(
+                                                              12,
+                                                            ),
+                                                      ),
+                                                      child: const Center(
+                                                        child: Icon(
+                                                          Icons
+                                                              .image_not_supported,
+                                                          size: 40,
+                                                          color: Colors.grey,
+                                                        ),
+                                                      ),
+                                                    );
+                                                  },
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  )
+                                  .toList(),
+                              // Duplicate set for seamless loop
+                              ..._brandLogos
+                                  .map(
+                                    (logo) => Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 8.0,
+                                      ),
+                                      child: GestureDetector(
+                                        onTap: () => _onBrandTap(logo['name']!),
+                                        child: Container(
+                                          width: 100,
+                                          height: 100,
+                                          decoration: BoxDecoration(
+                                            color: Colors.transparent,
+                                            borderRadius: BorderRadius.circular(
+                                              12,
+                                            ),
+                                          ),
+                                          child: ClipRRect(
+                                            borderRadius: BorderRadius.circular(
+                                              12,
+                                            ),
+                                            child: Image.asset(
+                                              logo['path']!,
+                                              fit: BoxFit.contain,
+                                              errorBuilder:
+                                                  (context, error, stackTrace) {
+                                                    return Container(
+                                                      decoration: BoxDecoration(
+                                                        color: Colors.grey[100],
+                                                        borderRadius:
+                                                            BorderRadius.circular(
+                                                              12,
+                                                            ),
+                                                      ),
+                                                      child: const Center(
+                                                        child: Icon(
+                                                          Icons
+                                                              .image_not_supported,
+                                                          size: 40,
+                                                          color: Colors.grey,
+                                                        ),
+                                                      ),
+                                                    );
+                                                  },
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  )
+                                  .toList(),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                // Agents Header
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 6,
+                        height: 24,
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [primaryPurple, primaryPink],
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                          ),
+                          borderRadius: BorderRadius.circular(3),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      const Text(
+                        'Discover Our Partner Agents',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black87,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                // Content Section
+                BlocBuilder<AgentsProductsBloc, AgentsProductsState>(
+                  builder: (context, agentsProductsState) {
+                    if (agentsProductsState is AgentsProductsLoading) {
+                      return ListView.builder(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 12,
+                        ),
+                        itemCount: 3,
+                        itemBuilder: (context, index) =>
+                            const DiscoverItemShimmer(),
+                      );
+                    }
+
+                    if (agentsProductsState is AgentsProductsLoaded) {
+                      if (agentsProductsState.agents.isEmpty) {
+                        return Container(
+                          height: 300,
+                          child: Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Container(
+                                  width: 80,
+                                  height: 80,
+                                  decoration: BoxDecoration(
+                                    gradient: const LinearGradient(
+                                      colors: [primaryPurple, primaryPink],
+                                      begin: Alignment.topLeft,
+                                      end: Alignment.bottomRight,
+                                    ),
+                                    borderRadius: BorderRadius.circular(40),
+                                  ),
+                                  child: const Icon(
+                                    Icons.search_off,
+                                    color: Colors.white,
+                                    size: 40,
+                                  ),
+                                ),
+                                const SizedBox(height: 16),
+                                Text(
+                                  'No agents found',
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.grey[700],
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  'Try refreshing the page',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: Colors.grey[600],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      }
+
+                      // Filter agents with products
+                      final agentsWithProducts = agentsProductsState.agents
+                          .where((agent) {
+                            final products =
+                                agentsProductsState.agentProducts[agent
+                                    .agentId] ??
+                                [];
+                            return products.isNotEmpty;
+                          })
+                          .toList();
+
+                      return ListView.builder(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 12,
+                        ),
+                        itemCount:
+                            agentsWithProducts.length +
+                            (agentsProductsState.hasMoreAgents ? 1 : 0),
+                        itemBuilder: (context, index) {
+                          // Show loading indicator at the end for infinite scroll
+                          if (index == agentsWithProducts.length) {
+                            return Container(
+                              height: 100,
+                              margin: const EdgeInsets.only(bottom: 16),
+                              child: Center(
+                                child: CircularProgressIndicator(
+                                  color: primaryPurple,
+                                ),
+                              ),
+                            );
+                          }
+
+                          final agent = agentsWithProducts[index];
+                          final products =
+                              agentsProductsState.agentProducts[agent
+                                  .agentId] ??
+                              [];
+
+                          return AgentProductsSection(
+                            agent: {
+                              'id': agent.agentId,
+                              'name': agent.name,
+                              'company': agent.brandName,
+                              'avatar':
+                                  null, // You can add avatar field to AgentModel if needed
+                              'categories': agent.categories,
+                            },
+                            products: products
+                                .map(
+                                  (product) => {
+                                    'id': product.id,
+                                    'name': product.productName,
+                                    'price': product.productPrice,
+                                    'originalPrice': product
+                                        .productPrice, // No original price field in your structure
+                                    'stock': product.stockQuantity,
+                                    'imageUrl': product.productImage,
+                                    'isNew':
+                                        false, // No isNew field in your structure
+                                    'discountPercentage':
+                                        null, // No discount field in your structure
+                                  },
+                                )
+                                .toList(),
+                            hasMoreProducts:
+                                agentsProductsState.hasMoreProducts[agent
+                                    .agentId] ??
+                                false,
+                            isLoadingMoreProducts:
+                                agentsProductsState.isLoadingMoreProducts[agent
+                                    .agentId] ??
+                                false,
+                            onProductClicked: (productId) {
+                              // Product click handled silently
+                            },
+                            onProductInventoryIncremented: (productId) {
+                              context.read<InventoryBloc>().add(
+                                UpdateProductStockQuantityEvent(
+                                  productId: productId,
+                                  newQuantity: 10, // Mock quantity
+                                ),
+                              );
+                            },
+                            onProductInventoryDecremented: (productId) {
+                              context.read<InventoryBloc>().add(
+                                UpdateProductStockQuantityEvent(
+                                  productId: productId,
+                                  newQuantity: 5, // Mock quantity
+                                ),
+                              );
+                            },
+                            onAddToCart: (productId) {
+                              final product = products.firstWhere(
+                                (p) => p.id == productId,
+                                orElse: () => AgentProductModel(
+                                  id: productId,
+                                  productName: 'Unknown Product',
+                                  productPrice: 0.0,
+                                  stockQuantity: 0,
+                                ),
+                              );
+
+                              context.read<CartBloc>().add(
+                                AddToCartEvent(
+                                  product: product,
+                                  agentId: agent.agentId,
+                                  agentName: agent.name,
+                                ),
+                              );
+                            },
+                            onLoadMoreProducts: () {
+                              context.read<AgentsProductsBloc>().add(
+                                LoadMoreAgentProducts(agent.agentId),
+                              );
+                            },
+                          );
+                        },
+                      );
+                    }
+
+                    if (agentsProductsState is AgentsProductsError) {
+                      return Container(
+                        height: 300,
                         child: Center(
-                          child: CircularProgressIndicator(
-                            color: primaryPurple,
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Container(
+                                width: 80,
+                                height: 80,
+                                decoration: BoxDecoration(
+                                  gradient: const LinearGradient(
+                                    colors: [primaryPurple, primaryPink],
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                  ),
+                                  borderRadius: BorderRadius.circular(40),
+                                ),
+                                child: const Icon(
+                                  Icons.error_outline,
+                                  color: Colors.white,
+                                  size: 40,
+                                ),
+                              ),
+                              const SizedBox(height: 16),
+                              Text(
+                                'Error loading data',
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.grey[700],
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                agentsProductsState.message,
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: Colors.grey[600],
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                            ],
                           ),
                         ),
                       );
                     }
 
-                    final agent = agentsWithProducts[index];
-                    final products =
-                        agentsProductsState.agentProducts[agent.agentId] ?? [];
-
-                    return AgentProductsSection(
-                      agent: {
-                        'id': agent.agentId,
-                        'name': agent.name,
-                        'company': agent.brandName,
-                        'avatar':
-                            null, // You can add avatar field to AgentModel if needed
-                        'categories': agent.categories,
-                      },
-                      products: products
-                          .map(
-                            (product) => {
-                              'id': product.id,
-                              'name': product.productName,
-                              'price': product.productPrice,
-                              'originalPrice': product
-                                  .productPrice, // No original price field in your structure
-                              'stock': product.stockQuantity,
-                              'imageUrl': product.productImage,
-                              'isNew':
-                                  false, // No isNew field in your structure
-                              'discountPercentage':
-                                  null, // No discount field in your structure
-                            },
-                          )
-                          .toList(),
-                      hasMoreProducts:
-                          agentsProductsState.hasMoreProducts[agent.agentId] ??
-                          false,
-                      isLoadingMoreProducts:
-                          agentsProductsState.isLoadingMoreProducts[agent
-                              .agentId] ??
-                          false,
-                      onProductClicked: (productId) {
-                        // Product click handled silently
-                      },
-                      onProductInventoryIncremented: (productId) {
-                        context.read<InventoryBloc>().add(
-                          UpdateProductStockQuantityEvent(
-                            productId: productId,
-                            newQuantity: 10, // Mock quantity
-                          ),
-                        );
-                      },
-                      onProductInventoryDecremented: (productId) {
-                        context.read<InventoryBloc>().add(
-                          UpdateProductStockQuantityEvent(
-                            productId: productId,
-                            newQuantity: 5, // Mock quantity
-                          ),
-                        );
-                      },
-                      onAddToCart: (productId) {
-                        final product = products.firstWhere(
-                          (p) => p.id == productId,
-                          orElse: () => AgentProductModel(
-                            id: productId,
-                            productName: 'Unknown Product',
-                            productPrice: 0.0,
-                            stockQuantity: 0,
-                          ),
-                        );
-
-                        context.read<CartBloc>().add(
-                          AddToCartEvent(
-                            product: product,
-                            agentId: agent.agentId,
-                            agentName: agent.name,
-                          ),
-                        );
-                      },
-                      onLoadMoreProducts: () {
-                        context.read<AgentsProductsBloc>().add(
-                          LoadMoreAgentProducts(agent.agentId),
-                        );
-                      },
+                    return Container(
+                      height: 200,
+                      child: Center(
+                        child: CircularProgressIndicator(color: primaryPurple),
+                      ),
                     );
                   },
-                );
-              }
-
-              if (agentsProductsState is AgentsProductsError) {
-                return Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Container(
-                        width: 80,
-                        height: 80,
-                        decoration: BoxDecoration(
-                          gradient: const LinearGradient(
-                            colors: [primaryPurple, primaryPink],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          ),
-                          borderRadius: BorderRadius.circular(40),
-                        ),
-                        child: const Icon(
-                          Icons.error_outline,
-                          color: Colors.white,
-                          size: 40,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        'Error loading data',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.grey[700],
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        agentsProductsState.message,
-                        style: TextStyle(fontSize: 14, color: Colors.grey[600]),
-                        textAlign: TextAlign.center,
-                      ),
-                    ],
-                  ),
-                );
-              }
-
-              return Center(
-                child: CircularProgressIndicator(color: primaryPurple),
-              );
-            },
+                ),
+              ],
+            ),
           ),
         ),
       ),
