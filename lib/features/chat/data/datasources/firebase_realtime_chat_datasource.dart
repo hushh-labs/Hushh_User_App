@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -38,44 +39,150 @@ class FirebaseRealtimeChatDataSource {
     final userId = currentUserId;
     if (userId == null) return Stream.value([]);
 
-    print('Getting chats for user: $userId');
-    print('Database path: ${_database.child('chats').path}');
+    final controller = StreamController<List<ChatModel>>();
+    final chats = <String, ChatModel>{};
 
-    return _database.child('chats').onValue.map((event) {
-      print('Stream event received');
-      print('Event snapshot value: ${event.snapshot.value}');
-      print('Event snapshot exists: ${event.snapshot.exists}');
+    print('🔍 DataSource: Fetching chats for user: $userId');
 
+    // Get all chats and filter locally
+    final query = _database.child('chats');
+    final listener = query.onValue.listen((event) async {
       final data = event.snapshot.value as Map<dynamic, dynamic>?;
-      if (data == null) {
-        print('No data in snapshot, returning empty list');
-        return [];
+      chats.clear();
+
+      if (data != null) {
+        print('🔍 DataSource: Found ${data.length} total chats in database');
+
+        for (var entry in data.entries) {
+          final chatData = Map<String, dynamic>.from(entry.value as Map);
+          final participants = List<String>.from(
+            chatData['participants'] ?? [],
+          );
+
+          print(
+            '🔍 DataSource: Chat ${entry.key} has participants: $participants',
+          );
+          print('🔍 DataSource: Current user ID: $userId');
+          print(
+            '🔍 DataSource: User is participant: ${participants.contains(userId)}',
+          );
+
+          // Check if chat is missing required fields and try to fix it
+          final hasParticipants =
+              participants.isNotEmpty || chatData['participants'] != null;
+          final hasCreatedAt = chatData['createdAt'] != null;
+          final hasDeletionFlags = chatData['deletionFlags'] != null;
+          final hasHasBlocked = chatData['hasBlocked'] != null;
+          final hasTypingStatus = chatData['typingStatus'] != null;
+
+          if (!hasParticipants ||
+              !hasCreatedAt ||
+              !hasDeletionFlags ||
+              !hasHasBlocked ||
+              !hasTypingStatus) {
+            print(
+              '🔍 DataSource: Chat ${entry.key} is missing required fields',
+            );
+            print(
+              '🔍 DataSource: Missing fields - participants: ${!hasParticipants}, createdAt: ${!hasCreatedAt}, deletionFlags: ${!hasDeletionFlags}, hasBlocked: ${!hasHasBlocked}, typingStatus: ${!hasTypingStatus}',
+            );
+
+            // Try to extract participants from chat ID
+            final chatIdParts = entry.key.toString().split('_');
+            if (chatIdParts.length >= 2) {
+              print(
+                '🔍 DataSource: Extracting participants from chat ID: $chatIdParts',
+              );
+
+              // Check if current user is in the chat ID
+              if (chatIdParts.contains(userId)) {
+                print(
+                  '🔍 DataSource: User found in chat ID, fixing missing fields',
+                );
+
+                // Prepare all missing fields
+                final missingFields = <String, dynamic>{};
+
+                // Add participants if missing
+                if (!hasParticipants) {
+                  missingFields['participants'] = chatIdParts;
+                }
+
+                // Add createdAt if missing
+                if (!hasCreatedAt) {
+                  missingFields['createdAt'] =
+                      DateTime.now().millisecondsSinceEpoch;
+                }
+
+                // Add deletionFlags if missing
+                if (!hasDeletionFlags) {
+                  final deletionFlags = <String, int>{};
+                  for (final participantId in chatIdParts) {
+                    deletionFlags[participantId] = -1; // -1 means no deletion
+                  }
+                  missingFields['deletionFlags'] = deletionFlags;
+                }
+
+                // Add hasBlocked if missing
+                if (!hasHasBlocked) {
+                  final hasBlocked = <String, bool>{};
+                  for (final participantId in chatIdParts) {
+                    hasBlocked[participantId] = false;
+                  }
+                  missingFields['hasBlocked'] = hasBlocked;
+                }
+
+                // Add typingStatus if missing
+                if (!hasTypingStatus) {
+                  final typingStatus = <String, bool>{};
+                  for (final participantId in chatIdParts) {
+                    typingStatus[participantId] = false;
+                  }
+                  missingFields['typingStatus'] = typingStatus;
+                }
+
+                print('🔍 DataSource: Adding missing fields: $missingFields');
+
+                // Add all missing fields to database
+                await _database
+                    .child('chats')
+                    .child(entry.key)
+                    .update(missingFields);
+
+                // Add to our results with all fields
+                chats[entry.key] = ChatModel.fromJson(entry.key.toString(), {
+                  ...chatData,
+                  ...missingFields,
+                });
+              }
+            }
+          } else if (participants.contains(userId)) {
+            print('🔍 DataSource: User is participant in chat: ${entry.key}');
+            chats[entry.key] = ChatModel.fromJson(
+              entry.key.toString(),
+              chatData,
+            );
+          } else {
+            print(
+              '🔍 DataSource: User is NOT participant in chat: ${entry.key}',
+            );
+          }
+        }
+
+        print('🔍 DataSource: User is participant in ${chats.length} chats');
+        print('🔍 DataSource: Chat IDs: ${chats.keys.join(', ')}');
+      } else {
+        print('🔍 DataSource: No chats found in database');
       }
 
-      print('Raw data entries: ${data.entries.length}');
-
-      final filteredChats = data.entries
-          .where((entry) {
-            final chatData = Map<String, dynamic>.from(entry.value as Map);
-            final participants = List<String>.from(
-              chatData['participants'] ?? [],
-            );
-            final containsUser = participants.contains(userId);
-            print(
-              'Chat ${entry.key} participants: $participants, contains user: $containsUser',
-            );
-            return containsUser;
-          })
-          .map((entry) {
-            final chatData = Map<String, dynamic>.from(entry.value as Map);
-            print('Creating ChatModel for chat: ${entry.key}');
-            return ChatModel.fromJson(entry.key.toString(), chatData);
-          })
-          .toList();
-
-      print('Filtered chats count: ${filteredChats.length}');
-      return filteredChats;
+      controller.add(chats.values.toList());
     });
+
+    controller.onCancel = () {
+      listener.cancel();
+    };
+
+    return controller.stream;
   }
 
   // Get messages for a specific chat
