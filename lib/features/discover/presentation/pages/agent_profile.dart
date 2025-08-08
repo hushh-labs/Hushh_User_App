@@ -2,7 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:lottie/lottie.dart';
 import '../widgets/agent_profile_tabbar.dart';
+import '../widgets/lookbooks_list_view.dart';
+import '../../data/models/lookbook_model.dart';
+import '../../data/models/agent_product_model.dart';
+import '../../data/datasources/firebase_discover_datasource.dart';
 import '../../../chat/presentation/bloc/chat_bloc.dart' as chat;
 import '../../../chat/presentation/pages/regular_chat_page.dart';
 import '../../../chat/domain/entities/chat_entity.dart';
@@ -24,11 +29,20 @@ class _AgentProfileState extends State<AgentProfile>
   bool isLoadingCategories = true;
   bool _isLoading = false;
 
+  // Lookbooks and products state
+  List<LookbookModel> lookbooks = [];
+  List<AgentProductModel> products = [];
+  bool isLoadingLookbooks = true;
+  bool isLoadingProducts = true;
+  final FirebaseDiscoverDataSource _dataSource =
+      FirebaseDiscoverDataSourceImpl();
+
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
     _loadCategories();
+    _loadLookbooksAndProducts();
   }
 
   @override
@@ -75,6 +89,48 @@ class _AgentProfileState extends State<AgentProfile>
       debugPrint('Error loading categories: $e');
       setState(() {
         isLoadingCategories = false;
+      });
+    }
+  }
+
+  Future<void> _loadLookbooksAndProducts() async {
+    try {
+      final agentId = widget.agent['agentId'] ?? widget.agent['id'];
+      if (agentId != null) {
+        // Load lookbooks and products in parallel
+        await Future.wait([_loadLookbooks(agentId), _loadProducts(agentId)]);
+      }
+    } catch (e) {
+      debugPrint('Error loading lookbooks and products: $e');
+    }
+  }
+
+  Future<void> _loadLookbooks(String agentId) async {
+    try {
+      final lookbooksData = await _dataSource.getAgentLookbooks(agentId);
+      setState(() {
+        lookbooks = lookbooksData;
+        isLoadingLookbooks = false;
+      });
+    } catch (e) {
+      debugPrint('Error loading lookbooks: $e');
+      setState(() {
+        isLoadingLookbooks = false;
+      });
+    }
+  }
+
+  Future<void> _loadProducts(String agentId) async {
+    try {
+      final productsData = await _dataSource.getAgentProducts(agentId);
+      setState(() {
+        products = productsData;
+        isLoadingProducts = false;
+      });
+    } catch (e) {
+      debugPrint('Error loading products: $e');
+      setState(() {
+        isLoadingProducts = false;
       });
     }
   }
@@ -248,26 +304,58 @@ class _AgentProfileState extends State<AgentProfile>
   }
 
   Widget _buildLookbooksTab() {
-    return const Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.photo_library_outlined, size: 80, color: Colors.grey),
-          SizedBox(height: 16),
-          Text(
-            'Lookbooks',
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              color: Colors.grey,
+    if (isLoadingLookbooks) {
+      return const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(height: 16),
+            Text(
+              'Loading lookbooks...',
+              style: TextStyle(fontSize: 16, color: Colors.grey),
             ),
-          ),
-          SizedBox(height: 8),
-          Text(
-            'No lookbooks available yet',
-            style: TextStyle(fontSize: 16, color: Colors.grey),
-          ),
-        ],
+          ],
+        ),
+      );
+    }
+
+    if (lookbooks.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Lottie.asset(
+              'assets/animations/empty-lookbook.json',
+              width: 200,
+              height: 200,
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'Lookbooks',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: Colors.black,
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'No lookbooks available yet',
+              style: TextStyle(fontSize: 16, color: Colors.black),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.all(16.0),
+      child: LookBooksListView(
+        lookbooks: lookbooks,
+        products: products,
+        fromChat: false,
+        sendLookBook: false,
       ),
     );
   }
