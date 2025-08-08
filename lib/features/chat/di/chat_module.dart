@@ -33,6 +33,7 @@ class ChatModule {
     getIt.registerLazySingleton(() => SetTypingStatus(getIt()));
     getIt.registerLazySingleton(() => MarkMessageAsSeen(getIt()));
     getIt.registerLazySingleton(() => MarkLastMessageAsSeen(getIt()));
+    getIt.registerLazySingleton(() => MarkChatAsSeen(getIt()));
 
     // Stream use cases
     getIt.registerLazySingleton(() => StreamUserChats(getIt()));

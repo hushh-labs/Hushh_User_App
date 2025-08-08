@@ -170,6 +170,15 @@ class UpdateMessagesEvent extends ChatEvent {
   List<Object> get props => [chatId, messages];
 }
 
+class _ChatsUpdatedEvent extends ChatEvent {
+  final List<ChatEntity> chats;
+
+  const _ChatsUpdatedEvent(this.chats);
+
+  @override
+  List<Object> get props => [chats];
+}
+
 // States
 abstract class ChatState extends Equatable {
   const ChatState();
@@ -454,6 +463,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   final GetUsers? getUsers;
   final GetCurrentUser? getCurrentUser;
   final SearchUsers? searchUsers;
+  final MarkChatAsSeen? markChatAsSeen;
 
   // Add cached state for users and chats
   List<ChatUserEntity> _cachedUsers = [];
@@ -485,6 +495,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       getUsers: GetIt.instance.get<GetUsers>(),
       getCurrentUser: GetIt.instance.get<GetCurrentUser>(),
       searchUsers: GetIt.instance.get<SearchUsers>(),
+      markChatAsSeen: GetIt.instance.get<MarkChatAsSeen>(),
     );
   }
 
@@ -504,6 +515,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     this.getUsers,
     this.getCurrentUser,
     this.searchUsers,
+    this.markChatAsSeen,
   }) : super(const ChatInitialState()) {
     print('🔍 BLoC: ChatBloc._ constructor called');
     on<LoadChatsEvent>(_onLoadChats);
@@ -522,6 +534,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     on<LoadUsersEvent>(_onLoadUsers);
     on<SearchUsersEvent>(_onSearchUsers);
     on<GetCurrentUserEvent>(_onGetCurrentUser);
+    on<_ChatsUpdatedEvent>(_onChatsUpdated);
     print('🔍 BLoC: Event handlers registered');
   }
 
@@ -552,137 +565,45 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     LoadChatsEvent event,
     Emitter<ChatState> emit,
   ) async {
-    final startTime = DateTime.now();
     try {
       print('BLoC: Loading chats');
-
-      // Force fresh query for debugging - always clear cache
-      print('🔍 BLoC: Clearing cache and forcing fresh query');
-      _cachedChats.clear();
-
       emit(const ChatLoadingState());
 
-      final hushhBotChat = const ChatItem(
-        id: 'hushh_bot',
-        title: 'Hushh Bot',
-        subtitle: 'Talk to Hushh Bot / upload bills for Insights',
-        avatarIcon: 'smart_toy',
-        avatarColor: '#A342FF',
-        isBot: true,
-        isUnread: false,
-        isLastMessageSeen: null,
-      );
-
+      // Cancel any existing subscription to avoid duplicates.
+      await _chatSubscription?.cancel();
       if (streamUserChats != null) {
-        print('BLoC: Repository available, listening to chats stream');
-
-        // Cancel any existing subscription to avoid duplicates.
-        await _chatSubscription?.cancel();
-
+        print(
+          'BLoC: Repository available, setting up new chats stream subscription.',
+        );
         _chatSubscription = streamUserChats!().listen(
-          (chatEntities) async {
-            print(
-              '🔍 BLoC: Stream received ${chatEntities.length} chat entities',
-            );
-            print(
-              '🔍 BLoC: Chat entity IDs: ${chatEntities.map((e) => e.id).join(', ')}',
-            );
-
-            final regularChats = chatEntities
-                .where((entity) => entity.id != 'hushh_bot')
-                .map(
-                  (entity) => ChatItem(
-                    id: entity.id,
-                    title: '', // Will be replaced by real name
-                    subtitle: entity.lastText ?? 'No messages yet',
-                    avatarIcon: _getAvatarIcon(entity),
-                    avatarColor: _getAvatarColor(entity),
-                    lastMessageTime: _formatTime(entity.lastTextTime),
-                    isBot: false,
-                    isUnread: entity.isUnread,
-                    isLastMessageSeen: entity.isLastTextSeen,
-                  ),
-                )
-                .toList();
-
-            print('🔍 BLoC: Created ${regularChats.length} regular chat items');
-
-            final updatedChats = <ChatItem>[hushhBotChat];
-            final currentUserId = FirebaseAuth.instance.currentUser?.uid;
-
-            for (final chat in regularChats) {
-              if (currentUserId == null) {
-                updatedChats.add(chat);
-                continue;
-              }
-
-              final participants = chat.id.split('_');
-              String otherUserId = '';
-              if (participants.length >= 2) {
-                otherUserId = participants.firstWhere(
-                  (id) => id != currentUserId,
-                  orElse: () => '',
-                );
-              }
-
-              if (otherUserId.isNotEmpty) {
-                final realName = await _getUserDisplayNameAsync(otherUserId);
-                updatedChats.add(chat.copyWith(title: realName));
-              } else {
-                updatedChats.add(chat.copyWith(title: 'Unknown Chat'));
-              }
-            }
-
-            _allChats = updatedChats;
-            _cachedChats = updatedChats;
-            print('🔍 BLoC: Updated cached chats: ${_cachedChats.length}');
-            print(
-              '🔍 BLoC: Chat IDs: ${_cachedChats.map((c) => c.id).join(', ')}',
-            );
-
-            final elapsedTime = DateTime.now().difference(startTime);
-            final remainingTime =
-                const Duration(milliseconds: 1500) - elapsedTime;
-
-            if (remainingTime > Duration.zero) {
-              await Future.delayed(remainingTime);
-            }
-
-            if (!isClosed) {
-              emit(
-                ChatsLoadedState(
-                  chats: updatedChats,
-                  filteredChats: updatedChats,
-                ),
-              );
-            }
+          (chatEntities) {
+            // Add a new event to handle the update, instead of emitting directly.
+            add(_ChatsUpdatedEvent(chatEntities));
           },
-          onError: (error, stackTrace) async {
-            print('BLoC: Error loading chats: $error');
-            _allChats = [hushhBotChat];
-
-            final elapsedTime = DateTime.now().difference(startTime);
-            final remainingTime =
-                const Duration(milliseconds: 1500) - elapsedTime;
-
-            if (remainingTime > Duration.zero) {
-              await Future.delayed(remainingTime);
-            }
-
-            if (!isClosed) {
-              emit(
-                ChatsLoadedState(chats: _allChats, filteredChats: _allChats),
-              );
-            }
+          onError: (error) {
+            print('❌ BLoC: Error in chat stream: $error');
+            add(const _ChatsUpdatedEvent([])); // Emit empty list on error
           },
         );
       } else {
-        print('BLoC: No repository available, using fallback');
-        _allChats = [hushhBotChat];
-        emit(ChatsLoadedState(chats: _allChats, filteredChats: _allChats));
+        print('BLoC: No repository available, showing fallback.');
+        add(const _ChatsUpdatedEvent([]));
       }
     } catch (e) {
-      print('BLoC: Exception loading chats: $e');
+      print('BLoC: Exception setting up chat loading: $e');
+      add(const _ChatsUpdatedEvent([]));
+    }
+  }
+
+  Future<void> _onChatsUpdated(
+    _ChatsUpdatedEvent event,
+    Emitter<ChatState> emit,
+  ) async {
+    final startTime = DateTime.now();
+    try {
+      print(
+        '🔍 BLoC: _onChatsUpdated called with ${event.chats.length} chats.',
+      );
       final hushhBotChat = const ChatItem(
         id: 'hushh_bot',
         title: 'Hushh Bot',
@@ -693,9 +614,68 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         isUnread: false,
         isLastMessageSeen: null,
       );
-      _allChats = [hushhBotChat];
-      _cachedChats = [hushhBotChat];
-      emit(ChatsLoadedState(chats: _allChats, filteredChats: _allChats));
+
+      final regularChats = event.chats
+          .where((entity) => entity.id != 'hushh_bot')
+          .map(
+            (entity) => ChatItem(
+              id: entity.id,
+              title: '', // Will be replaced by real name
+              subtitle: entity.lastText ?? 'No messages yet',
+              avatarIcon: _getAvatarIcon(entity),
+              avatarColor: _getAvatarColor(entity),
+              lastMessageTime: _formatTime(entity.lastTextTime),
+              isBot: false,
+              isUnread: entity.isUnread,
+              isLastMessageSeen: entity.isLastTextSeen,
+            ),
+          )
+          .toList();
+
+      final updatedChats = <ChatItem>[hushhBotChat];
+      final currentUserId = FirebaseAuth.instance.currentUser?.uid;
+
+      for (final chat in regularChats) {
+        if (currentUserId == null) {
+          updatedChats.add(chat);
+          continue;
+        }
+
+        final participants = chat.id.split('_');
+        String otherUserId = '';
+        if (participants.length >= 2) {
+          otherUserId = participants.firstWhere(
+            (id) => id != currentUserId,
+            orElse: () => '',
+          );
+        }
+
+        if (otherUserId.isNotEmpty) {
+          final realName = await _getUserDisplayNameAsync(otherUserId);
+          updatedChats.add(chat.copyWith(title: realName));
+        } else {
+          updatedChats.add(chat.copyWith(title: 'Unknown Chat'));
+        }
+      }
+
+      _allChats = updatedChats;
+      _cachedChats = updatedChats;
+      print('🔍 BLoC: Updated cached chats: ${_cachedChats.length}');
+
+      final elapsedTime = DateTime.now().difference(startTime);
+      final remainingTime = const Duration(milliseconds: 1500) - elapsedTime;
+
+      if (remainingTime > Duration.zero) {
+        await Future.delayed(remainingTime);
+      }
+
+      if (!isClosed) {
+        emit(
+          ChatsLoadedState(chats: updatedChats, filteredChats: updatedChats),
+        );
+      }
+    } catch (e) {
+      print('❌ BLoC: Exception in _onChatsUpdated: $e');
     }
   }
 
@@ -867,6 +847,12 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     try {
       print('🔍 BLoC: _onOpenChat called');
       print('🔍 BLoC: Chat ID: ${event.chatId}');
+
+      // Mark chat as seen when opening it
+      if (markChatAsSeen != null && event.chatId != 'hushh_bot') {
+        print('🔍 BLoC: Marking chat as seen: ${event.chatId}');
+        await markChatAsSeen!(event.chatId);
+      }
 
       // Check if we already have messages in local state
       if (_chatMessages[event.chatId] != null &&

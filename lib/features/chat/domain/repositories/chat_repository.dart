@@ -23,6 +23,7 @@ abstract class ChatRepository {
     String messageId,
   );
   Future<Either<Failure, void>> markLastMessageAsSeen(String chatId);
+  Future<Either<Failure, void>> markChatAsSeen(String chatId);
   Future<Either<Failure, void>> deleteMessage(String chatId, String messageId);
 
   // Typing status operations
