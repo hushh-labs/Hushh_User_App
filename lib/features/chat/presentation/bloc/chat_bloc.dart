@@ -552,6 +552,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     LoadChatsEvent event,
     Emitter<ChatState> emit,
   ) async {
+    final startTime = DateTime.now();
     try {
       print('BLoC: Loading chats');
 
@@ -572,37 +573,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         isLastMessageSeen: null,
       );
 
-      // Immediately show the Hushh Bot chat while loading others
-      _allChats = [hushhBotChat];
-      _cachedChats = [hushhBotChat];
-      emit(ChatsLoadedState(chats: _allChats, filteredChats: _allChats));
-
       if (streamUserChats != null) {
         print('BLoC: Repository available, listening to chats stream');
-
-        // Add a timeout to ensure we show the chat list even if stream doesn't return data
-        Timer(const Duration(seconds: 3), () {
-          if (state is ChatLoadingState) {
-            print('BLoC: Timeout reached, showing fallback chat list');
-            final hushhBotChat = const ChatItem(
-              id: 'hushh_bot',
-              title: 'Hushh Bot',
-              subtitle: 'Talk to Hushh Bot / upload bills for Insights',
-              avatarIcon: 'smart_toy',
-              avatarColor: '#A342FF',
-              isBot: true,
-              isUnread: false,
-              isLastMessageSeen: null,
-            );
-            _allChats = [hushhBotChat];
-            _cachedChats = [hushhBotChat];
-            if (!isClosed) {
-              emit(
-                ChatsLoadedState(chats: _allChats, filteredChats: _allChats),
-              );
-            }
-          }
-        });
 
         // Cancel any existing subscription to avoid duplicates.
         await _chatSubscription?.cancel();
@@ -668,6 +640,14 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
               '🔍 BLoC: Chat IDs: ${_cachedChats.map((c) => c.id).join(', ')}',
             );
 
+            final elapsedTime = DateTime.now().difference(startTime);
+            final remainingTime =
+                const Duration(milliseconds: 1500) - elapsedTime;
+
+            if (remainingTime > Duration.zero) {
+              await Future.delayed(remainingTime);
+            }
+
             if (!isClosed) {
               emit(
                 ChatsLoadedState(
@@ -677,9 +657,18 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
               );
             }
           },
-          onError: (error, stackTrace) {
+          onError: (error, stackTrace) async {
             print('BLoC: Error loading chats: $error');
             _allChats = [hushhBotChat];
+
+            final elapsedTime = DateTime.now().difference(startTime);
+            final remainingTime =
+                const Duration(milliseconds: 1500) - elapsedTime;
+
+            if (remainingTime > Duration.zero) {
+              await Future.delayed(remainingTime);
+            }
+
             if (!isClosed) {
               emit(
                 ChatsLoadedState(chats: _allChats, filteredChats: _allChats),
