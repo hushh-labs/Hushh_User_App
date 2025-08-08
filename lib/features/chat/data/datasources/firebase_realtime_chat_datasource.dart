@@ -1,20 +1,17 @@
 import 'dart:async';
-import 'package:firebase_database/firebase_database.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/chat_model.dart';
 import '../models/user_model.dart';
 
 class FirebaseRealtimeChatDataSource {
-  final DatabaseReference _database = FirebaseDatabase.instance.ref();
   final FirebaseAuth _auth = FirebaseAuth.instance;
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   FirebaseRealtimeChatDataSource() {
-    print('FirebaseRealtimeChatDataSource initialized');
-    print('Database URL: ${FirebaseDatabase.instance.databaseURL}');
-    print('Database reference path: ${_database.path}');
+    print('FirebaseRealtimeChatDataSource initialized (using Firestore)');
 
-    // Set up auth state listener for database
+    // Set up auth state listener
     _auth.authStateChanges().listen((user) {
       print('Auth state changed - User: ${user?.uid}');
       if (user != null) {
@@ -34,173 +31,131 @@ class FirebaseRealtimeChatDataSource {
     return user?.uid;
   }
 
-  // Get all chats for current user
+  // Get all chats for current user (Firestore)
   Stream<List<ChatModel>> getUserChats() {
     final userId = currentUserId;
-    if (userId == null) return Stream.value([]);
+    if (userId == null) {
+      print('❌ DataSource: No current user ID available');
+      return Stream.value([]);
+    }
 
-    final controller = StreamController<List<ChatModel>>();
-    final chats = <String, ChatModel>{};
+    print('🔍 DataSource: Preparing stream for chats of user: $userId');
 
-    print('🔍 DataSource: Fetching chats for user: $userId');
+    final controller = StreamController<List<ChatModel>>.broadcast();
 
-    // Get all chats and filter locally
-    final query = _database.child('chats');
-    final listener = query.onValue.listen((event) async {
-      final data = event.snapshot.value as Map<dynamic, dynamic>?;
-      chats.clear();
-
-      if (data != null) {
-        print('🔍 DataSource: Found ${data.length} total chats in database');
-
-        for (var entry in data.entries) {
-          final chatData = Map<String, dynamic>.from(entry.value as Map);
-          final participants = List<String>.from(
-            chatData['participants'] ?? [],
-          );
-
-          print(
-            '🔍 DataSource: Chat ${entry.key} has participants: $participants',
-          );
-          print('🔍 DataSource: Current user ID: $userId');
-          print(
-            '🔍 DataSource: User is participant: ${participants.contains(userId)}',
-          );
-
-          // Check if chat is missing required fields and try to fix it
-          final hasParticipants =
-              participants.isNotEmpty || chatData['participants'] != null;
-          final hasCreatedAt = chatData['createdAt'] != null;
-          final hasDeletionFlags = chatData['deletionFlags'] != null;
-          final hasHasBlocked = chatData['hasBlocked'] != null;
-          final hasTypingStatus = chatData['typingStatus'] != null;
-
-          if (!hasParticipants ||
-              !hasCreatedAt ||
-              !hasDeletionFlags ||
-              !hasHasBlocked ||
-              !hasTypingStatus) {
+    controller.onListen = () {
+      print('🔍 DataSource: Listener subscribed, fetching chats...');
+      _getChatsAsync(userId)
+          .then((results) {
             print(
-              '🔍 DataSource: Chat ${entry.key} is missing required fields',
+              '🔍 DataSource: Adding ${results.length} chats to broadcast stream',
             );
-            print(
-              '🔍 DataSource: Missing fields - participants: ${!hasParticipants}, createdAt: ${!hasCreatedAt}, deletionFlags: ${!hasDeletionFlags}, hasBlocked: ${!hasHasBlocked}, typingStatus: ${!hasTypingStatus}',
-            );
-
-            // Try to extract participants from chat ID
-            final chatIdParts = entry.key.toString().split('_');
-            if (chatIdParts.length >= 2) {
-              print(
-                '🔍 DataSource: Extracting participants from chat ID: $chatIdParts',
-              );
-
-              // Check if current user is in the chat ID
-              if (chatIdParts.contains(userId)) {
-                print(
-                  '🔍 DataSource: User found in chat ID, fixing missing fields',
-                );
-
-                // Prepare all missing fields
-                final missingFields = <String, dynamic>{};
-
-                // Add participants if missing
-                if (!hasParticipants) {
-                  missingFields['participants'] = chatIdParts;
-                }
-
-                // Add createdAt if missing
-                if (!hasCreatedAt) {
-                  missingFields['createdAt'] =
-                      DateTime.now().millisecondsSinceEpoch;
-                }
-
-                // Add deletionFlags if missing
-                if (!hasDeletionFlags) {
-                  final deletionFlags = <String, int>{};
-                  for (final participantId in chatIdParts) {
-                    deletionFlags[participantId] = -1; // -1 means no deletion
-                  }
-                  missingFields['deletionFlags'] = deletionFlags;
-                }
-
-                // Add hasBlocked if missing
-                if (!hasHasBlocked) {
-                  final hasBlocked = <String, bool>{};
-                  for (final participantId in chatIdParts) {
-                    hasBlocked[participantId] = false;
-                  }
-                  missingFields['hasBlocked'] = hasBlocked;
-                }
-
-                // Add typingStatus if missing
-                if (!hasTypingStatus) {
-                  final typingStatus = <String, bool>{};
-                  for (final participantId in chatIdParts) {
-                    typingStatus[participantId] = false;
-                  }
-                  missingFields['typingStatus'] = typingStatus;
-                }
-
-                print('🔍 DataSource: Adding missing fields: $missingFields');
-
-                // Add all missing fields to database
-                await _database
-                    .child('chats')
-                    .child(entry.key)
-                    .update(missingFields);
-
-                // Add to our results with all fields
-                chats[entry.key] = ChatModel.fromJson(entry.key.toString(), {
-                  ...chatData,
-                  ...missingFields,
-                });
-              }
+            if (!controller.isClosed) {
+              controller.add(results);
+              controller.close();
             }
-          } else if (participants.contains(userId)) {
-            print('🔍 DataSource: User is participant in chat: ${entry.key}');
-            chats[entry.key] = ChatModel.fromJson(
-              entry.key.toString(),
-              chatData,
-            );
-          } else {
-            print(
-              '🔍 DataSource: User is NOT participant in chat: ${entry.key}',
-            );
-          }
-        }
-
-        print('🔍 DataSource: User is participant in ${chats.length} chats');
-        print('🔍 DataSource: Chat IDs: ${chats.keys.join(', ')}');
-      } else {
-        print('🔍 DataSource: No chats found in database');
-      }
-
-      controller.add(chats.values.toList());
-    });
+          })
+          .catchError((error) {
+            print('❌ DataSource: Error in getUserChats: $error');
+            if (!controller.isClosed) {
+              controller.add(<ChatModel>[]);
+              controller.close();
+            }
+          });
+    };
 
     controller.onCancel = () {
-      listener.cancel();
+      print('🔍 DataSource: Stream cancelled.');
+      // No specific action needed here for a one-shot stream,
+      // but good practice to have.
     };
 
     return controller.stream;
   }
 
-  // Get messages for a specific chat
-  Stream<List<MessageModel>> getChatMessages(String chatId) {
-    return _database
-        .child('chats')
-        .child(chatId)
-        .child('messages')
-        .orderByChild('timestamp')
-        .onValue
-        .map((event) {
-          final data = event.snapshot.value as Map<dynamic, dynamic>?;
-          if (data == null) return [];
+  Future<List<ChatModel>> _getChatsAsync(String userId) async {
+    try {
+      final snapshot = await _firestore.collection('chats').get();
+      print(
+        '🔍 DataSource: Future completed - Total chats in collection: ${snapshot.docs.length}',
+      );
 
-          return data.entries.map((entry) {
-            final messageData = Map<String, dynamic>.from(entry.value as Map);
-            return MessageModel.fromJson(entry.key.toString(), messageData);
+      final List<ChatModel> results = [];
+      for (final doc in snapshot.docs) {
+        try {
+          final data = Map<String, dynamic>.from(doc.data());
+          print('🔍 DataSource: Processing chat doc: ${doc.id}');
+          print('🔍 DataSource: Raw data: $data');
+
+          // Check if this chat contains the current user
+          final participants = data['participants'];
+          print('🔍 DataSource: Participants field: $participants');
+          print('🔍 DataSource: Current user ID: $userId');
+          print(
+            '🔍 DataSource: Participants contains user: ${participants is List && participants.contains(userId)}',
+          );
+
+          if (participants is List && participants.contains(userId)) {
+            print('🔍 DataSource: Chat contains current user, processing...');
+
+            // normalize timestamps to ms integers for ChatModel.fromJson
+            if (data['createdAt'] is Timestamp) {
+              data['createdAt'] =
+                  (data['createdAt'] as Timestamp).millisecondsSinceEpoch;
+            }
+            if (data['lastTextTime'] is Timestamp) {
+              data['lastTextTime'] =
+                  (data['lastTextTime'] as Timestamp).millisecondsSinceEpoch;
+            }
+
+            final chatModel = ChatModel.fromJson(doc.id, data);
+            print(
+              '🔍 DataSource: Created ChatModel: ${chatModel.id} with ${chatModel.participants.length} participants',
+            );
+            results.add(chatModel);
+          } else {
+            print(
+              '🔍 DataSource: Chat does not contain current user, skipping...',
+            );
+          }
+        } catch (e) {
+          print('❌ DataSource: Error mapping chat doc ${doc.id}: $e');
+          print('❌ DataSource: Error stack trace: ${StackTrace.current}');
+        }
+      }
+      print(
+        '🔍 DataSource: Returning ${results.length} chats for user $userId',
+      );
+      return results;
+    } catch (error) {
+      print('❌ DataSource: Error in Firestore query: $error');
+      print('❌ DataSource: Error type: ${error.runtimeType}');
+      print('❌ DataSource: Error stack trace: ${StackTrace.current}');
+      return <ChatModel>[];
+    }
+  }
+
+  // Get messages for a specific chat (Firestore)
+  Stream<List<MessageModel>> getChatMessages(String chatId) {
+    print(
+      '🔍 DataSource: Subscribing to messages for chat: $chatId (Firestore)',
+    );
+    return _firestore
+        .collection('chats')
+        .doc(chatId)
+        .collection('messages')
+        .orderBy('timestamp')
+        .snapshots()
+        .map((snapshot) {
+          final messages = snapshot.docs.map((doc) {
+            final data = Map<String, dynamic>.from(doc.data());
+            if (data['timestamp'] is Timestamp) {
+              data['timestamp'] =
+                  (data['timestamp'] as Timestamp).millisecondsSinceEpoch;
+            }
+            return MessageModel.fromJson(doc.id, data);
           }).toList();
+          return messages;
         });
   }
 
@@ -221,22 +176,14 @@ class FirebaseRealtimeChatDataSource {
     print('User ID: $userId');
 
     try {
-      // Check if chat exists first
-      final chatSnapshot = await _database.child('chats').child(chatId).get();
-      print('Chat existence check - snapshot value: ${chatSnapshot.value}');
-      print('Chat existence check - snapshot exists: ${chatSnapshot.exists}');
-
-      final messageRef = _database
-          .child('chats')
-          .child(chatId)
-          .child('messages')
-          .push();
-
-      print('Message reference path: ${messageRef.path}');
-      print('Message reference key: ${messageRef.key}');
+      final msgRef = _firestore
+          .collection('chats')
+          .doc(chatId)
+          .collection('messages')
+          .doc();
 
       final message = MessageModel(
-        id: messageRef.key!,
+        id: msgRef.id,
         text: text,
         senderId: userId,
         timestamp: DateTime.now(),
@@ -244,27 +191,14 @@ class FirebaseRealtimeChatDataSource {
         isSeen: false,
       );
 
-      print('Message data to save: ${message.toJson()}');
-
-      // Save message
-      await messageRef.set(message.toJson());
-      print('Message saved successfully');
-
-      // Update chat's last message info
-      await _database.child('chats').child(chatId).update({
+      await msgRef.set(message.toJson());
+      await _firestore.collection('chats').doc(chatId).update({
         'lastText': text,
         'lastTextTime': DateTime.now().millisecondsSinceEpoch,
         'lastTextBy': userId,
         'isLastTextSeen': false,
       });
-      print('Chat last message info updated successfully');
-
-      // Verify message was saved
-      final messageSnapshot = await messageRef.get();
-      print('Message verification - snapshot value: ${messageSnapshot.value}');
-      print(
-        'Message verification - snapshot exists: ${messageSnapshot.exists}',
-      );
+      print('Message saved and chat updated successfully (Firestore)');
     } catch (e) {
       print('Error sending message: $e');
       print('Error type: ${e.runtimeType}');
@@ -278,23 +212,25 @@ class FirebaseRealtimeChatDataSource {
     String userId,
     bool isTyping,
   ) async {
-    await _database
-        .child('chats')
-        .child(chatId)
-        .child('typingStatus')
-        .child(userId)
-        .set(isTyping);
+    await _firestore.collection('chats').doc(chatId).update({
+      'typingStatus.$userId': isTyping,
+    });
   }
 
   // Listen for typing status of the other user
   Stream<bool> isOtherUserTyping(String chatId, String otherUserId) {
-    return _database
-        .child('chats')
-        .child(chatId)
-        .child('typingStatus')
-        .child(otherUserId)
-        .onValue
-        .map((event) => event.snapshot.value == true);
+    print(
+      '🔍 DataSource: Subscribing to typingStatus (Firestore) for chat: $chatId otherUser: $otherUserId',
+    );
+    return _firestore.collection('chats').doc(chatId).snapshots().map((doc) {
+      final data = doc.data();
+      if (data == null) return false;
+      final typing = data['typingStatus'];
+      if (typing is Map<String, dynamic>) {
+        return typing[otherUserId] == true;
+      }
+      return false;
+    });
   }
 
   // Set chat deletion flag for a user
@@ -303,46 +239,43 @@ class FirebaseRealtimeChatDataSource {
     String userId,
     int messageIndex,
   ) async {
-    await _database
-        .child('chats')
-        .child(chatId)
-        .child('deletionFlags')
-        .child(userId)
-        .set(messageIndex);
+    await _firestore.collection('chats').doc(chatId).update({
+      'deletionFlags.$userId': messageIndex,
+    });
   }
 
   // Get chat deletion flag for a user
   Future<int?> getChatDeletionFlag(String chatId, String userId) async {
-    final snapshot = await _database
-        .child('chats')
-        .child(chatId)
-        .child('deletionFlags')
-        .child(userId)
-        .get();
-
-    return snapshot.value as int?;
+    final doc = await _firestore.collection('chats').doc(chatId).get();
+    final data = doc.data();
+    if (data == null) return null;
+    final flags = data['deletionFlags'];
+    if (flags is Map<String, dynamic>) {
+      final val = flags[userId];
+      if (val is int) return val;
+    }
+    return null;
   }
 
   // Block a user
   Future<void> blockUser(String userId, String blockedUserId) async {
-    await _database
-        .child('users')
-        .child(userId)
-        .child('blockedUsers')
-        .child(blockedUserId)
-        .set(true);
+    await _firestore
+        .collection('users')
+        .doc(userId)
+        .collection('blockedUsers')
+        .doc(blockedUserId)
+        .set({'blocked': true});
   }
 
   // Check if a user is blocked
   Future<bool> isUserBlocked(String userId, String blockedUserId) async {
-    final snapshot = await _database
-        .child('users')
-        .child(userId)
-        .child('blockedUsers')
-        .child(blockedUserId)
+    final doc = await _firestore
+        .collection('users')
+        .doc(userId)
+        .collection('blockedUsers')
+        .doc(blockedUserId)
         .get();
-
-    return snapshot.value == true;
+    return doc.exists;
   }
 
   // Create a new chat
@@ -356,25 +289,7 @@ class FirebaseRealtimeChatDataSource {
     print('Creating chat with participants: $participantIds');
     print('Current user ID: $userId');
 
-    // Test database connection first
-    try {
-      print('Testing database read access...');
-      print('Current user ID: $userId');
-      print('User is authenticated: ${_auth.currentUser != null}');
-
-      // Check if user has a valid token
-      final token = await _auth.currentUser?.getIdToken();
-      print('User has valid token: ${token != null}');
-
-      final testSnapshot = await _database.child('chats').get();
-      print(
-        'Database read test successful - snapshot exists: ${testSnapshot.exists}',
-      );
-    } catch (e) {
-      print('Database read test failed: $e');
-      print('Error details: ${e.toString()}');
-      rethrow;
-    }
+    // Firestore has no separate connectivity test here
 
     // Add current user to participants if not already included
     if (!participantIds.contains(userId)) {
@@ -424,71 +339,61 @@ class FirebaseRealtimeChatDataSource {
     }
     chatData['hasBlocked'] = hasBlocked;
 
-    print('Creating chat with data: $chatData');
-    print('Database reference: ${_database.child('chats').child(chatId).path}');
-
+    print('Creating chat with data: $chatData (Firestore)');
     try {
-      print('About to call set() operation...');
-      await _database.child('chats').child(chatId).set(chatData);
-      print('set() operation completed');
-      print(
-        'Chat created successfully with typingStatus, deletionFlags, and hasBlocked',
-      );
-
-      print('About to verify chat creation...');
-      // Verify the chat was created
-      final snapshot = await _database.child('chats').child(chatId).get();
-      print('Verification snapshot value: ${snapshot.value}');
-      print('Verification snapshot exists: ${snapshot.exists}');
-      print('Verification completed');
-
+      await _firestore.collection('chats').doc(chatId).set(chatData);
       return chatId;
     } catch (e) {
       print('Error creating chat: $e');
-      print('Error type: ${e.runtimeType}');
-      print('Error stack trace: ${StackTrace.current}');
       rethrow;
     }
   }
 
   // Mark message as seen
   Future<void> markMessageAsSeen(String chatId, String messageId) async {
-    await _database
-        .child('chats')
-        .child(chatId)
-        .child('messages')
-        .child(messageId)
+    await _firestore
+        .collection('chats')
+        .doc(chatId)
+        .collection('messages')
+        .doc(messageId)
         .update({'isSeen': true});
   }
 
   // Mark last message as seen
   Future<void> markLastMessageAsSeen(String chatId) async {
-    await _database.child('chats').child(chatId).update({
+    await _firestore.collection('chats').doc(chatId).update({
       'isLastTextSeen': true,
     });
   }
 
   // Delete a message
   Future<void> deleteMessage(String chatId, String messageId) async {
-    await _database
-        .child('chats')
-        .child(chatId)
-        .child('messages')
-        .child(messageId)
-        .remove();
+    await _firestore
+        .collection('chats')
+        .doc(chatId)
+        .collection('messages')
+        .doc(messageId)
+        .delete();
   }
 
   // Delete a chat
   Future<void> deleteChat(String chatId) async {
-    await _database.child('chats').child(chatId).remove();
+    await _firestore.collection('chats').doc(chatId).delete();
   }
 
   // Get chat by ID
   Future<ChatModel?> getChatById(String chatId) async {
-    final snapshot = await _database.child('chats').child(chatId).get();
-    if (!snapshot.exists) return null;
-
-    final data = Map<String, dynamic>.from(snapshot.value as Map);
+    final doc = await _firestore.collection('chats').doc(chatId).get();
+    if (!doc.exists) return null;
+    final data = Map<String, dynamic>.from(doc.data()!);
+    if (data['createdAt'] is Timestamp) {
+      data['createdAt'] =
+          (data['createdAt'] as Timestamp).millisecondsSinceEpoch;
+    }
+    if (data['lastTextTime'] is Timestamp) {
+      data['lastTextTime'] =
+          (data['lastTextTime'] as Timestamp).millisecondsSinceEpoch;
+    }
     return ChatModel.fromJson(chatId, data);
   }
 
@@ -502,12 +407,8 @@ class FirebaseRealtimeChatDataSource {
     final expectedChatId = participants.join('_');
 
     // Check if the chat exists
-    final snapshot = await _database.child('chats').child(expectedChatId).get();
-
-    if (snapshot.exists) {
-      return expectedChatId;
-    }
-
+    final doc = await _firestore.collection('chats').doc(expectedChatId).get();
+    if (doc.exists) return expectedChatId;
     return null;
   }
 

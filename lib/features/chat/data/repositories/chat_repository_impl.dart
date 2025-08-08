@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:dartz/dartz.dart';
 import '../../../../core/errors/failures.dart';
 import '../../../../core/network/network_info.dart';
@@ -19,9 +20,53 @@ class ChatRepositoryImpl implements ChatRepository {
 
   @override
   Stream<List<ChatEntity>> getUserChats() {
-    return remoteDataSource.getUserChats().map((chatModels) {
-      return chatModels.map((model) => _mapChatModelToEntity(model)).toList();
-    });
+    print('🔍 Repository: Creating chat stream...');
+
+    // Use a StreamController to manage the subscription lifecycle and add logging.
+    final controller = StreamController<List<ChatEntity>>();
+
+    controller.onListen = () {
+      print('🔍 Repository: Subscription started. Listening to data source...');
+      final sourceStream = remoteDataSource.getUserChats();
+
+      sourceStream.listen(
+        (chatModels) {
+          print(
+            '✅ Repository: Data received from data source with ${chatModels.length} chats.',
+          );
+          try {
+            final chatEntities = chatModels
+                .map((model) => _mapChatModelToEntity(model))
+                .toList();
+            print(
+              '✅ Repository: Successfully mapped to ${chatEntities.length} entities. Adding to stream.',
+            );
+            controller.add(chatEntities);
+          } catch (e) {
+            print('❌ Repository: Error mapping models to entities: $e');
+            controller.addError(
+              Exception('Failed to process chat data.'),
+            );
+          }
+        },
+        onError: (error) {
+          print('❌ Repository: Error received from data source stream: $error');
+          controller.addError(error);
+        },
+        onDone: () {
+          print('✅ Repository: Data source stream is done. Closing controller.');
+          controller.close();
+        },
+      );
+    };
+
+    controller.onCancel = () {
+      print('🔍 Repository: Stream subscription cancelled.');
+      // You might want to cancel the underlying subscription here if it's long-lived.
+      // For a one-shot stream from a Future, this is less critical.
+    };
+
+    return controller.stream;
   }
 
   @override
