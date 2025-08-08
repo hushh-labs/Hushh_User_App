@@ -8,6 +8,7 @@ import 'package:hushh_user_app/features/pda/domain/usecases/send_message_use_cas
 import 'package:hushh_user_app/features/pda/domain/usecases/get_messages_use_case.dart';
 import 'package:hushh_user_app/features/pda/domain/usecases/clear_messages_use_case.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:hushh_user_app/features/pda/presentation/components/pda_loading_animation.dart';
 
 import 'package:hushh_user_app/shared/utils/app_local_storage.dart';
 
@@ -358,18 +359,12 @@ class _PdaSimplePageState extends State<PdaSimplePage> {
             // Messages list or Welcome Screen
             Expanded(
               child: _isLoadingMessages && _messages.isEmpty
-                  ? Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          CircularProgressIndicator(color: primaryPurple),
-                          const SizedBox(height: 16),
-                          Text(
-                            'Loading messages...',
-                            style: TextStyle(color: Colors.grey[600]),
-                          ),
-                        ],
-                      ),
+                  ? PdaLoadingAnimation(
+                      isLoading: _isLoadingMessages,
+                      onAnimationComplete: () {
+                        // Animation completed, but we keep loading until messages are actually loaded
+                        // The loading state will be updated in _loadMessages()
+                      },
                     )
                   : _messages.isEmpty
                   ? _buildWelcomeScreen()
