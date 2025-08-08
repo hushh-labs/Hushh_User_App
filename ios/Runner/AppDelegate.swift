@@ -14,7 +14,7 @@ import UserNotifications
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
-    FirebaseApp.configure()
+    // Rely on Flutter (Dart) side to configure Firebase via firebase_core
     
     // Enable APNS debugging
     print("=== APNS DEBUGGING ENABLED ===")

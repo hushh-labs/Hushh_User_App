@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:equatable/equatable.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:get_it/get_it.dart';
+import 'dart:async'; // Added for Timer
 import '../../../../core/usecases/usecase.dart';
 import '../../domain/entities/chat_entity.dart';
 import '../../domain/entities/user_entity.dart';
@@ -368,6 +369,7 @@ class ChatItem extends Equatable {
 class ChatMessage extends Equatable {
   final String id;
   final String text;
+  final String senderId;
   final bool isBot;
   final DateTime timestamp;
   final MessageType type;
@@ -380,6 +382,7 @@ class ChatMessage extends Equatable {
   const ChatMessage({
     required this.id,
     required this.text,
+    required this.senderId,
     required this.isBot,
     required this.timestamp,
     this.type = MessageType.text,
@@ -394,6 +397,7 @@ class ChatMessage extends Equatable {
   List<Object?> get props => [
     id,
     text,
+    senderId,
     isBot,
     timestamp,
     type,
@@ -407,6 +411,7 @@ class ChatMessage extends Equatable {
   ChatMessage copyWith({
     String? id,
     String? text,
+    String? senderId,
     bool? isBot,
     DateTime? timestamp,
     MessageType? type,
@@ -419,6 +424,7 @@ class ChatMessage extends Equatable {
     return ChatMessage(
       id: id ?? this.id,
       text: text ?? this.text,
+      senderId: senderId ?? this.senderId,
       isBot: isBot ?? this.isBot,
       timestamp: timestamp ?? this.timestamp,
       type: type ?? this.type,
@@ -453,6 +459,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   List<ChatUserEntity> _cachedUsers = [];
   ChatUserEntity? _cachedCurrentUser;
   List<ChatItem> _cachedChats = [];
+  StreamSubscription<List<ChatEntity>>? _chatSubscription;
 
   // Public getter for cached chats
   List<ChatItem> get cachedChats => _cachedChats;
@@ -519,6 +526,12 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   }
 
   @override
+  Future<void> close() {
+    _chatSubscription?.cancel();
+    return super.close();
+  }
+
+  @override
   void onEvent(ChatEvent event) {
     print('🔍 BLoC: Event received: ${event.runtimeType}');
     super.onEvent(event);
@@ -535,7 +548,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   List<ChatItem> _allChats = [];
   Map<String, List<ChatMessage>> _chatMessages = {};
 
-  void _onLoadChats(LoadChatsEvent event, Emitter<ChatState> emit) async {
+  Future<void> _onLoadChats(
+    LoadChatsEvent event,
+    Emitter<ChatState> emit,
+  ) async {
     try {
       print('BLoC: Loading chats');
 
@@ -556,12 +572,49 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         isLastMessageSeen: null,
       );
 
+      // Immediately show the Hushh Bot chat while loading others
+      _allChats = [hushhBotChat];
+      _cachedChats = [hushhBotChat];
+      emit(ChatsLoadedState(chats: _allChats, filteredChats: _allChats));
+
       if (streamUserChats != null) {
         print('BLoC: Repository available, listening to chats stream');
-        await emit.onEach<List<ChatEntity>>(
-          streamUserChats!(),
-          onData: (chatEntities) async {
-            print('BLoC: Received ${chatEntities.length} chat entities');
+
+        // Add a timeout to ensure we show the chat list even if stream doesn't return data
+        Timer(const Duration(seconds: 3), () {
+          if (state is ChatLoadingState) {
+            print('BLoC: Timeout reached, showing fallback chat list');
+            final hushhBotChat = const ChatItem(
+              id: 'hushh_bot',
+              title: 'Hushh Bot',
+              subtitle: 'Talk to Hushh Bot / upload bills for Insights',
+              avatarIcon: 'smart_toy',
+              avatarColor: '#A342FF',
+              isBot: true,
+              isUnread: false,
+              isLastMessageSeen: null,
+            );
+            _allChats = [hushhBotChat];
+            _cachedChats = [hushhBotChat];
+            if (!isClosed) {
+              emit(
+                ChatsLoadedState(chats: _allChats, filteredChats: _allChats),
+              );
+            }
+          }
+        });
+
+        // Cancel any existing subscription to avoid duplicates.
+        await _chatSubscription?.cancel();
+
+        _chatSubscription = streamUserChats!().listen(
+          (chatEntities) async {
+            print(
+              '🔍 BLoC: Stream received ${chatEntities.length} chat entities',
+            );
+            print(
+              '🔍 BLoC: Chat entity IDs: ${chatEntities.map((e) => e.id).join(', ')}',
+            );
 
             final regularChats = chatEntities
                 .where((entity) => entity.id != 'hushh_bot')
@@ -579,6 +632,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
                   ),
                 )
                 .toList();
+
+            print('🔍 BLoC: Created ${regularChats.length} regular chat items');
 
             final updatedChats = <ChatItem>[hushhBotChat];
             final currentUserId = FirebaseAuth.instance.currentUser?.uid;
@@ -726,9 +781,11 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         }
       }
 
+      final currentUserId = FirebaseAuth.instance.currentUser?.uid ?? 'unknown';
       final message = ChatMessage(
         id: DateTime.now().millisecondsSinceEpoch.toString(),
         text: event.message,
+        senderId: currentUserId,
         isBot: event.isBot,
         timestamp: DateTime.now(),
         type: event.messageType ?? MessageType.text,
@@ -985,6 +1042,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
                   (messageEntity) => ChatMessage(
                     id: messageEntity.id,
                     text: messageEntity.text,
+                    senderId: messageEntity.senderId,
                     isBot: false,
                     timestamp: messageEntity.timestamp,
                     type: messageEntity.type,
@@ -1127,7 +1185,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         bool lastTypingStatus = false; // Track the last typing status
         List<ChatMessage> lastMessages = []; // Track the last messages
 
-        await emit.onEach<bool>(
+        emit.onEach<bool>(
           streamTypingStatus!(event.chatId, event.otherUserId),
           onData: (isTyping) {
             print('🔍 BLoC: Stream received typing status: $isTyping');
@@ -1209,6 +1267,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       final uploadMessage = ChatMessage(
         id: DateTime.now().millisecondsSinceEpoch.toString(),
         text: 'File uploaded successfully! I\'m analyzing your bill...',
+        senderId: 'hushh_bot',
         isBot: true,
         timestamp: DateTime.now(),
       );
@@ -1231,6 +1290,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       final analysisMessage = ChatMessage(
         id: DateTime.now().millisecondsSinceEpoch.toString(),
         text: analysisResult,
+        senderId: 'hushh_bot',
         isBot: true,
         timestamp: DateTime.now(),
       );

@@ -1,4 +1,6 @@
 import 'package:firebase_database/firebase_database.dart';
+import 'package:firebase_core/firebase_core.dart';
+import '../../../../firebase_options.dart';
 import '../models/bid_model.dart';
 
 abstract class BidDataSource {
@@ -11,7 +13,10 @@ abstract class BidDataSource {
 }
 
 class BidDataSourceImpl implements BidDataSource {
-  final FirebaseDatabase _database = FirebaseDatabase.instance;
+  final FirebaseDatabase _database = FirebaseDatabase.instanceFor(
+    app: Firebase.app(),
+    databaseURL: DefaultFirebaseOptions.currentPlatform.databaseURL,
+  );
 
   @override
   Future<List<BidModel>> getValidBidsForUser(String userId) async {

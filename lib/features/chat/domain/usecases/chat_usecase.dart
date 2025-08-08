@@ -183,7 +183,24 @@ class StreamUserChats {
   StreamUserChats(this.repository);
 
   Stream<List<ChatEntity>> call() {
-    return repository.getUserChats();
+    print('🔍 UseCase: StreamUserChats.call() called');
+    final stream = repository.getUserChats();
+    print('🔍 UseCase: Got stream from repository');
+
+    return stream
+        .map((entities) {
+          print(
+            '🔍 UseCase: Stream.map called with ${entities.length} entities',
+          );
+          print(
+            '🔍 UseCase: Entity IDs: ${entities.map((e) => e.id).join(', ')}',
+          );
+          return entities;
+        })
+        .handleError((error) {
+          print('❌ UseCase: Error in StreamUserChats: $error');
+          return <ChatEntity>[];
+        });
   }
 }
 
