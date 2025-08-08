@@ -176,6 +176,18 @@ class MarkLastMessageAsSeen extends UseCase<void, String> {
   }
 }
 
+// Mark Chat As Seen Use Case
+class MarkChatAsSeen extends UseCase<void, String> {
+  final ChatRepository repository;
+
+  MarkChatAsSeen(this.repository);
+
+  @override
+  Future<Either<Failure, void>> call(String chatId) async {
+    return await repository.markChatAsSeen(chatId);
+  }
+}
+
 // Stream Use Cases (for real-time features)
 class StreamUserChats {
   final ChatRepository repository;

@@ -31,108 +31,65 @@ class FirebaseRealtimeChatDataSource {
     return user?.uid;
   }
 
-  // Get all chats for current user (Firestore)
+  // Get all chats for current user (Firestore) - REALTIME
   Stream<List<ChatModel>> getUserChats() {
     final userId = currentUserId;
     if (userId == null) {
-      print('❌ DataSource: No current user ID available');
+      print('❌ DataSource: No current user ID available for real-time chats.');
       return Stream.value([]);
     }
 
-    print('🔍 DataSource: Preparing stream for chats of user: $userId');
+    print(
+      '🔍 DataSource: Subscribing to real-time chat updates for user: $userId',
+    );
 
-    final controller = StreamController<List<ChatModel>>.broadcast();
-
-    controller.onListen = () {
-      print('🔍 DataSource: Listener subscribed, fetching chats...');
-      _getChatsAsync(userId)
-          .then((results) {
-            print(
-              '🔍 DataSource: Adding ${results.length} chats to broadcast stream',
-            );
-            if (!controller.isClosed) {
-              controller.add(results);
-              controller.close();
-            }
-          })
-          .catchError((error) {
-            print('❌ DataSource: Error in getUserChats: $error');
-            if (!controller.isClosed) {
-              controller.add(<ChatModel>[]);
-              controller.close();
-            }
-          });
-    };
-
-    controller.onCancel = () {
-      print('🔍 DataSource: Stream cancelled.');
-      // No specific action needed here for a one-shot stream,
-      // but good practice to have.
-    };
-
-    return controller.stream;
-  }
-
-  Future<List<ChatModel>> _getChatsAsync(String userId) async {
-    try {
-      final snapshot = await _firestore.collection('chats').get();
-      print(
-        '🔍 DataSource: Future completed - Total chats in collection: ${snapshot.docs.length}',
-      );
-
-      final List<ChatModel> results = [];
-      for (final doc in snapshot.docs) {
-        try {
-          final data = Map<String, dynamic>.from(doc.data());
-          print('🔍 DataSource: Processing chat doc: ${doc.id}');
-          print('🔍 DataSource: Raw data: $data');
-
-          // Check if this chat contains the current user
-          final participants = data['participants'];
-          print('🔍 DataSource: Participants field: $participants');
-          print('🔍 DataSource: Current user ID: $userId');
+    return _firestore
+        .collection('chats')
+        .where('participants', arrayContains: userId)
+        .snapshots()
+        .map((snapshot) {
           print(
-            '🔍 DataSource: Participants contains user: ${participants is List && participants.contains(userId)}',
+            '🔍 DataSource: Received snapshot with ${snapshot.docs.length} chats.',
           );
+          final chats = snapshot.docs
+              .map((doc) {
+                try {
+                  final data = Map<String, dynamic>.from(doc.data());
+                  print('🔍 DataSource: Processing chat doc: ${doc.id}');
 
-          if (participants is List && participants.contains(userId)) {
-            print('🔍 DataSource: Chat contains current user, processing...');
+                  // Normalize timestamps to ms integers for ChatModel.fromJson
+                  if (data['createdAt'] is Timestamp) {
+                    data['createdAt'] =
+                        (data['createdAt'] as Timestamp).millisecondsSinceEpoch;
+                  }
+                  if (data['lastTextTime'] is Timestamp) {
+                    data['lastTextTime'] = (data['lastTextTime'] as Timestamp)
+                        .millisecondsSinceEpoch;
+                  }
 
-            // normalize timestamps to ms integers for ChatModel.fromJson
-            if (data['createdAt'] is Timestamp) {
-              data['createdAt'] =
-                  (data['createdAt'] as Timestamp).millisecondsSinceEpoch;
-            }
-            if (data['lastTextTime'] is Timestamp) {
-              data['lastTextTime'] =
-                  (data['lastTextTime'] as Timestamp).millisecondsSinceEpoch;
-            }
+                  return ChatModel.fromJson(doc.id, data);
+                } catch (e) {
+                  print('❌ DataSource: Error mapping chat doc ${doc.id}: $e');
+                  return null;
+                }
+              })
+              .whereType<ChatModel>()
+              .toList(); // Filter out any nulls from errors
 
-            final chatModel = ChatModel.fromJson(doc.id, data);
-            print(
-              '🔍 DataSource: Created ChatModel: ${chatModel.id} with ${chatModel.participants.length} participants',
-            );
-            results.add(chatModel);
-          } else {
-            print(
-              '🔍 DataSource: Chat does not contain current user, skipping...',
-            );
-          }
-        } catch (e) {
-          print('❌ DataSource: Error mapping chat doc ${doc.id}: $e');
-          print('❌ DataSource: Error stack trace: ${StackTrace.current}');
-        }
-      }
-      print(
-        '🔍 DataSource: Returning ${results.length} chats for user $userId',
-      );
-      return results;
-    } catch (error) {
-      print('❌ DataSource: Error in Firestore query: $error');
-      print('❌ DataSource: Error type: ${error.runtimeType}');
-      print('❌ DataSource: Error stack trace: ${StackTrace.current}');
-      return <ChatModel>[];
-    }
+          // Sort by last message time, descending
+          chats.sort((a, b) {
+            final timeA = a.lastTextTime ?? a.createdAt;
+            final timeB = b.lastTextTime ?? b.createdAt;
+            return timeB.compareTo(timeA);
+          });
+
+          print('🔍 DataSource: Emitting ${chats.length} sorted chats.');
+          return chats;
+        })
+        .handleError((error) {
+          print('❌ DataSource: Error in getUserChats stream: $error');
+          return <ChatModel>[];
+        });
   }
 
   // Get messages for a specific chat (Firestore)
@@ -157,6 +114,78 @@ class FirebaseRealtimeChatDataSource {
           }).toList();
           return messages;
         });
+  }
+
+  // Get chat messages with auto-seen functionality
+  Stream<List<MessageModel>> getChatMessagesWithAutoSeen(String chatId) {
+    final currentUserId = this.currentUserId;
+    print('🔍 DataSource: getChatMessagesWithAutoSeen for chat: $chatId');
+
+    return _firestore
+        .collection('chats')
+        .doc(chatId)
+        .collection('messages')
+        .orderBy('timestamp')
+        .snapshots()
+        .map((snapshot) {
+          print('🔍 DataSource: Processing ${snapshot.docs.length} messages');
+          final messages = <MessageModel>[];
+
+          for (final doc in snapshot.docs) {
+            final data = Map<String, dynamic>.from(doc.data());
+
+            // Auto-mark messages from other users as seen
+            final senderId = data['senderId'] as String;
+            final isSeen = data['isSeen'] as bool;
+
+            if (senderId != currentUserId && !isSeen) {
+              print(
+                '🔍 DataSource: Auto-marking message ${doc.id} as seen (sender: $senderId)',
+              );
+
+              // Mark message as seen
+              doc.reference.update({'isSeen': true});
+
+              // Update chat's isLastTextSeen if this is the latest message
+              _updateChatLastTextSeen(chatId, data);
+            }
+
+            // Convert to MessageModel
+            final messageModel = MessageModel.fromJson(doc.id, data);
+            messages.add(messageModel);
+          }
+
+          print('🔍 DataSource: Returning ${messages.length} messages');
+          return messages;
+        });
+  }
+
+  Future<void> _updateChatLastTextSeen(
+    String chatId,
+    Map<String, dynamic> messageData,
+  ) async {
+    final currentUserId = this.currentUserId;
+    if (currentUserId == null) return;
+
+    try {
+      final chatDoc = await _firestore.collection('chats').doc(chatId).get();
+      final chatData = chatDoc.data();
+
+      if (chatData != null) {
+        final lastTextTime = chatData['lastTextTime'] as int;
+        final messageTimestamp = messageData['timestamp'] as int;
+
+        // If this message is the latest, update isLastTextSeen
+        if (messageTimestamp >= lastTextTime) {
+          print('🔍 DataSource: Updating chat $chatId isLastTextSeen to true');
+          await _firestore.collection('chats').doc(chatId).update({
+            'isLastTextSeen': true,
+          });
+        }
+      }
+    } catch (e) {
+      print('❌ DataSource: Error updating chat lastTextSeen: $e');
+    }
   }
 
   // Send a message
@@ -563,5 +592,46 @@ class FirebaseRealtimeChatDataSource {
           email.contains(lowercaseQuery) ||
           phone.contains(lowercaseQuery);
     }).toList();
+  }
+
+  // Mark chat as seen when opening it
+  Future<void> markChatAsSeen(String chatId) async {
+    final currentUserId = this.currentUserId;
+    if (currentUserId == null) {
+      print('❌ DataSource: No current user ID available for markChatAsSeen');
+      return;
+    }
+
+    print('🔍 DataSource: markChatAsSeen called for chat: $chatId');
+
+    try {
+      final chatDoc = await _firestore.collection('chats').doc(chatId).get();
+      final chatData = chatDoc.data();
+
+      if (chatData != null) {
+        final lastTextBy = chatData['lastTextBy'] as String;
+        final isLastTextSeen = chatData['isLastTextSeen'] as bool;
+
+        print(
+          '🔍 DataSource: Chat $chatId - lastTextBy: $lastTextBy, isLastTextSeen: $isLastTextSeen',
+        );
+
+        // If last message was sent by other user and not seen, mark as seen
+        if (lastTextBy != currentUserId && !isLastTextSeen) {
+          print(
+            '🔍 DataSource: Marking chat $chatId as seen (lastTextBy: $lastTextBy)',
+          );
+          await _firestore.collection('chats').doc(chatId).update({
+            'isLastTextSeen': true,
+          });
+        } else {
+          print(
+            '🔍 DataSource: Chat $chatId already seen or last message is from current user',
+          );
+        }
+      }
+    } catch (e) {
+      print('❌ DataSource: Error marking chat as seen: $e');
+    }
   }
 }

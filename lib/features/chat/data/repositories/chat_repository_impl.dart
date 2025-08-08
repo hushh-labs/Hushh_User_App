@@ -20,53 +20,24 @@ class ChatRepositoryImpl implements ChatRepository {
 
   @override
   Stream<List<ChatEntity>> getUserChats() {
-    print('🔍 Repository: Creating chat stream...');
-
-    // Use a StreamController to manage the subscription lifecycle and add logging.
-    final controller = StreamController<List<ChatEntity>>();
-
-    controller.onListen = () {
-      print('🔍 Repository: Subscription started. Listening to data source...');
-      final sourceStream = remoteDataSource.getUserChats();
-
-      sourceStream.listen(
-        (chatModels) {
+    print(
+      '🔍 Repository: getUserChats called, forwarding stream from data source.',
+    );
+    return remoteDataSource
+        .getUserChats()
+        .map((chatModels) {
           print(
-            '✅ Repository: Data received from data source with ${chatModels.length} chats.',
+            '🔍 Repository: Mapping ${chatModels.length} chat models to entities.',
           );
-          try {
-            final chatEntities = chatModels
-                .map((model) => _mapChatModelToEntity(model))
-                .toList();
-            print(
-              '✅ Repository: Successfully mapped to ${chatEntities.length} entities. Adding to stream.',
-            );
-            controller.add(chatEntities);
-          } catch (e) {
-            print('❌ Repository: Error mapping models to entities: $e');
-            controller.addError(
-              Exception('Failed to process chat data.'),
-            );
-          }
-        },
-        onError: (error) {
-          print('❌ Repository: Error received from data source stream: $error');
-          controller.addError(error);
-        },
-        onDone: () {
-          print('✅ Repository: Data source stream is done. Closing controller.');
-          controller.close();
-        },
-      );
-    };
-
-    controller.onCancel = () {
-      print('🔍 Repository: Stream subscription cancelled.');
-      // You might want to cancel the underlying subscription here if it's long-lived.
-      // For a one-shot stream from a Future, this is less critical.
-    };
-
-    return controller.stream;
+          return chatModels
+              .map((model) => _mapChatModelToEntity(model))
+              .toList();
+        })
+        .handleError((error) {
+          print('❌ Repository: Error in getUserChats stream: $error');
+          // Return an empty list on error to keep the stream alive.
+          return <ChatEntity>[];
+        });
   }
 
   @override
@@ -133,11 +104,28 @@ class ChatRepositoryImpl implements ChatRepository {
 
   @override
   Stream<List<MessageEntity>> getChatMessages(String chatId) {
-    return remoteDataSource.getChatMessages(chatId).map((messageModels) {
-      return messageModels
-          .map((model) => _mapMessageModelToEntity(model))
-          .toList();
-    });
+    print('🔍 Repository: getChatMessages called for chat: $chatId');
+    return remoteDataSource
+        .getChatMessagesWithAutoSeen(chatId)
+        .map((messageModels) {
+          print(
+            '🔍 Repository: Received ${messageModels.length} message models from data source',
+          );
+
+          final messageEntities = messageModels.map((model) {
+            print('🔍 Repository: Mapping message model: ${model.id}');
+            return _mapMessageModelToEntity(model);
+          }).toList();
+
+          print(
+            '🔍 Repository: Emitting ${messageEntities.length} message entities',
+          );
+          return messageEntities;
+        })
+        .handleError((error) {
+          print('❌ Repository: Error in getChatMessages stream: $error');
+          return <MessageEntity>[];
+        });
   }
 
   @override
@@ -368,6 +356,20 @@ class ChatRepositoryImpl implements ChatRepository {
             .map((model) => model.toEntity())
             .toList();
         return Right(userEntities);
+      } catch (e) {
+        return Left(ServerFailure(e.toString()));
+      }
+    } else {
+      return Left(NetworkFailure('No internet connection'));
+    }
+  }
+
+  @override
+  Future<Either<Failure, void>> markChatAsSeen(String chatId) async {
+    if (await networkInfo.isConnected) {
+      try {
+        await remoteDataSource.markChatAsSeen(chatId);
+        return const Right(null);
       } catch (e) {
         return Left(ServerFailure(e.toString()));
       }

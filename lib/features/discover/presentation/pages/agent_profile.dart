@@ -1,6 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../widgets/agent_profile_tabbar.dart';
+import '../../../chat/presentation/bloc/chat_bloc.dart' as chat;
+import '../../../chat/presentation/pages/regular_chat_page.dart';
+import '../../../chat/domain/entities/chat_entity.dart';
 
 class AgentProfile extends StatefulWidget {
   final Map<String, dynamic> agent;
@@ -17,6 +22,7 @@ class _AgentProfileState extends State<AgentProfile>
   final ScrollController _scrollController = ScrollController();
   List<Map<String, dynamic>> categories = [];
   bool isLoadingCategories = true;
+  bool _isLoading = false;
 
   @override
   void initState() {
@@ -341,15 +347,21 @@ class _AgentProfileState extends State<AgentProfile>
               ),
               // Chat Icon
               IconButton(
-                onPressed: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Chat feature coming soon!'),
-                      duration: Duration(seconds: 1),
-                    ),
-                  );
-                },
-                icon: const Icon(Icons.message, color: Color(0xFFA342FF)),
+                onPressed: _isLoading
+                    ? null
+                    : () => _handleProductChat(product),
+                icon: _isLoading
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            Color(0xFFA342FF),
+                          ),
+                        ),
+                      )
+                    : const Icon(Icons.message, color: Color(0xFFA342FF)),
               ),
             ],
           ),
@@ -381,5 +393,129 @@ class _AgentProfileState extends State<AgentProfile>
         ),
       ),
     );
+  }
+
+  Future<void> _handleProductChat(Map<String, dynamic> product) async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final currentUser = FirebaseAuth.instance.currentUser;
+      if (currentUser == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please login to start a chat'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+
+      final agentId = widget.agent['agentId'] ?? widget.agent['id'];
+      if (agentId == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Agent information not available'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+
+      // Create chat ID by combining user IDs
+      final participantIds = [currentUser.uid, agentId]..sort();
+      final chatId = participantIds.join('_');
+
+      // Create chat bloc and handle chat creation/opening
+      final chatBloc = chat.ChatBloc();
+
+      // Open or create chat
+      chatBloc.add(chat.OpenChatEvent(chatId));
+
+      // Send automatic product inquiry message immediately
+      _sendProductInquiryMessage(chatBloc, chatId, product);
+
+      // Navigate to chat page
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => BlocProvider.value(
+            value: chatBloc,
+            child: RegularChatPage(
+              chatId: chatId,
+              userName: widget.agent['name'] ?? 'Agent',
+            ),
+          ),
+        ),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error starting chat: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _sendProductInquiryMessage(
+    chat.ChatBloc chatBloc,
+    String chatId,
+    Map<String, dynamic> product,
+  ) async {
+    try {
+      final productName = product['name'] ?? 'Product';
+      final productPrice = (product['price'] ?? 0.0).toStringAsFixed(2);
+      final productImage = product['imageUrl'];
+      final productSku = product['id'] ?? 'N/A';
+
+      // Create inquiry message
+      final inquiryMessage =
+          '''
+Hi! I'm interested in learning more about your $productName.
+
+Product Details:
+• Name: $productName
+• SKU: $productSku
+• Price: \$$productPrice
+
+Could you please provide more information about this product?''';
+
+      // Add a small delay to ensure chat is initialized
+      await Future.delayed(const Duration(milliseconds: 1000));
+
+      // Send the text message using the passed chat bloc
+      chatBloc.add(
+        chat.SendMessageEvent(
+          chatId: chatId,
+          message: inquiryMessage,
+          isBot: false,
+        ),
+      );
+
+      // If there's a product image, send it as an image message
+      if (productImage != null && productImage.isNotEmpty) {
+        // Add a small delay to ensure the first message is sent
+        await Future.delayed(const Duration(milliseconds: 500));
+
+        // Send as image message with proper type and mediaUrl
+        chatBloc.add(
+          chat.SendMessageEvent(
+            chatId: chatId,
+            message: 'Product Image',
+            isBot: false,
+            messageType: MessageType.image,
+            imageUrl: productImage,
+          ),
+        );
+      }
+    } catch (e) {
+      print('Error sending product inquiry message: $e');
+    }
   }
 }
