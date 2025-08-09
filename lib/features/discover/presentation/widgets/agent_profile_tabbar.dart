@@ -19,11 +19,7 @@ class AgentProfileTabBar extends StatelessWidget
         controller: tabController,
         onTap: onTap,
         indicator: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [Color(0xFFA342FF), Color(0xFFE54D60)],
-            begin: Alignment.centerLeft,
-            end: Alignment.centerRight,
-          ),
+          color: const Color(0xFF111111),
           borderRadius: BorderRadius.circular(12),
         ),
         indicatorSize: TabBarIndicatorSize.tab,
@@ -46,9 +42,9 @@ class AgentProfileTabBar extends StatelessWidget
             child: const Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.photo_library_outlined, size: 18),
+                Icon(Icons.inventory_2_outlined, size: 18),
                 SizedBox(width: 6),
-                Text("Lookbooks"),
+                Text("Products"),
               ],
             ),
           ),
@@ -57,9 +53,9 @@ class AgentProfileTabBar extends StatelessWidget
             child: const Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.inventory_2_outlined, size: 18),
+                Icon(Icons.photo_library_outlined, size: 18),
                 SizedBox(width: 6),
-                Text("Products"),
+                Text("Lookbooks"),
               ],
             ),
           ),

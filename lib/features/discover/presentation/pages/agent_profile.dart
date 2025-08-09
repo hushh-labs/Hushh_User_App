@@ -371,7 +371,7 @@ class _AgentProfileState extends State<AgentProfile>
           SliverFillRemaining(
             child: TabBarView(
               controller: _tabController,
-              children: [_buildLookbooksTab(), _buildProductsTab(products)],
+              children: [_buildProductsTab(products), _buildLookbooksTab()],
             ),
           ),
         ],
@@ -601,14 +601,7 @@ class _AgentProfileState extends State<AgentProfile>
                                   vertical: 6,
                                 ),
                                 decoration: BoxDecoration(
-                                  gradient: const LinearGradient(
-                                    colors: [
-                                      Color(0xFFA342FF),
-                                      Color(0xFFE54D60),
-                                    ],
-                                    begin: Alignment.centerLeft,
-                                    end: Alignment.centerRight,
-                                  ),
+                                  color: const Color(0xFF111111),
                                   borderRadius: BorderRadius.circular(20),
                                 ),
                                 child: Row(
