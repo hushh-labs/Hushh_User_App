@@ -11,6 +11,8 @@ import '../../data/datasources/firebase_discover_datasource.dart';
 import '../../../chat/presentation/bloc/chat_bloc.dart' as chat;
 import '../../../chat/presentation/pages/regular_chat_page.dart';
 import '../../../chat/domain/entities/chat_entity.dart';
+import '../bloc/cart_bloc.dart';
+import 'product_details_page.dart';
 
 class AgentProfile extends StatefulWidget {
   final Map<String, dynamic> agent;
@@ -43,6 +45,50 @@ class _AgentProfileState extends State<AgentProfile>
     _tabController = TabController(length: 2, vsync: this);
     _loadCategories();
     _loadLookbooksAndProducts();
+  }
+
+  void _openProductDetails(Map<String, dynamic> product) {
+    final agentId = widget.agent['agentId'] ?? widget.agent['id'];
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ProductDetailsPage(
+          product: product,
+          agentId: agentId?.toString() ?? '',
+          agentName: widget.agent['name'] ?? 'Agent',
+        ),
+      ),
+    );
+  }
+
+  void _handleAddToCart(Map<String, dynamic> product) {
+    try {
+      final agentId = (widget.agent['agentId'] ?? widget.agent['id'])?.toString() ?? '';
+      final agentName = widget.agent['name']?.toString() ?? 'Agent';
+      final model = AgentProductModel(
+        id: product['id']?.toString() ?? '',
+        productName: product['name']?.toString() ?? '',
+        productPrice: (product['price'] as num?)?.toDouble() ?? 0.0,
+        productImage: product['imageUrl']?.toString(),
+        stockQuantity: (product['stock'] as num?)?.toInt() ?? 0,
+        productDescription: product['productDescription']?.toString(),
+        createdAt: DateTime.now(),
+      );
+      context.read<CartBloc>().add(
+            AddToCartEvent(
+              product: model,
+              agentId: agentId,
+              agentName: agentName,
+            ),
+          );
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Added to cart')),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Cart unavailable'), backgroundColor: Colors.red),
+      );
+    }
   }
 
   @override
@@ -501,11 +547,11 @@ class _AgentProfileState extends State<AgentProfile>
               ),
             ],
           ),
-          child: Material(
+            child: Material(
             color: Colors.transparent,
             child: InkWell(
               borderRadius: BorderRadius.circular(16),
-              onTap: () => _handleProductChat(product),
+              onTap: () => _openProductDetails(product),
               child: Padding(
                 padding: const EdgeInsets.all(16),
                 child: Row(
@@ -585,44 +631,107 @@ class _AgentProfileState extends State<AgentProfile>
                           ),
                           const SizedBox(height: 8),
                           Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(
-                                '\$${(product['price'] ?? 0.0).toStringAsFixed(2)}',
-                                style: const TextStyle(
-                                  color: Color(0xFFA342FF),
-                                  fontWeight: FontWeight.w800,
-                                  fontSize: 18,
+                              Expanded(
+                                child: Text.rich(
+                                  TextSpan(
+                                    children: [
+                                      const TextSpan(
+                                        text: '\$',
+                                        style: TextStyle(
+                                          color: Color(0xFFA342FF),
+                                          fontWeight: FontWeight.w800,
+                                          fontSize: 18,
+                                        ),
+                                      ),
+                                      TextSpan(
+                                        text: ((product['price'] ?? 0.0) as num)
+                                            .toStringAsFixed(2),
+                                        style: const TextStyle(
+                                          color: Color(0xFFA342FF),
+                                          fontWeight: FontWeight.w800,
+                                          fontSize: 18,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ),
                               ),
-                              const Spacer(),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                  vertical: 6,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFF111111),
-                                  borderRadius: BorderRadius.circular(20),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    const Icon(
-                                      Icons.message_outlined,
-                                      color: Colors.white,
-                                      size: 16,
-                                    ),
-                                    const SizedBox(width: 4),
-                                    const Text(
-                                      'Chat',
-                                      style: TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w600,
+                              const SizedBox(width: 8),
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: [
+                                  // Chat button
+                                  InkWell(
+                                    borderRadius: BorderRadius.circular(20),
+                                    onTap: () => _handleProductChat(product),
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 12,
+                                        vertical: 6,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFF111111),
+                                        borderRadius: BorderRadius.circular(20),
+                                      ),
+                                      child: const Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(
+                                            Icons.message_outlined,
+                                            color: Colors.white,
+                                            size: 16,
+                                          ),
+                                          SizedBox(width: 4),
+                                          Text(
+                                            'Chat',
+                                            style: TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                        ],
                                       ),
                                     ),
-                                  ],
-                                ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  // Add to Cart button
+                                  InkWell(
+                                    borderRadius: BorderRadius.circular(20),
+                                    onTap: () => _handleAddToCart(product),
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 12,
+                                        vertical: 6,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFF111111),
+                                        borderRadius: BorderRadius.circular(20),
+                                      ),
+                                      child: const Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(
+                                            Icons.add_shopping_cart_outlined,
+                                            color: Colors.white,
+                                            size: 16,
+                                          ),
+                                          SizedBox(width: 4),
+                                          Text(
+                                            'Add to Cart',
+                                            style: TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ],
                           ),
