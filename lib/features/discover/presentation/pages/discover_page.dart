@@ -1274,8 +1274,8 @@ class _DiscoverPageState extends State<DiscoverPage> {
                             crossAxisCount: 2,
                             crossAxisSpacing: 16,
                             mainAxisSpacing: 16,
-                            // Slightly adjusted for smaller header image
-                            childAspectRatio: 0.78,
+                            // Taller cells to accommodate larger brand header image
+                            childAspectRatio: 0.70,
                           ),
                           itemCount: agents.length +
                               (state.hasMoreAgents ? 1 : 0),
@@ -1294,11 +1294,21 @@ class _DiscoverPageState extends State<DiscoverPage> {
                             final coverUrl = brandNameToIcon[resolvedBrandName
                                     .toLowerCase()] ??
                                 brandNameToIcon[agent.brand.trim().toLowerCase()];
+                            // Build a short info string about this agent
+                            final categories = agent.categories;
+                            final info = [
+                              if (resolvedBrandName.isNotEmpty)
+                                'Brand: $resolvedBrandName',
+                              if (categories.isNotEmpty)
+                                'Areas: ${categories.take(2).join(', ')}',
+                            ].join('  •  ');
+
                             return AgentCard(
                               agent: agent,
                               coverImageUrl: coverUrl,
                               // Show resolved brand name (fallback to agent.brandName), never a raw doc id
                               subtitleText: resolvedBrandName,
+                              infoText: info,
                               onTap: () {
                                 final agentWithProducts = {
                                   'id': agent.agentId,

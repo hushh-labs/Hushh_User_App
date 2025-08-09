@@ -9,6 +9,7 @@ class AgentCard extends StatelessWidget {
   final String? coverImageUrl;
   final VoidCallback onTap;
   final String? subtitleText;
+  final String? infoText;
 
   static const Color primaryPurple = Color(0xFFA342FF);
   static const Color primaryPink = Color(0xFFE54D60);
@@ -19,6 +20,7 @@ class AgentCard extends StatelessWidget {
     required this.onTap,
     this.coverImageUrl,
     this.subtitleText,
+    this.infoText,
   });
 
   // No additional summary line; keep the card clean
@@ -53,8 +55,8 @@ class AgentCard extends StatelessWidget {
               child: Stack(
                 children: [
                   AspectRatio(
-                    // Make header image a bit shorter so it doesn't dominate the card
-                    aspectRatio: 16 / 9,
+                    // Taller header area so brand logos are more visible
+                    aspectRatio: 4 / 3,
                     child: coverImageUrl != null && coverImageUrl!.isNotEmpty
                         ? CachedNetworkImage(
                             imageUrl: coverImageUrl!,
@@ -127,7 +129,7 @@ class AgentCard extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
-                        fontSize: 16,
+                        fontSize: 20,
                         fontWeight: FontWeight.w700,
                         color: Colors.black87,
                       ),
@@ -139,12 +141,24 @@ class AgentCard extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                          fontSize: 13,
+                          fontSize: 16,
                           color: Colors.grey[600],
                           fontWeight: FontWeight.w500,
                         ),
                       ),
-                    // Removed extra third line to avoid showing document IDs or noisy metadata
+                    if ((infoText ?? '').trim().isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Text(
+                          (infoText ?? '').trim(),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: Colors.grey[600],
+                          ),
+                        ),
+                      ),
                     const Spacer(),
                     Row(
                       children: [
@@ -155,11 +169,8 @@ class AgentCard extends StatelessWidget {
                             vertical: 6,
                           ),
                           decoration: BoxDecoration(
-                            gradient: const LinearGradient(
-                              colors: [primaryPink, primaryPurple],
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                            ),
+                            // Off-black background for the forward arrow button
+                            color: const Color(0xFF111111),
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: const Icon(
