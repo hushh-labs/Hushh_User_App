@@ -19,6 +19,7 @@ import '../widgets/brand_card.dart';
 import 'agent_profile.dart';
 import 'order_success_page.dart';
 import 'all_brands_page.dart';
+import '../widgets/agent_card.dart';
 
 final RouteObserver<ModalRoute<void>> routeObserver =
     RouteObserver<ModalRoute<void>>();
@@ -93,7 +94,8 @@ class _DiscoverPageState extends State<DiscoverPage> {
     context.read<CardWalletBloc>().add(const LoadProducts());
     context.read<CartBloc>().add(const LoadCartEvent());
     context.read<AgentsProductsBloc>().add(const LoadAgentsAndProducts());
-    context.read<BrandBloc>().add(const LoadRandomBrands(limit: 6));
+    // Load all brands so we can map agents to their brand icon links
+    context.read<BrandBloc>().add(const LoadAllBrands());
     _scrollController.addListener(_onScroll);
 
     // Initialize carousel
@@ -1017,11 +1019,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
                               width: 6,
                               height: 24,
                               decoration: BoxDecoration(
-                                gradient: LinearGradient(
-                                  colors: [primaryPurple, primaryPink],
-                                  begin: Alignment.topCenter,
-                                  end: Alignment.bottomCenter,
-                                ),
+                                color: Colors.black,
                                 borderRadius: BorderRadius.circular(3),
                               ),
                             ),
@@ -1199,11 +1197,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
                         width: 6,
                         height: 24,
                         decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: [primaryPurple, primaryPink],
-                            begin: Alignment.topCenter,
-                            end: Alignment.bottomCenter,
-                          ),
+                          color: Colors.black,
                           borderRadius: BorderRadius.circular(3),
                         ),
                       ),
@@ -1220,248 +1214,138 @@ class _DiscoverPageState extends State<DiscoverPage> {
                   ),
                 ),
 
-                // Content Section
+                // Agent Grid Section (revamped UI) with brand image fetched from Firestore
                 BlocBuilder<AgentsProductsBloc, AgentsProductsState>(
-                  builder: (context, agentsProductsState) {
-                    if (agentsProductsState is AgentsProductsLoading) {
-                      return ListView.builder(
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
+                  builder: (context, state) {
+                    if (state is AgentsProductsLoading) {
+                      return Padding(
                         padding: const EdgeInsets.symmetric(
                           horizontal: 16,
                           vertical: 12,
                         ),
-                        itemCount: 3,
-                        itemBuilder: (context, index) =>
-                            const DiscoverItemShimmer(),
+                        child: const Center(
+                          child: CircularProgressIndicator(),
+                        ),
                       );
                     }
 
-                    if (agentsProductsState is AgentsProductsLoaded) {
-                      if (agentsProductsState.agents.isEmpty) {
-                        return Container(
-                          height: 300,
+                    if (state is AgentsProductsLoaded) {
+                      final agents = state.agents;
+                      if (agents.isEmpty) {
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 24,
+                          ),
                           child: Center(
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Container(
-                                  width: 80,
-                                  height: 80,
-                                  decoration: BoxDecoration(
-                                    gradient: const LinearGradient(
-                                      colors: [primaryPurple, primaryPink],
-                                      begin: Alignment.topLeft,
-                                      end: Alignment.bottomRight,
-                                    ),
-                                    borderRadius: BorderRadius.circular(40),
-                                  ),
-                                  child: const Icon(
-                                    Icons.search_off,
-                                    color: Colors.white,
-                                    size: 40,
-                                  ),
-                                ),
-                                const SizedBox(height: 16),
-                                Text(
-                                  'No agents found',
-                                  style: TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.w600,
-                                    color: Colors.grey[700],
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  'Try refreshing the page',
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    color: Colors.grey[600],
-                                  ),
-                                ),
-                              ],
+                            child: Text(
+                              'No agents found',
+                              style: TextStyle(
+                                color: Colors.grey[600],
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
                           ),
                         );
                       }
 
-                      // Filter agents with products
-                      final agentsWithProducts = agentsProductsState.agents
-                          .where((agent) {
-                            final products =
-                                agentsProductsState.agentProducts[agent
-                                    .agentId] ??
-                                [];
-                            return products.isNotEmpty;
-                          })
-                          .toList();
+                      // Build index of brandName -> iconLink from BrandBloc
+                      final brandState = context.watch<BrandBloc>().state;
+                      final Map<String, String> brandNameToIcon = {};
+                      final Map<String, String> brandIdToName = {};
+                      if (brandState is BrandLoaded) {
+                        for (final b in brandState.brands) {
+                          final nameKey = b.brandName.trim().toLowerCase();
+                          brandNameToIcon[nameKey] = b.iconLink;
+                          brandIdToName[b.id] = b.brandName;
+                        }
+                      }
 
-                      return ListView.builder(
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
+                      return Padding(
                         padding: const EdgeInsets.symmetric(
                           horizontal: 16,
-                          vertical: 12,
+                          vertical: 8,
                         ),
-                        itemCount:
-                            agentsWithProducts.length +
-                            (agentsProductsState.hasMoreAgents ? 1 : 0),
-                        itemBuilder: (context, index) {
-                          // Show loading indicator at the end for infinite scroll
-                          if (index == agentsWithProducts.length) {
-                            return Container(
-                              height: 100,
-                              margin: const EdgeInsets.only(bottom: 16),
-                              child: Center(
+                        child: GridView.builder(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          gridDelegate:
+                              const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 2,
+                            crossAxisSpacing: 16,
+                            mainAxisSpacing: 16,
+                            // Slightly adjusted for smaller header image
+                            childAspectRatio: 0.78,
+                          ),
+                          itemCount: agents.length +
+                              (state.hasMoreAgents ? 1 : 0),
+                          itemBuilder: (context, index) {
+                            if (index == agents.length) {
+                              // Load more indicator block styled as card-sized
+                              return Center(
                                 child: CircularProgressIndicator(
                                   color: primaryPurple,
                                 ),
-                              ),
+                              );
+                            }
+
+                            final agent = agents[index];
+                            final resolvedBrandName = (brandIdToName[agent.brand] ?? agent.brandName).trim();
+                            final coverUrl = brandNameToIcon[resolvedBrandName
+                                    .toLowerCase()] ??
+                                brandNameToIcon[agent.brand.trim().toLowerCase()];
+                            return AgentCard(
+                              agent: agent,
+                              coverImageUrl: coverUrl,
+                              // Show resolved brand name (fallback to agent.brandName), never a raw doc id
+                              subtitleText: resolvedBrandName,
+                              onTap: () {
+                                final agentWithProducts = {
+                                  'id': agent.agentId,
+                                  'name': agent.name,
+                                  'company': agent.brandName,
+                                  'avatar': null,
+                                  'categories': agent.categories,
+                                  'products': (state.agentProducts[agent.agentId]
+                                          ?? [])
+                                      .map((p) => {
+                                            'id': p.id,
+                                            'name': p.productName,
+                                            'price': p.productPrice,
+                                            'stock': p.stockQuantity,
+                                            'imageUrl': p.productImage,
+                                          })
+                                      .toList(),
+                                };
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => AgentProfile(
+                                      agent: agentWithProducts,
+                                    ),
+                                  ),
+                                );
+                              },
                             );
-                          }
-
-                          final agent = agentsWithProducts[index];
-                          final products =
-                              agentsProductsState.agentProducts[agent
-                                  .agentId] ??
-                              [];
-
-                          return AgentProductsSection(
-                            agent: {
-                              'id': agent.agentId,
-                              'name': agent.name,
-                              'company': agent.brandName,
-                              'avatar':
-                                  null, // You can add avatar field to AgentModel if needed
-                              'categories': agent.categories,
-                            },
-                            products: products
-                                .map(
-                                  (product) => {
-                                    'id': product.id,
-                                    'name': product.productName,
-                                    'price': product.productPrice,
-                                    'originalPrice': product
-                                        .productPrice, // No original price field in your structure
-                                    'stock': product.stockQuantity,
-                                    'imageUrl': product.productImage,
-                                    'isNew':
-                                        false, // No isNew field in your structure
-                                    'discountPercentage':
-                                        null, // No discount field in your structure
-                                  },
-                                )
-                                .toList(),
-                            hasMoreProducts:
-                                agentsProductsState.hasMoreProducts[agent
-                                    .agentId] ??
-                                false,
-                            isLoadingMoreProducts:
-                                agentsProductsState.isLoadingMoreProducts[agent
-                                    .agentId] ??
-                                false,
-                            onProductClicked: (productId) {
-                              // Product click handled silently
-                            },
-                            onProductInventoryIncremented: (productId) {
-                              context.read<InventoryBloc>().add(
-                                UpdateProductStockQuantityEvent(
-                                  productId: productId,
-                                  newQuantity: 10, // Mock quantity
-                                ),
-                              );
-                            },
-                            onProductInventoryDecremented: (productId) {
-                              context.read<InventoryBloc>().add(
-                                UpdateProductStockQuantityEvent(
-                                  productId: productId,
-                                  newQuantity: 5, // Mock quantity
-                                ),
-                              );
-                            },
-                            onAddToCart: (productId) {
-                              final product = products.firstWhere(
-                                (p) => p.id == productId,
-                                orElse: () => AgentProductModel(
-                                  id: productId,
-                                  productName: 'Unknown Product',
-                                  productPrice: 0.0,
-                                  stockQuantity: 0,
-                                ),
-                              );
-
-                              context.read<CartBloc>().add(
-                                AddToCartEvent(
-                                  product: product,
-                                  agentId: agent.agentId,
-                                  agentName: agent.name,
-                                ),
-                              );
-                            },
-                            onLoadMoreProducts: () {
-                              context.read<AgentsProductsBloc>().add(
-                                LoadMoreAgentProducts(agent.agentId),
-                              );
-                            },
-                          );
-                        },
+                          },
+                        ),
                       );
                     }
 
-                    if (agentsProductsState is AgentsProductsError) {
-                      return Container(
-                        height: 300,
+                    if (state is AgentsProductsError) {
+                      return Padding(
+                        padding: const EdgeInsets.all(24.0),
                         child: Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Container(
-                                width: 80,
-                                height: 80,
-                                decoration: BoxDecoration(
-                                  gradient: const LinearGradient(
-                                    colors: [primaryPurple, primaryPink],
-                                    begin: Alignment.topLeft,
-                                    end: Alignment.bottomRight,
-                                  ),
-                                  borderRadius: BorderRadius.circular(40),
-                                ),
-                                child: const Icon(
-                                  Icons.error_outline,
-                                  color: Colors.white,
-                                  size: 40,
-                                ),
-                              ),
-                              const SizedBox(height: 16),
-                              Text(
-                                'Error loading data',
-                                style: TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.w600,
-                                  color: Colors.grey[700],
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                agentsProductsState.message,
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  color: Colors.grey[600],
-                                ),
-                                textAlign: TextAlign.center,
-                              ),
-                            ],
+                          child: Text(
+                            state.message,
+                            textAlign: TextAlign.center,
+                            style: TextStyle(color: Colors.grey[600]),
                           ),
                         ),
                       );
                     }
 
-                    return Container(
-                      height: 200,
-                      child: Center(
-                        child: CircularProgressIndicator(color: primaryPurple),
-                      ),
-                    );
+                    return const SizedBox.shrink();
                   },
                 ),
               ],
