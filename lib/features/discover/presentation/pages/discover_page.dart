@@ -17,6 +17,7 @@ import '../../data/models/agent_product_model.dart';
 import '../widgets/product_tile.dart';
 import '../widgets/brand_card.dart';
 import 'agent_profile.dart';
+import '../bloc/cart_bloc.dart';
 import 'order_success_page.dart';
 import 'all_brands_page.dart';
 import '../widgets/agent_card.dart';
@@ -1330,8 +1331,11 @@ class _DiscoverPageState extends State<DiscoverPage> {
                                 Navigator.push(
                                   context,
                                   MaterialPageRoute(
-                                    builder: (context) => AgentProfile(
-                                      agent: agentWithProducts,
+                                    builder: (context) => BlocProvider.value(
+                                      value: context.read<CartBloc>(),
+                                      child: AgentProfile(
+                                        agent: agentWithProducts,
+                                      ),
                                     ),
                                   ),
                                 );

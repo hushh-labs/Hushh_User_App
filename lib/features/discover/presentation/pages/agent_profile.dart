@@ -631,7 +631,6 @@ class _AgentProfileState extends State<AgentProfile>
                           ),
                           const SizedBox(height: 8),
                           Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Expanded(
                                 child: Text.rich(
@@ -659,10 +658,11 @@ class _AgentProfileState extends State<AgentProfile>
                                 ),
                               ),
                               const SizedBox(width: 8),
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.end,
+                              // Place Chat and Add to Cart horizontally with wrapping to avoid overflow
+                              Wrap(
+                                spacing: 8,
+                                runSpacing: 6,
                                 children: [
-                                  // Chat button
                                   InkWell(
                                     borderRadius: BorderRadius.circular(20),
                                     onTap: () => _handleProductChat(product),
@@ -696,8 +696,6 @@ class _AgentProfileState extends State<AgentProfile>
                                       ),
                                     ),
                                   ),
-                                  const SizedBox(height: 8),
-                                  // Add to Cart button
                                   InkWell(
                                     borderRadius: BorderRadius.circular(20),
                                     onTap: () => _handleAddToCart(product),
