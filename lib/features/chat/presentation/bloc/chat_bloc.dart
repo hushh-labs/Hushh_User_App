@@ -2,8 +2,10 @@ import 'dart:developer';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:equatable/equatable.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:get_it/get_it.dart';
 import 'dart:async'; // Added for Timer
+import '../../../../core/errors/failures.dart';
 import '../../../../core/usecases/usecase.dart';
 import '../../domain/entities/chat_entity.dart';
 import '../../domain/entities/user_entity.dart';
@@ -140,6 +142,29 @@ class BlockUserEvent extends ChatEvent {
 
   @override
   List<Object> get props => [userId, blockedUserId];
+}
+
+class UnblockUserEvent extends ChatEvent {
+  final String userId;
+  final String blockedUserId;
+
+  const UnblockUserEvent({required this.userId, required this.blockedUserId});
+
+  @override
+  List<Object> get props => [userId, blockedUserId];
+}
+
+class CheckBlockingStatusEvent extends ChatEvent {
+  final String userId;
+  final String otherUserId;
+
+  const CheckBlockingStatusEvent({
+    required this.userId,
+    required this.otherUserId,
+  });
+
+  @override
+  List<Object> get props => [userId, otherUserId];
 }
 
 class RemoveChatFromListEvent extends ChatEvent {
@@ -284,6 +309,24 @@ class UserBlockedState extends ChatState {
 
   @override
   List<Object> get props => [blockedUserId];
+}
+
+class UserUnblockedState extends ChatState {
+  final String unblockedUserId;
+
+  const UserUnblockedState({required this.unblockedUserId});
+
+  @override
+  List<Object> get props => [unblockedUserId];
+}
+
+class BlockingStatusCheckedState extends ChatState {
+  final bool hasBlockedUser;
+
+  const BlockingStatusCheckedState({required this.hasBlockedUser});
+
+  @override
+  List<Object> get props => [hasBlockedUser];
 }
 
 class ChatErrorState extends ChatState {
@@ -464,6 +507,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   final GetCurrentUser? getCurrentUser;
   final SearchUsers? searchUsers;
   final MarkChatAsSeen? markChatAsSeen;
+  final BlockUser? blockUser;
+  final UnblockUser? unblockUser;
+  final IsUserBlocked? isUserBlocked;
 
   // Add cached state for users and chats
   List<ChatUserEntity> _cachedUsers = [];
@@ -496,6 +542,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       getCurrentUser: GetIt.instance.get<GetCurrentUser>(),
       searchUsers: GetIt.instance.get<SearchUsers>(),
       markChatAsSeen: GetIt.instance.get<MarkChatAsSeen>(),
+      blockUser: GetIt.instance.get<BlockUser>(),
+      unblockUser: GetIt.instance.get<UnblockUser>(),
+      isUserBlocked: GetIt.instance.get<IsUserBlocked>(),
     );
   }
 
@@ -516,6 +565,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     this.getCurrentUser,
     this.searchUsers,
     this.markChatAsSeen,
+    this.blockUser,
+    this.unblockUser,
+    this.isUserBlocked,
   }) : super(const ChatInitialState()) {
     print('🔍 BLoC: ChatBloc._ constructor called');
     on<LoadChatsEvent>(_onLoadChats);
@@ -528,6 +580,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     on<UploadFileEvent>(_onUploadFile);
     on<ClearChatEvent>(_onClearChat);
     on<BlockUserEvent>(_onBlockUser);
+    on<UnblockUserEvent>(_onUnblockUser);
+    on<CheckBlockingStatusEvent>(_onCheckBlockingStatus);
     on<RemoveChatFromListEvent>(_onRemoveChatFromList);
     on<UpdateChatsEvent>(_onUpdateChats);
     on<UpdateMessagesEvent>(_onUpdateMessages);
@@ -742,12 +796,19 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
 
       // Check if user is blocked before sending message
       if (event.chatId != 'hushh_bot') {
+        print('🔍 BLoC: Not bot chat, checking block status...');
         final blockStatus = await _checkBlockStatus(event.chatId);
+        print(
+          '🔍 BLoC: Block status result - isBlocked: ${blockStatus.isBlocked}, message: ${blockStatus.errorMessage}',
+        );
         if (blockStatus.isBlocked) {
           print('❌ BLoC: User is blocked, cannot send message');
           emit(ChatErrorState(blockStatus.errorMessage));
           return;
         }
+        print('✅ BLoC: No blocking detected, proceeding with message send');
+      } else {
+        print('🔍 BLoC: Bot chat detected, skipping block check');
       }
 
       final currentUserId = FirebaseAuth.instance.currentUser?.uid ?? 'unknown';
@@ -1323,12 +1384,92 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
 
   void _onBlockUser(BlockUserEvent event, Emitter<ChatState> emit) async {
     try {
-      // TODO: In real implementation, this would update Firebase
-      // to mark user as blocked
+      if (blockUser != null) {
+        final result = await blockUser!(
+          BlockUserParams(
+            userId: event.userId,
+            blockedUserId: event.blockedUserId,
+          ),
+        );
 
-      emit(UserBlockedState(blockedUserId: event.blockedUserId));
+        result.fold(
+          (failure) {
+            emit(ChatErrorState('Failed to block user: ${failure.toString()}'));
+          },
+          (_) {
+            emit(UserBlockedState(blockedUserId: event.blockedUserId));
+          },
+        );
+      } else {
+        emit(ChatErrorState('Block user functionality not available'));
+      }
     } catch (e) {
       emit(ChatErrorState('Failed to block user: ${e.toString()}'));
+    }
+  }
+
+  void _onUnblockUser(UnblockUserEvent event, Emitter<ChatState> emit) async {
+    try {
+      if (unblockUser != null) {
+        final result = await unblockUser!(
+          UnblockUserParams(
+            userId: event.userId,
+            blockedUserId: event.blockedUserId,
+          ),
+        );
+
+        result.fold(
+          (failure) {
+            emit(
+              ChatErrorState('Failed to unblock user: ${failure.toString()}'),
+            );
+          },
+          (_) {
+            emit(UserUnblockedState(unblockedUserId: event.blockedUserId));
+          },
+        );
+      } else {
+        emit(ChatErrorState('Unblock user functionality not available'));
+      }
+    } catch (e) {
+      emit(ChatErrorState('Failed to unblock user: ${e.toString()}'));
+    }
+  }
+
+  void _onCheckBlockingStatus(
+    CheckBlockingStatusEvent event,
+    Emitter<ChatState> emit,
+  ) async {
+    try {
+      print('🔍 BLoC: _onCheckBlockingStatus called');
+      print('🔍 BLoC: User ID: ${event.userId}');
+      print('🔍 BLoC: Other User ID: ${event.otherUserId}');
+
+      if (isUserBlocked != null) {
+        final result = await isUserBlocked!(
+          IsUserBlockedParams(
+            userId: event.userId,
+            blockedUserId: event.otherUserId,
+          ),
+        );
+
+        result.fold(
+          (failure) {
+            print('❌ BLoC: Error checking blocking status: $failure');
+            emit(const BlockingStatusCheckedState(hasBlockedUser: false));
+          },
+          (isBlocked) {
+            print('🔍 BLoC: Has blocked user: $isBlocked');
+            emit(BlockingStatusCheckedState(hasBlockedUser: isBlocked));
+          },
+        );
+      } else {
+        print('❌ BLoC: isUserBlocked use case not available');
+        emit(const BlockingStatusCheckedState(hasBlockedUser: false));
+      }
+    } catch (e) {
+      print('❌ BLoC: Error in _onCheckBlockingStatus: $e');
+      emit(const BlockingStatusCheckedState(hasBlockedUser: false));
     }
   }
 
@@ -1513,65 +1654,108 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
 
   Future<BlockStatus> _checkBlockStatus(String chatId) async {
     try {
+      print('🔍 BLoC: _checkBlockStatus called for chat: $chatId');
       final currentUserId = FirebaseAuth.instance.currentUser!.uid;
+      print('🔍 BLoC: Current user ID: $currentUserId');
 
-      // Extract other user ID from chat ID (assuming format: user1_user2)
-      final participants = chatId.split('_');
-      String otherUserId = '';
-
-      if (participants.length >= 2) {
-        if (participants[0] == currentUserId) {
-          otherUserId = participants[1];
-        } else if (participants[1] == currentUserId) {
-          otherUserId = participants[0];
-        }
+      // Get the chat document to check the hasBlocked field directly
+      final chatDoc = await FirebaseFirestore.instance
+          .collection('chats')
+          .doc(chatId)
+          .get();
+      if (!chatDoc.exists) {
+        print('❌ BLoC: Chat document does not exist');
+        return BlockStatus(
+          isBlocked: false,
+          errorMessage: '',
+          blockedByMe: false,
+        );
       }
 
-      if (otherUserId.isNotEmpty && repository != null) {
-        // Check if current user is blocked by other user
-        final isBlockedByOtherResult = await repository!.isUserBlocked(
-          otherUserId,
-          currentUserId,
-        );
-        final isBlockedByOther = isBlockedByOtherResult.fold(
-          (failure) => false,
-          (isBlocked) => isBlocked,
-        );
+      final chatData = chatDoc.data()!;
+      final hasBlocked = chatData['hasBlocked'] as Map<String, dynamic>?;
+      print('🔍 BLoC: hasBlocked field: $hasBlocked');
 
-        if (isBlockedByOther) {
-          return BlockStatus(
-            isBlocked: true,
-            errorMessage: 'You have been blocked by this user.',
-            blockedByMe: false,
+      if (hasBlocked != null) {
+        // Get participants to identify the other user
+        final participants = chatData['participants'] as List<dynamic>?;
+        if (participants != null && participants.isNotEmpty) {
+          final otherUserId = participants.firstWhere(
+            (id) => id != currentUserId,
+            orElse: () => '',
           );
-        }
 
-        // Check if current user has blocked other user
-        final hasBlockedOtherResult = await repository!.isUserBlocked(
-          currentUserId,
-          otherUserId,
-        );
-        final hasBlockedOther = hasBlockedOtherResult.fold(
-          (failure) => false,
-          (isBlocked) => isBlocked,
-        );
+          if (otherUserId.isNotEmpty) {
+            // Check if current user is blocked by other user
+            final isBlockedByOther = hasBlocked[otherUserId] == true;
+            print(
+              '🔍 BLoC: Is current user blocked by other: $isBlockedByOther',
+            );
 
-        if (hasBlockedOther) {
-          return BlockStatus(
-            isBlocked: true,
-            errorMessage:
-                'You have blocked this user. Unblock to send messages.',
-            blockedByMe: true,
-          );
+            if (isBlockedByOther) {
+              // Get other user's name for error message
+              String otherUserName = 'this user';
+              if (getUserDisplayName != null) {
+                final nameResult = await getUserDisplayName!(otherUserId);
+                nameResult.fold(
+                  (failure) => print(
+                    '🔍 BLoC: Failed to get user display name: $failure',
+                  ),
+                  (name) => otherUserName = name,
+                );
+              }
+
+              print(
+                '❌ BLoC: User is blocked by other user - returning block status',
+              );
+              return BlockStatus(
+                isBlocked: true,
+                errorMessage: 'You have been blocked by $otherUserName.',
+                blockedByMe: false,
+              );
+            }
+
+            // Check if current user has blocked other user
+            final hasBlockedOther = hasBlocked[currentUserId] == true;
+            print('🔍 BLoC: Has current user blocked other: $hasBlockedOther');
+
+            if (hasBlockedOther) {
+              // Get other user's name for error message
+              String otherUserName = 'this user';
+              if (getUserDisplayName != null) {
+                final nameResult = await getUserDisplayName!(otherUserId);
+                nameResult.fold(
+                  (failure) => print(
+                    '🔍 BLoC: Failed to get user display name: $failure',
+                  ),
+                  (name) => otherUserName = name,
+                );
+              }
+
+              print(
+                '❌ BLoC: User has blocked other user - returning block status',
+              );
+              return BlockStatus(
+                isBlocked: true,
+                errorMessage:
+                    'You have blocked $otherUserName. Unblock to send messages.',
+                blockedByMe: true,
+              );
+            }
+          }
         }
+      } else {
+        print('🔍 BLoC: hasBlocked field is null or empty');
       }
 
+      print('✅ BLoC: No blocking detected - allowing message');
       return BlockStatus(
         isBlocked: false,
         errorMessage: '',
         blockedByMe: false,
       );
     } catch (e) {
+      print('❌ BLoC: Error checking block status: $e');
       log('Error checking block status: $e');
       return BlockStatus(
         isBlocked: false,
@@ -1648,6 +1832,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         result.fold(
           (failure) {
             print('❌ BLoC: Failed to send message: ${failure.toString()}');
+            if (failure is ServerFailure) {
+              emit(ChatErrorState(failure.message));
+            }
           },
           (_) {
             print('✅ BLoC: Message sent to database: ${message.text}');

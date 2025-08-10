@@ -46,6 +46,11 @@ class ChatModule {
     getIt.registerLazySingleton(() => GetCurrentUser(getIt()));
     getIt.registerLazySingleton(() => SearchUsers(getIt()));
 
+    // Blocking use cases
+    getIt.registerLazySingleton(() => BlockUser(getIt()));
+    getIt.registerLazySingleton(() => UnblockUser(getIt()));
+    getIt.registerLazySingleton(() => IsUserBlocked(getIt()));
+
     // BLoC - Register with factory constructor
     getIt.registerFactory(() => ChatBloc());
   }
