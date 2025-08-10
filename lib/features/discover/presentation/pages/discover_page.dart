@@ -38,6 +38,10 @@ class _DiscoverPageState extends State<DiscoverPage> {
   final ScrollController _scrollController = ScrollController();
   bool _isSearchVisible = true;
 
+  // Search functionality
+  String searchQuery = '';
+  Timer? _searchDebounce;
+
   // Carousel controller and timer
   late PageController _carouselController;
   Timer? _carouselTimer;
@@ -113,7 +117,19 @@ class _DiscoverPageState extends State<DiscoverPage> {
     _brandMarqueeController.dispose();
     _carouselTimer?.cancel();
     _brandMarqueeTimer?.cancel();
+    _searchDebounce?.cancel();
+    searchController.dispose();
+    searchFocusNode.dispose();
     super.dispose();
+  }
+
+  void _onSearchChanged(String query) {
+    _searchDebounce?.cancel();
+    _searchDebounce = Timer(const Duration(milliseconds: 500), () {
+      setState(() {
+        searchQuery = query.toLowerCase();
+      });
+    });
   }
 
   void _startCarouselTimer() {
@@ -902,29 +918,37 @@ class _DiscoverPageState extends State<DiscoverPage> {
                     child: TextField(
                       controller: searchController,
                       focusNode: searchFocusNode,
-                      decoration: const InputDecoration(
+                      decoration: InputDecoration(
                         hintText: "Search Luxury Brands & Agents",
-                        prefixIcon: Icon(Icons.search, color: Colors.grey),
-                        suffixIcon: Icon(Icons.search, color: Colors.grey),
+                        prefixIcon: const Icon(
+                          Icons.search,
+                          color: Colors.grey,
+                        ),
+                        suffixIcon: searchController.text.isNotEmpty
+                            ? IconButton(
+                                icon: const Icon(
+                                  Icons.clear,
+                                  color: Colors.grey,
+                                ),
+                                onPressed: () {
+                                  searchController.clear();
+                                  _onSearchChanged('');
+                                  searchFocusNode.unfocus();
+                                },
+                              )
+                            : const Icon(Icons.search, color: Colors.grey),
                         border: InputBorder.none,
-                        contentPadding: EdgeInsets.symmetric(
+                        contentPadding: const EdgeInsets.symmetric(
                           horizontal: 16,
                           vertical: 12,
                         ),
                       ),
                       onChanged: (value) {
-                        // Search functionality placeholder
+                        setState(() {}); // Rebuild to show/hide clear button
+                        _onSearchChanged(value);
                       },
                       onSubmitted: (value) {
-                        if (value.isNotEmpty) {
-                          // Perform search
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text('Searching for: $value'),
-                              duration: const Duration(seconds: 1),
-                            ),
-                          );
-                        }
+                        _onSearchChanged(value);
                       },
                     ),
                   ),
@@ -1006,7 +1030,8 @@ class _DiscoverPageState extends State<DiscoverPage> {
                   ),
                 ),
 
-                // Brand Categories Section
+                // Brand Categories Section - COMMENTED OUT
+                /*
                 Container(
                   padding: const EdgeInsets.all(16),
                   child: Column(
@@ -1188,6 +1213,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
                     ],
                   ),
                 ),
+                */
 
                 // Agents Header
                 Container(
@@ -1224,14 +1250,23 @@ class _DiscoverPageState extends State<DiscoverPage> {
                           horizontal: 16,
                           vertical: 12,
                         ),
-                        child: const Center(
-                          child: CircularProgressIndicator(),
-                        ),
+                        child: const Center(child: CircularProgressIndicator()),
                       );
                     }
 
                     if (state is AgentsProductsLoaded) {
-                      final agents = state.agents;
+                      var agents = state.agents;
+
+                      // Apply search filter
+                      if (searchQuery.isNotEmpty) {
+                        agents = agents.where((agent) {
+                          final agentName = agent.name.toLowerCase();
+                          final brandName = agent.brandName.toLowerCase();
+                          return agentName.contains(searchQuery) ||
+                              brandName.contains(searchQuery);
+                        }).toList();
+                      }
+
                       if (agents.isEmpty) {
                         return Padding(
                           padding: const EdgeInsets.symmetric(
@@ -1239,12 +1274,38 @@ class _DiscoverPageState extends State<DiscoverPage> {
                             vertical: 24,
                           ),
                           child: Center(
-                            child: Text(
-                              'No agents found',
-                              style: TextStyle(
-                                color: Colors.grey[600],
-                                fontWeight: FontWeight.w600,
-                              ),
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  searchQuery.isNotEmpty
+                                      ? Icons.search_off
+                                      : Icons.person_off,
+                                  size: 48,
+                                  color: Colors.grey[400],
+                                ),
+                                const SizedBox(height: 16),
+                                Text(
+                                  searchQuery.isNotEmpty
+                                      ? 'No agents found for "$searchQuery"'
+                                      : 'No agents found',
+                                  style: TextStyle(
+                                    color: Colors.grey[600],
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 16,
+                                  ),
+                                ),
+                                if (searchQuery.isNotEmpty) ...[
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    'Try different keywords or clear the search',
+                                    style: TextStyle(
+                                      color: Colors.grey[500],
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                ],
+                              ],
                             ),
                           ),
                         );
@@ -1272,14 +1333,14 @@ class _DiscoverPageState extends State<DiscoverPage> {
                           physics: const NeverScrollableScrollPhysics(),
                           gridDelegate:
                               const SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: 2,
-                            crossAxisSpacing: 16,
-                            mainAxisSpacing: 16,
-                            // Taller cells to accommodate larger brand header image
-                            childAspectRatio: 0.70,
-                          ),
-                          itemCount: agents.length +
-                              (state.hasMoreAgents ? 1 : 0),
+                                crossAxisCount: 2,
+                                crossAxisSpacing: 16,
+                                mainAxisSpacing: 16,
+                                // Taller cells to accommodate larger brand header image
+                                childAspectRatio: 0.70,
+                              ),
+                          itemCount:
+                              agents.length + (state.hasMoreAgents ? 1 : 0),
                           itemBuilder: (context, index) {
                             if (index == agents.length) {
                               // Load more indicator block styled as card-sized
@@ -1291,10 +1352,15 @@ class _DiscoverPageState extends State<DiscoverPage> {
                             }
 
                             final agent = agents[index];
-                            final resolvedBrandName = (brandIdToName[agent.brand] ?? agent.brandName).trim();
-                            final coverUrl = brandNameToIcon[resolvedBrandName
+                            final resolvedBrandName =
+                                (brandIdToName[agent.brand] ?? agent.brandName)
+                                    .trim();
+                            final coverUrl =
+                                brandNameToIcon[resolvedBrandName
                                     .toLowerCase()] ??
-                                brandNameToIcon[agent.brand.trim().toLowerCase()];
+                                brandNameToIcon[agent.brand
+                                    .trim()
+                                    .toLowerCase()];
                             // Build a short info string about this agent
                             final categories = agent.categories;
                             final info = [
@@ -1317,28 +1383,46 @@ class _DiscoverPageState extends State<DiscoverPage> {
                                   'company': agent.brandName,
                                   'avatar': null,
                                   'categories': agent.categories,
-                                  'products': (state.agentProducts[agent.agentId]
-                                          ?? [])
-                                      .map((p) => {
-                                            'id': p.id,
-                                            'name': p.productName,
-                                            'price': p.productPrice,
-                                            'stock': p.stockQuantity,
-                                            'imageUrl': p.productImage,
-                                          })
-                                      .toList(),
+                                  'products':
+                                      (state.agentProducts[agent.agentId] ?? [])
+                                          .map(
+                                            (p) => {
+                                              'id': p.id,
+                                              'name': p.productName,
+                                              'price': p.productPrice,
+                                              'stock': p.stockQuantity,
+                                              'imageUrl': p.productImage,
+                                            },
+                                          )
+                                          .toList(),
                                 };
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) => BlocProvider.value(
-                                      value: context.read<CartBloc>(),
-                                      child: AgentProfile(
+
+                                // Get CartBloc reference before navigation with error handling
+                                try {
+                                  final cartBloc = context.read<CartBloc>();
+
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) => BlocProvider.value(
+                                        value: cartBloc,
+                                        child: AgentProfile(
+                                          agent: agentWithProducts,
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                                } catch (e) {
+                                  // If CartBloc is not available, navigate without it
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) => AgentProfile(
                                         agent: agentWithProducts,
                                       ),
                                     ),
-                                  ),
-                                );
+                                  );
+                                }
                               },
                             );
                           },
@@ -1431,15 +1515,16 @@ class AgentProductsSection extends StatelessWidget {
                     ),
                     borderRadius: BorderRadius.circular(20),
                   ),
-                  child: agent['avatar'] != null && agent['avatar']!.isNotEmpty
-                      ? ClipRRect(
-                          borderRadius: BorderRadius.circular(20),
-                          child: Image.network(
-                            agent['avatar']!,
-                            fit: BoxFit.cover,
-                          ),
-                        )
-                      : Center(
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(20),
+                    child: Image.asset(
+                      'assets/avtar_agent.png',
+                      width: 40,
+                      height: 40,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) {
+                        // Fallback to initials if asset fails to load
+                        return Center(
                           child: Text(
                             _getInitials(agent['name'] ?? 'A'),
                             style: const TextStyle(
@@ -1448,7 +1533,10 @@ class AgentProductsSection extends StatelessWidget {
                               color: Colors.white,
                             ),
                           ),
-                        ),
+                        );
+                      },
+                    ),
+                  ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(

@@ -55,40 +55,56 @@ class AgentCard extends StatelessWidget {
               child: Stack(
                 children: [
                   AspectRatio(
-                    // Taller header area so brand logos are more visible
+                    // Taller header area for the avatar
                     aspectRatio: 4 / 3,
-                    child: coverImageUrl != null && coverImageUrl!.isNotEmpty
-                        ? CachedNetworkImage(
-                            imageUrl: coverImageUrl!,
-                            fit: BoxFit.cover,
-                            placeholder: (context, url) => Container(
-                              decoration: const BoxDecoration(
-                                gradient: LinearGradient(
-                                  colors: [primaryPurple, primaryPink],
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
-                                ),
-                              ),
+                    child: Container(
+                      decoration: const BoxDecoration(
+                        color: Color(0xFFFAF9F6), // Warm off-white color
+                      ),
+                      child: Center(
+                        child: Container(
+                          width: 60,
+                          height: 60,
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(30),
+                            border: Border.all(
+                              color: Colors.grey.withOpacity(0.2),
+                              width: 2,
                             ),
-                            errorWidget: (context, url, error) => Container(
-                              decoration: const BoxDecoration(
-                                gradient: LinearGradient(
-                                  colors: [primaryPurple, primaryPink],
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
-                                ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.08),
+                                blurRadius: 8,
+                                offset: const Offset(0, 2),
                               ),
-                            ),
-                          )
-                        : Container(
-                            decoration: const BoxDecoration(
-                              gradient: LinearGradient(
-                                colors: [primaryPurple, primaryPink],
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
+                            ],
+                          ),
+                          child: Center(
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(28),
+                              child: Image.asset(
+                                'assets/avtar_agent.png',
+                                width: 50,
+                                height: 50,
+                                fit: BoxFit.cover,
+                                errorBuilder: (context, error, stackTrace) {
+                                  // Fallback to initials if image fails to load
+                                  return Text(
+                                    _getInitials(agent.name),
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 24,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  );
+                                },
                               ),
                             ),
                           ),
+                        ),
+                      ),
+                    ),
                   ),
                   Positioned(
                     right: 8,
@@ -120,41 +136,44 @@ class AgentCard extends StatelessWidget {
             // Details (fills remaining height, prevents overflow)
             Expanded(
               child: Padding(
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.all(10), // Reduced from 12 to 10
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min, // Added to prevent overflow
                   children: [
                     Text(
                       agent.name,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
-                        fontSize: 20,
+                        fontSize: 18, // Reduced from 20 to 18
                         fontWeight: FontWeight.w700,
                         color: Colors.black87,
                       ),
                     ),
-                    const SizedBox(height: 2),
+                    const SizedBox(height: 1), // Reduced from 2 to 1
                     if ((subtitleText ?? agent.brandName).trim().isNotEmpty)
                       Text(
                         (subtitleText ?? agent.brandName).trim(),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                          fontSize: 16,
+                          fontSize: 14, // Reduced from 16 to 14
                           color: Colors.grey[600],
                           fontWeight: FontWeight.w500,
                         ),
                       ),
                     if ((infoText ?? '').trim().isNotEmpty)
                       Padding(
-                        padding: const EdgeInsets.only(top: 4),
+                        padding: const EdgeInsets.only(
+                          top: 2,
+                        ), // Reduced from 4 to 2
                         child: Text(
                           (infoText ?? '').trim(),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
-                            fontSize: 13,
+                            fontSize: 12, // Reduced from 13 to 12
                             color: Colors.grey[600],
                           ),
                         ),
@@ -165,17 +184,19 @@ class AgentCard extends StatelessWidget {
                         const Spacer(),
                         Container(
                           padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 6,
+                            horizontal: 8, // Reduced from 10 to 8
+                            vertical: 4, // Reduced from 6 to 4
                           ),
                           decoration: BoxDecoration(
                             // Off-black background for the forward arrow button
                             color: const Color(0xFF111111),
-                            borderRadius: BorderRadius.circular(12),
+                            borderRadius: BorderRadius.circular(
+                              10,
+                            ), // Reduced from 12 to 10
                           ),
                           child: const Icon(
                             Icons.chevron_right_rounded,
-                            size: 18,
+                            size: 16, // Reduced from 18 to 16
                             color: Colors.white,
                           ),
                         ),
@@ -190,6 +211,14 @@ class AgentCard extends StatelessWidget {
       ),
     );
   }
+
+  String _getInitials(String name) {
+    final List<String> words = name.split(' ');
+    if (words.length > 1) {
+      return '${words[0][0]}${words[1][0]}';
+    } else if (words.isNotEmpty) {
+      return words[0][0];
+    }
+    return '';
+  }
 }
-
-
