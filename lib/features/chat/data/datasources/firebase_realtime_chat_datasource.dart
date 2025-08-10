@@ -286,25 +286,41 @@ class FirebaseRealtimeChatDataSource {
     return null;
   }
 
-  // Block a user
+  // Block a user using hasBlocked field in chat document
   Future<void> blockUser(String userId, String blockedUserId) async {
-    await _firestore
-        .collection('users')
-        .doc(userId)
-        .collection('blockedUsers')
-        .doc(blockedUserId)
-        .set({'blocked': true});
+    final chatId = await getExistingChatId(blockedUserId);
+    if (chatId != null) {
+      await _firestore.collection('chats').doc(chatId).update({
+        'hasBlocked.$userId': true,
+      });
+    }
   }
 
-  // Check if a user is blocked
+  // Unblock a user
+  Future<void> unblockUser(String userId, String blockedUserId) async {
+    final chatId = await getExistingChatId(blockedUserId);
+    if (chatId != null) {
+      await _firestore.collection('chats').doc(chatId).update({
+        'hasBlocked.$userId': false,
+      });
+    }
+  }
+
+  // Check if a user is blocked using hasBlocked field in chat document
   Future<bool> isUserBlocked(String userId, String blockedUserId) async {
-    final doc = await _firestore
-        .collection('users')
-        .doc(userId)
-        .collection('blockedUsers')
-        .doc(blockedUserId)
-        .get();
-    return doc.exists;
+    // Find the chat between these two users
+    final chatId = await getExistingChatId(blockedUserId);
+    if (chatId == null) return false;
+
+    final doc = await _firestore.collection('chats').doc(chatId).get();
+    final data = doc.data();
+    if (data == null) return false;
+
+    final hasBlocked = data['hasBlocked'];
+    if (hasBlocked is Map<String, dynamic>) {
+      return hasBlocked[userId] == true;
+    }
+    return false;
   }
 
   // Create a new chat

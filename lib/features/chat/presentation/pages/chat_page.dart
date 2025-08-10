@@ -79,9 +79,9 @@ class _ChatViewState extends State<_ChatView> {
                       ),
                     ),
                   ).then((_) {
-                    context
-                        .read<chat.ChatBloc>()
-                        .add(const chat.RefreshChatsEvent());
+                    context.read<chat.ChatBloc>().add(
+                      const chat.RefreshChatsEvent(),
+                    );
                   });
                 },
                 child: Container(
@@ -170,7 +170,9 @@ class _ChatViewState extends State<_ChatView> {
                               direction: DismissDirection.endToStart,
                               confirmDismiss: (direction) async {
                                 return await _showDeleteChatDialog(
-                                    context, chatItem);
+                                  context,
+                                  chatItem,
+                                );
                               },
                               onDismissed: (direction) {
                                 _deleteChat(chatItem);
@@ -196,7 +198,6 @@ class _ChatViewState extends State<_ChatView> {
   }
 
   void _openChat(BuildContext context, chat.ChatItem chatItem) {
-    final chatBloc = context.read<chat.ChatBloc>();
     if (chatItem.isBot && chatItem.id == 'hushh_bot') {
       Navigator.push(
         context,
@@ -206,12 +207,15 @@ class _ChatViewState extends State<_ChatView> {
       );
     } else {
       // Navigate to regular chat page for user conversations
-      chatBloc.add(chat.OpenChatEvent(chatItem.id));
       Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (_) => BlocProvider.value(
-            value: chatBloc,
+          builder: (_) => BlocProvider(
+            create: (context) {
+              final bloc = chat.ChatBloc();
+              bloc.add(chat.OpenChatEvent(chatItem.id));
+              return bloc;
+            },
             child: RegularChatPage(
               chatId: chatItem.id,
               userName: chatItem.title,

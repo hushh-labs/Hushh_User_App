@@ -45,6 +45,10 @@ abstract class ChatRepository {
     String userId,
   );
   Future<Either<Failure, void>> blockUser(String userId, String blockedUserId);
+  Future<Either<Failure, void>> unblockUser(
+    String userId,
+    String blockedUserId,
+  );
   Future<Either<Failure, bool>> isUserBlocked(
     String userId,
     String blockedUserId,

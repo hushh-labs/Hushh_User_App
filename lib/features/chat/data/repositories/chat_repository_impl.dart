@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:dartz/dartz.dart';
 import '../../../../core/errors/failures.dart';
 import '../../../../core/network/network_info.dart';
@@ -271,6 +272,23 @@ class ChatRepositoryImpl implements ChatRepository {
     if (await networkInfo.isConnected) {
       try {
         await remoteDataSource.blockUser(userId, blockedUserId);
+        return const Right(null);
+      } catch (e) {
+        return Left(ServerFailure(e.toString()));
+      }
+    } else {
+      return Left(NetworkFailure('No internet connection'));
+    }
+  }
+
+  @override
+  Future<Either<Failure, void>> unblockUser(
+    String userId,
+    String blockedUserId,
+  ) async {
+    if (await networkInfo.isConnected) {
+      try {
+        await remoteDataSource.unblockUser(userId, blockedUserId);
         return const Right(null);
       } catch (e) {
         return Left(ServerFailure(e.toString()));

@@ -283,3 +283,72 @@ class SearchUsers extends UseCase<List<ChatUserEntity>, String> {
     return await repository.searchUsers(query);
   }
 }
+
+// Block User Use Case
+class BlockUser extends UseCase<void, BlockUserParams> {
+  final ChatRepository repository;
+
+  BlockUser(this.repository);
+
+  @override
+  Future<Either<Failure, void>> call(BlockUserParams params) async {
+    return await repository.blockUser(params.userId, params.blockedUserId);
+  }
+}
+
+class BlockUserParams extends Equatable {
+  final String userId;
+  final String blockedUserId;
+
+  const BlockUserParams({required this.userId, required this.blockedUserId});
+
+  @override
+  List<Object> get props => [userId, blockedUserId];
+}
+
+// Unblock User Use Case
+class UnblockUser extends UseCase<void, UnblockUserParams> {
+  final ChatRepository repository;
+
+  UnblockUser(this.repository);
+
+  @override
+  Future<Either<Failure, void>> call(UnblockUserParams params) async {
+    return await repository.unblockUser(params.userId, params.blockedUserId);
+  }
+}
+
+class UnblockUserParams extends Equatable {
+  final String userId;
+  final String blockedUserId;
+
+  const UnblockUserParams({required this.userId, required this.blockedUserId});
+
+  @override
+  List<Object> get props => [userId, blockedUserId];
+}
+
+// Check if User is Blocked Use Case
+class IsUserBlocked extends UseCase<bool, IsUserBlockedParams> {
+  final ChatRepository repository;
+
+  IsUserBlocked(this.repository);
+
+  @override
+  Future<Either<Failure, bool>> call(IsUserBlockedParams params) async {
+    return await repository.isUserBlocked(params.userId, params.blockedUserId);
+  }
+}
+
+class IsUserBlockedParams extends Equatable {
+  final String userId;
+  final String blockedUserId;
+
+  const IsUserBlockedParams({
+    required this.userId,
+    required this.blockedUserId,
+  });
+
+  @override
+  List<Object> get props => [userId, blockedUserId];
+}
