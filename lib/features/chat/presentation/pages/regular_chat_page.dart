@@ -29,6 +29,8 @@ class _RegularChatPageState extends State<RegularChatPage> {
   bool _isTyping = false;
   bool _hasSentFirstMessage = false; // Track if first message has been sent
   Timer? _typingTimer;
+  bool _hasBlockedUser =
+      false; // Track if current user has blocked the other user
 
   @override
   void initState() {
@@ -36,6 +38,8 @@ class _RegularChatPageState extends State<RegularChatPage> {
     _currentChatId = widget.chatId;
     // Start listening for typing status of the other user
     _startListeningTypingStatus();
+    // Check blocking status
+    _checkBlockingStatus();
   }
 
   @override
@@ -63,6 +67,28 @@ class _RegularChatPageState extends State<RegularChatPage> {
 
     context.read<chat.ChatBloc>().add(
       chat.ListenTypingStatusEvent(_currentChatId, otherUserId),
+    );
+  }
+
+  void _checkBlockingStatus() async {
+    final currentUserId = FirebaseAuth.instance.currentUser?.uid;
+    if (currentUserId == null) return;
+
+    final participants = _currentChatId.split('_');
+    final otherUserId = participants.firstWhere(
+      (id) => id != currentUserId,
+      orElse: () => '',
+    );
+
+    if (otherUserId.isEmpty) return;
+
+    // Check if current user has blocked the other user
+    final chatBloc = context.read<chat.ChatBloc>();
+    chatBloc.add(
+      chat.CheckBlockingStatusEvent(
+        userId: currentUserId,
+        otherUserId: otherUserId,
+      ),
     );
   }
 
@@ -227,13 +253,16 @@ class _RegularChatPageState extends State<RegularChatPage> {
                     ],
                   ),
                 ),
-                const PopupMenuItem(
-                  value: 'block_user',
+                PopupMenuItem(
+                  value: _hasBlockedUser ? 'unblock_user' : 'block_user',
                   child: Row(
                     children: [
-                      Icon(Icons.block, color: Colors.red),
-                      SizedBox(width: 8),
-                      Text('Block User'),
+                      Icon(
+                        _hasBlockedUser ? Icons.check_circle : Icons.block,
+                        color: _hasBlockedUser ? Colors.green : Colors.red,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(_hasBlockedUser ? 'Unblock User' : 'Block User'),
                     ],
                   ),
                 ),
@@ -252,12 +281,56 @@ class _RegularChatPageState extends State<RegularChatPage> {
 
             if (state is chat.ChatErrorState) {
               print('❌ UI: ChatErrorState received: ${state.message}');
+
+              // Check if this is a blocking error that requires user action
+              if (state.message.contains('You have blocked') &&
+                  state.message.contains('Unblock to send messages')) {
+                // Current user has blocked the other user - show unblock dialog
+                _showUnblockDialog(context, state.message);
+              } else if (state.message.contains('You have been blocked by')) {
+                // Current user has been blocked by the other user - show info dialog
+                _showBlockedByUserDialog(context, state.message);
+              } else {
+                // Other errors - show snackbar
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(state.message),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+              }
+            }
+
+            if (state is chat.UserBlockedState) {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
-                  content: Text(state.message),
-                  backgroundColor: Colors.red,
+                  content: Text('User has been blocked successfully'),
+                  backgroundColor: Colors.green,
                 ),
               );
+              // Update the blocking status
+              setState(() {
+                _hasBlockedUser = true;
+              });
+            }
+
+            if (state is chat.UserUnblockedState) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('User has been unblocked successfully'),
+                  backgroundColor: Colors.green,
+                ),
+              );
+              // Update the blocking status
+              setState(() {
+                _hasBlockedUser = false;
+              });
+            }
+
+            if (state is chat.BlockingStatusCheckedState) {
+              setState(() {
+                _hasBlockedUser = state.hasBlockedUser;
+              });
             }
 
             if (state is chat.ChatMessagesLoadedState) {
@@ -468,13 +541,19 @@ class _RegularChatPageState extends State<RegularChatPage> {
       case 'block_user':
         _showBlockUserDialog(context);
         break;
+      case 'unblock_user':
+        _showUnblockUserDialog(context);
+        break;
     }
   }
 
   void _showClearChatDialog(BuildContext context) {
+    // Capture the ChatBloc instance before showing the dialog
+    final chatBloc = context.read<chat.ChatBloc>();
+
     showDialog(
       context: context,
-      builder: (BuildContext context) {
+      builder: (BuildContext dialogContext) {
         return AlertDialog(
           title: const Text('Clear Chat'),
           content: const Text(
@@ -482,15 +561,15 @@ class _RegularChatPageState extends State<RegularChatPage> {
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(context),
+              onPressed: () => Navigator.pop(dialogContext),
               child: const Text('Cancel'),
             ),
             TextButton(
               onPressed: () {
-                Navigator.pop(context);
+                Navigator.pop(dialogContext);
                 final currentUserId = FirebaseAuth.instance.currentUser?.uid;
                 if (currentUserId == null) return;
-                context.read<chat.ChatBloc>().add(
+                chatBloc.add(
                   chat.ClearChatEvent(
                     chatId: _currentChatId,
                     userId: currentUserId,
@@ -506,9 +585,12 @@ class _RegularChatPageState extends State<RegularChatPage> {
   }
 
   void _showBlockUserDialog(BuildContext context) {
+    // Capture the ChatBloc instance before showing the dialog
+    final chatBloc = context.read<chat.ChatBloc>();
+
     showDialog(
       context: context,
-      builder: (BuildContext context) {
+      builder: (BuildContext dialogContext) {
         return AlertDialog(
           title: const Text('Block User'),
           content: Text(
@@ -516,12 +598,12 @@ class _RegularChatPageState extends State<RegularChatPage> {
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(context),
+              onPressed: () => Navigator.pop(dialogContext),
               child: const Text('Cancel'),
             ),
             TextButton(
               onPressed: () {
-                Navigator.pop(context);
+                Navigator.pop(dialogContext);
                 final currentUserId = FirebaseAuth.instance.currentUser?.uid;
                 if (currentUserId == null) return;
 
@@ -533,7 +615,7 @@ class _RegularChatPageState extends State<RegularChatPage> {
 
                 if (otherUserId.isEmpty) return;
 
-                context.read<chat.ChatBloc>().add(
+                chatBloc.add(
                   chat.BlockUserEvent(
                     userId: currentUserId,
                     blockedUserId: otherUserId,
@@ -541,6 +623,120 @@ class _RegularChatPageState extends State<RegularChatPage> {
                 );
               },
               child: const Text('Block', style: TextStyle(color: Colors.red)),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _showUnblockDialog(BuildContext context, String message) {
+    // Capture the ChatBloc instance before showing the dialog
+    final chatBloc = context.read<chat.ChatBloc>();
+
+    showDialog(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return AlertDialog(
+          title: const Text('User Blocked'),
+          content: Text(message),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.pop(dialogContext);
+                final currentUserId = FirebaseAuth.instance.currentUser?.uid;
+                if (currentUserId == null) return;
+
+                final participants = _currentChatId.split('_');
+                final otherUserId = participants.firstWhere(
+                  (id) => id != currentUserId,
+                  orElse: () => '',
+                );
+
+                if (otherUserId.isEmpty) return;
+
+                chatBloc.add(
+                  chat.UnblockUserEvent(
+                    userId: currentUserId,
+                    blockedUserId: otherUserId,
+                  ),
+                );
+              },
+              child: const Text(
+                'Unblock',
+                style: TextStyle(color: Colors.blue),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _showBlockedByUserDialog(BuildContext context, String message) {
+    showDialog(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return AlertDialog(
+          title: const Text('Cannot Send Message'),
+          content: Text(message),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('OK'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _showUnblockUserDialog(BuildContext context) {
+    // Capture the ChatBloc instance before showing the dialog
+    final chatBloc = context.read<chat.ChatBloc>();
+
+    showDialog(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return AlertDialog(
+          title: const Text('Unblock User'),
+          content: Text(
+            'Are you sure you want to unblock ${widget.userName}? You will be able to receive messages from this user again.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.pop(dialogContext);
+                final currentUserId = FirebaseAuth.instance.currentUser?.uid;
+                if (currentUserId == null) return;
+
+                final participants = _currentChatId.split('_');
+                final otherUserId = participants.firstWhere(
+                  (id) => id != currentUserId,
+                  orElse: () => '',
+                );
+
+                if (otherUserId.isEmpty) return;
+
+                chatBloc.add(
+                  chat.UnblockUserEvent(
+                    userId: currentUserId,
+                    blockedUserId: otherUserId,
+                  ),
+                );
+              },
+              child: const Text(
+                'Unblock',
+                style: TextStyle(color: Colors.green),
+              ),
             ),
           ],
         );
