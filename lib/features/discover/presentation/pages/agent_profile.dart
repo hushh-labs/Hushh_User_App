@@ -63,7 +63,8 @@ class _AgentProfileState extends State<AgentProfile>
 
   void _handleAddToCart(Map<String, dynamic> product) {
     try {
-      final agentId = (widget.agent['agentId'] ?? widget.agent['id'])?.toString() ?? '';
+      final agentId =
+          (widget.agent['agentId'] ?? widget.agent['id'])?.toString() ?? '';
       final agentName = widget.agent['name']?.toString() ?? 'Agent';
       final model = AgentProductModel(
         id: product['id']?.toString() ?? '',
@@ -75,18 +76,17 @@ class _AgentProfileState extends State<AgentProfile>
         createdAt: DateTime.now(),
       );
       context.read<CartBloc>().add(
-            AddToCartEvent(
-              product: model,
-              agentId: agentId,
-              agentName: agentName,
-            ),
-          );
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Added to cart')),
+        AddToCartEvent(product: model, agentId: agentId, agentName: agentName),
       );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Added to cart')));
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Cart unavailable'), backgroundColor: Colors.red),
+        const SnackBar(
+          content: Text('Cart unavailable'),
+          backgroundColor: Colors.red,
+        ),
       );
     }
   }
@@ -280,21 +280,27 @@ class _AgentProfileState extends State<AgentProfile>
                     ),
                     child: CircleAvatar(
                       radius: 56,
-                      backgroundImage:
-                          agent['avatar'] != null && agent['avatar']!.isNotEmpty
-                          ? NetworkImage(agent['avatar']!)
-                          : null,
                       backgroundColor: const Color(0xFFF5F5F5),
-                      child: agent['avatar'] == null || agent['avatar']!.isEmpty
-                          ? Text(
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(56),
+                        child: Image.asset(
+                          'assets/avtar_agent.png',
+                          width: 112,
+                          height: 112,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) {
+                            // Fallback to initials if asset fails to load
+                            return Text(
                               _getInitials(agent['name'] ?? 'A'),
                               style: const TextStyle(
                                 fontSize: 28,
                                 fontWeight: FontWeight.w700,
                                 color: Color(0xFF666666),
                               ),
-                            )
-                          : null,
+                            );
+                          },
+                        ),
+                      ),
                     ),
                   ),
                   const SizedBox(height: 16),
@@ -547,7 +553,7 @@ class _AgentProfileState extends State<AgentProfile>
               ),
             ],
           ),
-            child: Material(
+          child: Material(
             color: Colors.transparent,
             child: InkWell(
               borderRadius: BorderRadius.circular(16),
