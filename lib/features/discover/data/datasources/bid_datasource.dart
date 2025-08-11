@@ -87,12 +87,18 @@ class BidDataSourceImpl implements BidDataSource {
             final bid = BidModel.fromJson(bidData);
 
             // Check each condition separately for debugging
-            final userIdMatch = bid.userId == userId;
-            final agentIdMatch = bid.agentId == agentId;
-            final productIdMatch = bid.productId == productId;
+            final userIdMatch = bid.userId.toString().trim() == userId.trim();
+            final agentIdMatch = bid.agentId.toString().trim() == agentId.trim();
+            final productIdMatch = bid.productId.toString().trim() == productId.trim();
             final isValid = bid.isValid;
 
+            // If productId includes agentId prefix in your app, allow match by suffix
+            final productIdSuffixMatch = bid.productId.toString().trim() ==
+                productId.split(',').first.trim();
+
             if (userIdMatch && agentIdMatch && productIdMatch && isValid) {
+              return bid;
+            } else if (userIdMatch && agentIdMatch && productIdSuffixMatch && isValid) {
               return bid;
             }
           } catch (e) {

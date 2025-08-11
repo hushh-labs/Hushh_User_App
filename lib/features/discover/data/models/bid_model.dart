@@ -81,7 +81,11 @@ class BidModel extends Equatable {
 
   bool get isValid {
     final now = DateTime.now();
-    return status == 'pending' && validity.isAfter(now);
+    final normalizedStatus = status.toLowerCase().trim();
+    // Treat commonly used positive statuses as valid
+    final allowed = {'pending', 'accepted', 'active', 'approved'};
+    final statusOk = allowed.contains(normalizedStatus) || normalizedStatus.isEmpty;
+    return statusOk && validity.isAfter(now);
   }
 
   @override
