@@ -49,16 +49,35 @@ class _AgentProfileState extends State<AgentProfile>
 
   void _openProductDetails(Map<String, dynamic> product) {
     final agentId = widget.agent['agentId'] ?? widget.agent['id'];
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => ProductDetailsPage(
-          product: product,
-          agentId: agentId?.toString() ?? '',
-          agentName: widget.agent['name'] ?? 'Agent',
+    // Ensure ProductDetailsPage has access to the same CartBloc
+    try {
+      final cartBloc = context.read<CartBloc>();
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => BlocProvider.value(
+            value: cartBloc,
+            child: ProductDetailsPage(
+              product: product,
+              agentId: agentId?.toString() ?? '',
+              agentName: widget.agent['name'] ?? 'Agent',
+            ),
+          ),
         ),
-      ),
-    );
+      );
+    } catch (_) {
+      // Fallback if CartBloc isn't available in this context
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => ProductDetailsPage(
+            product: product,
+            agentId: agentId?.toString() ?? '',
+            agentName: widget.agent['name'] ?? 'Agent',
+          ),
+        ),
+      );
+    }
   }
 
   void _handleAddToCart(Map<String, dynamic> product) {
@@ -197,13 +216,12 @@ class _AgentProfileState extends State<AgentProfile>
   Widget build(BuildContext context) {
     final agent = widget.agent;
     final products = agent['products'] as List<dynamic>;
-    final screenHeight = MediaQuery.of(context).size.height;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FA),
       body: CustomScrollView(
         slivers: [
-          // Custom App Bar
+          // Simple app bar with title "Agent Profile"
           SliverAppBar(
             expandedHeight: 0,
             floating: false,
@@ -242,137 +260,130 @@ class _AgentProfileState extends State<AgentProfile>
             ),
             centerTitle: true,
           ),
-          // Agent Header Section
+          // Header row with avatar on left and name/company aligned to the right
+          SliverToBoxAdapter(
+            child: Container(
+              margin: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  CircleAvatar(
+                    radius: 42,
+                    backgroundColor: const Color(0xFFF5F5F5),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(42),
+                      child: Image.asset(
+                        'assets/avtar_agent.png',
+                        width: 84,
+                        height: 84,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) {
+                          return Text(
+                            _getInitials(agent['name'] ?? 'A'),
+                            style: const TextStyle(
+                              fontSize: 22,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFF666666),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          agent['name'] ?? 'Agent Name',
+                          style: const TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.w800,
+                            color: Color(0xFF1A1A1A),
+                            letterSpacing: -0.3,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          agent['company'] ?? 'Company',
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF666666),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  // Removed header chat button as requested
+                ],
+              ),
+            ),
+          ),
+          // About + Expertise section
           SliverToBoxAdapter(
             child: Container(
               margin: const EdgeInsets.all(16),
-              padding: const EdgeInsets.all(20),
+              padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
                 color: Colors.white,
-                borderRadius: BorderRadius.circular(20),
+                borderRadius: BorderRadius.circular(16),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.08),
-                    blurRadius: 20,
-                    offset: const Offset(0, 4),
+                    color: Colors.black.withOpacity(0.06),
+                    blurRadius: 12,
+                    offset: const Offset(0, 2),
                   ),
                 ],
               ),
               child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Avatar with enhanced design
-                  Container(
-                    padding: const EdgeInsets.all(4),
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [Color(0xFFA342FF), Color(0xFFE54D60)],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                      borderRadius: BorderRadius.circular(60),
-                      boxShadow: [
-                        BoxShadow(
-                          color: const Color(0xFFA342FF).withOpacity(0.3),
-                          blurRadius: 20,
-                          offset: const Offset(0, 8),
-                        ),
-                      ],
+                  const Text(
+                    'About',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF1A1A1A),
                     ),
-                    child: CircleAvatar(
-                      radius: 56,
-                      backgroundColor: const Color(0xFFF5F5F5),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(56),
-                        child: Image.asset(
-                          'assets/avtar_agent.png',
-                          width: 112,
-                          height: 112,
-                          fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) {
-                            // Fallback to initials if asset fails to load
-                            return Text(
-                              _getInitials(agent['name'] ?? 'A'),
-                              style: const TextStyle(
-                                fontSize: 28,
-                                fontWeight: FontWeight.w700,
-                                color: Color(0xFF666666),
-                              ),
-                            );
-                          },
-                        ),
-                      ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Luxury brand partner at \'${agent['company'] ?? 'Company'}\'',
+                    style: const TextStyle(
+                      fontSize: 14,
+                      color: Color(0xFF4A4A4A),
+                      height: 1.4,
                     ),
                   ),
                   const SizedBox(height: 16),
-                  // Agent Name with enhanced typography
-                  Text(
-                    agent['name'] ?? 'Agent Name',
-                    style: const TextStyle(
-                      fontSize: 26,
-                      fontWeight: FontWeight.w800,
-                      color: Color(0xFF1A1A1A),
-                      letterSpacing: -0.5,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 8),
-                  // Company with better styling
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF0F0F0),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(
-                      agent['company'] ?? 'Company',
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: Color(0xFF666666),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  // Categories section with improved design
                   if (!isLoadingCategories && categories.isNotEmpty) ...[
-                    const Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        'Expertise',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w700,
-                          color: Color(0xFF1A1A1A),
-                        ),
+                    const Text(
+                      'Expertise',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF1A1A1A),
                       ),
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 8),
                     Wrap(
                       spacing: 8,
                       runSpacing: 8,
                       children: categories.map((category) {
                         return Container(
                           padding: const EdgeInsets.symmetric(
-                            horizontal: 14,
-                            vertical: 8,
+                            horizontal: 12,
+                            vertical: 6,
                           ),
                           decoration: BoxDecoration(
-                            gradient: const LinearGradient(
-                              colors: [Color(0xFFF8F9FF), Color(0xFFF0F2FF)],
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                            ),
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(
-                              color: const Color(0xFFE8EAFF),
-                              width: 1,
-                            ),
+                            color: const Color(0xFFF3F6F8),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: const Color(0xFFE1E9EE)),
                           ),
                           child: Text(
-                            category['name'] ?? 'Unknown Category',
+                            category['name'] ?? 'Category',
                             style: const TextStyle(
                               fontSize: 12,
                               fontWeight: FontWeight.w600,
@@ -382,9 +393,7 @@ class _AgentProfileState extends State<AgentProfile>
                         );
                       }).toList(),
                     ),
-                  ],
-                  if (isLoadingCategories) ...[
-                    const SizedBox(height: 12),
+                  ] else if (isLoadingCategories) ...[
                     _buildCategoriesShimmer(),
                   ],
                 ],
@@ -499,6 +508,48 @@ class _AgentProfileState extends State<AgentProfile>
         sendLookBook: false,
       ),
     );
+  }
+
+  void _handleAgentChat() async {
+    try {
+      final currentUser = FirebaseAuth.instance.currentUser;
+      final agentId = widget.agent['agentId'] ?? widget.agent['id'];
+      if (currentUser == null || agentId == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please login to start a chat'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+
+      final participantIds = [currentUser.uid, agentId].map((e) => e.toString()).toList()..sort();
+      final chatId = participantIds.join('_');
+
+      final chatBloc = chat.ChatBloc();
+      chatBloc.add(chat.OpenChatEvent(chatId));
+
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => BlocProvider.value(
+            value: chatBloc,
+            child: RegularChatPage(
+              chatId: chatId,
+              userName: widget.agent['name'] ?? 'Agent',
+            ),
+          ),
+        ),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error opening chat: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   Widget _buildProductsTab(List<dynamic> products) {
@@ -646,8 +697,8 @@ class _AgentProfileState extends State<AgentProfile>
                                         text: '\$',
                                         style: TextStyle(
                                           color: Color(0xFFA342FF),
-                                          fontWeight: FontWeight.w800,
-                                          fontSize: 18,
+                                          fontWeight: FontWeight.w700,
+                                          fontSize: 16,
                                         ),
                                       ),
                                       TextSpan(
@@ -655,8 +706,8 @@ class _AgentProfileState extends State<AgentProfile>
                                             .toStringAsFixed(2),
                                         style: const TextStyle(
                                           color: Color(0xFFA342FF),
-                                          fontWeight: FontWeight.w800,
-                                          fontSize: 18,
+                                          fontWeight: FontWeight.w700,
+                                          fontSize: 16,
                                         ),
                                       ),
                                     ],
