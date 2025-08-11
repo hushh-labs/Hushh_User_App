@@ -243,16 +243,16 @@ class _RegularChatPageState extends State<RegularChatPage> {
               icon: const Icon(Icons.more_vert),
               onSelected: (value) => _handleChatOption(context, value),
               itemBuilder: (context) => [
-                const PopupMenuItem(
-                  value: 'clear_chat',
-                  child: Row(
-                    children: [
-                      Icon(Icons.clear_all, color: Colors.grey),
-                      SizedBox(width: 8),
-                      Text('Clear Chat'),
-                    ],
-                  ),
-                ),
+                // const PopupMenuItem(
+                //   value: 'clear_chat',
+                //   child: Row(
+                //     children: [
+                //       Icon(Icons.clear_all, color: Colors.grey),
+                //       SizedBox(width: 8),
+                //       Text('Clear Chat'),
+                //     ],
+                //   ),
+                // ),
                 PopupMenuItem(
                   value: _hasBlockedUser ? 'unblock_user' : 'block_user',
                   child: Row(

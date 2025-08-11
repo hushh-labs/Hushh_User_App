@@ -9,6 +9,7 @@ class ChatEntity extends Equatable {
   final bool? isLastTextSeen;
   final DateTime createdAt;
   final bool isUnread;
+  final Map<String, int> deletionFlags;
 
   const ChatEntity({
     required this.id,
@@ -19,19 +20,21 @@ class ChatEntity extends Equatable {
     this.isLastTextSeen,
     required this.createdAt,
     this.isUnread = false,
+    this.deletionFlags = const {},
   });
 
   @override
   List<Object?> get props => [
-    id,
-    participants,
-    lastText,
-    lastTextTime,
-    lastTextBy,
-    isLastTextSeen,
-    createdAt,
-    isUnread,
-  ];
+        id,
+        participants,
+        lastText,
+        lastTextTime,
+        lastTextBy,
+        isLastTextSeen,
+        createdAt,
+        isUnread,
+        deletionFlags,
+      ];
 }
 
 class MessageEntity extends Equatable {

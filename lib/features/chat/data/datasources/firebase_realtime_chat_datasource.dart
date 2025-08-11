@@ -650,4 +650,27 @@ class FirebaseRealtimeChatDataSource {
       print('❌ DataSource: Error marking chat as seen: $e');
     }
   }
+
+  Future<bool> areUsersActive(List<String> userIds) async {
+    if (userIds.length < 2) return false;
+
+    try {
+      for (final userId in userIds) {
+        final userDoc =
+            await _firestore.collection('HushUsers').doc(userId).get();
+        if (userDoc.exists) continue;
+
+        final agentDoc =
+            await _firestore.collection('Hushhagents').doc(userId).get();
+        if (!agentDoc.exists) {
+          print('User not found: $userId');
+          return false;
+        }
+      }
+      return true;
+    } catch (e) {
+      print('Error checking if users are active: $e');
+      return false;
+    }
+  }
 }

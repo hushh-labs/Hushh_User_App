@@ -13,7 +13,6 @@ class ChatLoadingAnimation extends StatefulWidget {
 class _ChatLoadingAnimationState extends State<ChatLoadingAnimation>
     with TickerProviderStateMixin {
   late AnimationController _animationController;
-  bool _minimumTimeElapsed = false;
 
   @override
   void initState() {
@@ -25,31 +24,8 @@ class _ChatLoadingAnimationState extends State<ChatLoadingAnimation>
       vsync: this,
     );
 
-    // Start animation
-    _animationController.forward();
-
-    // Set a timer for minimum 1.5 seconds
-    Future.delayed(const Duration(milliseconds: 1500), () {
-      if (mounted) {
-        setState(() {
-          _minimumTimeElapsed = true;
-        });
-        _checkAnimationComplete();
-      }
-    });
-
-    // Listen for animation completion
-    _animationController.addStatusListener((status) {
-      if (status == AnimationStatus.completed) {
-        _checkAnimationComplete();
-      }
-    });
-  }
-
-  void _checkAnimationComplete() {
-    if (_minimumTimeElapsed && widget.onAnimationComplete != null) {
-      widget.onAnimationComplete!();
-    }
+    // Start animation with repeat mode to keep it running infinitely
+    _animationController.repeat();
   }
 
   @override

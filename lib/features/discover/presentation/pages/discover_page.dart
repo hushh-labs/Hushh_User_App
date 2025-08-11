@@ -21,6 +21,7 @@ import '../bloc/cart_bloc.dart';
 import 'order_success_page.dart';
 import 'all_brands_page.dart';
 import '../widgets/agent_card.dart';
+import '../widgets/agent_card_shimmer.dart';
 
 final RouteObserver<ModalRoute<void>> routeObserver =
     RouteObserver<ModalRoute<void>>();
@@ -1248,9 +1249,23 @@ class _DiscoverPageState extends State<DiscoverPage> {
                       return Padding(
                         padding: const EdgeInsets.symmetric(
                           horizontal: 16,
-                          vertical: 12,
+                          vertical: 8,
                         ),
-                        child: const Center(child: CircularProgressIndicator()),
+                        child: GridView.builder(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          gridDelegate:
+                              const SliverGridDelegateWithFixedCrossAxisCount(
+                                crossAxisCount: 2,
+                                crossAxisSpacing: 16,
+                                mainAxisSpacing: 16,
+                                childAspectRatio: 0.70,
+                              ),
+                          itemCount: 6, // Show 6 shimmer cards while loading
+                          itemBuilder: (context, index) {
+                            return const AgentCardShimmer();
+                          },
+                        ),
                       );
                     }
 
@@ -1637,7 +1652,9 @@ class AgentProductsSection extends StatelessWidget {
                     onProductInventoryDecremented:
                         onProductInventoryDecremented,
                     onAddToCart: () {
-                      debugPrint('AddToCart tapped for productId: ${product['id']}');
+                      debugPrint(
+                        'AddToCart tapped for productId: ${product['id']}',
+                      );
                       onAddToCart(product['id']);
                     },
                   ),

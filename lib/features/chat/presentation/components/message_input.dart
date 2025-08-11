@@ -61,16 +61,16 @@ class MessageInput extends StatelessWidget {
                   ],
                 ),
               ),
-              const PopupMenuItem(
-                value: 'file',
-                child: Row(
-                  children: [
-                    Icon(Icons.file_copy, color: Colors.grey),
-                    SizedBox(width: 8),
-                    Text('File'),
-                  ],
-                ),
-              ),
+              // const PopupMenuItem(
+              //   value: 'file',
+              //   child: Row(
+              //     children: [
+              //       Icon(Icons.file_copy, color: Colors.grey),
+              //       SizedBox(width: 8),
+              //       Text('File'),
+              //     ],
+              //   ),
+              // ),
             ],
           ),
           Expanded(

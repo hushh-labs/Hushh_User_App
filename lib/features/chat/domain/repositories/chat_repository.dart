@@ -61,4 +61,5 @@ abstract class ChatRepository {
   Future<Either<Failure, List<ChatUserEntity>>> getUsers();
   Future<Either<Failure, ChatUserEntity?>> getCurrentUser();
   Future<Either<Failure, List<ChatUserEntity>>> searchUsers(String query);
+  Future<Either<Failure, bool>> areUsersActive(List<String> userIds);
 }

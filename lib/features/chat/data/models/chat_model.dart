@@ -6,6 +6,7 @@ class ChatModel {
   final String? lastTextBy;
   final bool? isLastTextSeen;
   final DateTime createdAt;
+  final Map<String, int> deletionFlags;
 
   const ChatModel({
     required this.id,
@@ -15,6 +16,7 @@ class ChatModel {
     this.lastTextBy,
     this.isLastTextSeen,
     required this.createdAt,
+    this.deletionFlags = const {},
   });
 
   Map<String, dynamic> toJson() {
@@ -25,6 +27,7 @@ class ChatModel {
       'lastTextBy': lastTextBy,
       'isLastTextSeen': isLastTextSeen,
       'createdAt': createdAt.millisecondsSinceEpoch,
+      'deletionFlags': deletionFlags,
     };
   }
 
@@ -41,6 +44,7 @@ class ChatModel {
       createdAt: json['createdAt'] != null
           ? DateTime.fromMillisecondsSinceEpoch(json['createdAt'])
           : DateTime.now(),
+      deletionFlags: Map<String, int>.from(json['deletionFlags'] ?? {}),
     );
   }
 }

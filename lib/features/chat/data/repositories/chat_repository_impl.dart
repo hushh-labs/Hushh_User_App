@@ -396,6 +396,20 @@ class ChatRepositoryImpl implements ChatRepository {
     }
   }
 
+  @override
+  Future<Either<Failure, bool>> areUsersActive(List<String> userIds) async {
+    if (await networkInfo.isConnected) {
+      try {
+        final result = await remoteDataSource.areUsersActive(userIds);
+        return Right(result);
+      } catch (e) {
+        return Left(ServerFailure(e.toString()));
+      }
+    } else {
+      return Left(NetworkFailure('No internet connection'));
+    }
+  }
+
   // Helper methods to map between models and entities
   ChatEntity _mapChatModelToEntity(data.ChatModel model) {
     return ChatEntity(
@@ -409,6 +423,7 @@ class ChatRepositoryImpl implements ChatRepository {
       isUnread:
           model.isLastTextSeen == false &&
           model.lastTextBy != remoteDataSource.currentUserId,
+      deletionFlags: model.deletionFlags,
     );
   }
 

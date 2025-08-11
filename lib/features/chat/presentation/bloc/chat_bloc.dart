@@ -10,6 +10,7 @@ import '../../../../core/usecases/usecase.dart';
 import '../../domain/entities/chat_entity.dart';
 import '../../domain/entities/user_entity.dart';
 import '../../domain/repositories/chat_repository.dart';
+import '../../domain/usecases/are_users_active.dart';
 import '../../domain/usecases/chat_usecase.dart';
 
 // Events
@@ -174,6 +175,16 @@ class RemoveChatFromListEvent extends ChatEvent {
 
   @override
   List<Object> get props => [chatId];
+}
+
+class SetDeletionFlagEvent extends ChatEvent {
+  final String chatId;
+  final String userId;
+
+  const SetDeletionFlagEvent({required this.chatId, required this.userId});
+
+  @override
+  List<Object> get props => [chatId, userId];
 }
 
 class UpdateChatsEvent extends ChatEvent {
@@ -510,6 +521,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   final BlockUser? blockUser;
   final UnblockUser? unblockUser;
   final IsUserBlocked? isUserBlocked;
+  final AreUsersActive? areUsersActive;
 
   // Add cached state for users and chats
   List<ChatUserEntity> _cachedUsers = [];
@@ -545,6 +557,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       blockUser: GetIt.instance.get<BlockUser>(),
       unblockUser: GetIt.instance.get<UnblockUser>(),
       isUserBlocked: GetIt.instance.get<IsUserBlocked>(),
+      areUsersActive: GetIt.instance.get<AreUsersActive>(),
     );
   }
 
@@ -568,6 +581,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     this.blockUser,
     this.unblockUser,
     this.isUserBlocked,
+    this.areUsersActive,
   }) : super(const ChatInitialState()) {
     print('🔍 BLoC: ChatBloc._ constructor called');
     on<LoadChatsEvent>(_onLoadChats);
@@ -583,6 +597,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     on<UnblockUserEvent>(_onUnblockUser);
     on<CheckBlockingStatusEvent>(_onCheckBlockingStatus);
     on<RemoveChatFromListEvent>(_onRemoveChatFromList);
+    on<SetDeletionFlagEvent>(_onSetDeletionFlag);
     on<UpdateChatsEvent>(_onUpdateChats);
     on<UpdateMessagesEvent>(_onUpdateMessages);
     on<LoadUsersEvent>(_onLoadUsers);
@@ -712,7 +727,32 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         }
       }
 
-      _allChats = updatedChats;
+      final filteredChats = <ChatItem>[];
+      for (var chat in updatedChats) {
+        if (chat.id == 'hushh_bot') {
+          filteredChats.add(chat);
+          continue;
+        }
+
+        final chatEntity = event.chats.firstWhere((c) => c.id == chat.id);
+
+        if (currentUserId != null &&
+            chatEntity.deletionFlags[currentUserId] != -1) {
+          continue;
+        }
+
+        if (areUsersActive != null) {
+          final result = await areUsersActive!(chatEntity.participants);
+          final isActive = result.getOrElse(() => false);
+          if (isActive) {
+            filteredChats.add(chat);
+          }
+        } else {
+          filteredChats.add(chat);
+        }
+      }
+
+      _allChats = filteredChats;
       _cachedChats = updatedChats;
       print('🔍 BLoC: Updated cached chats: ${_cachedChats.length}');
 
@@ -725,7 +765,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
 
       if (!isClosed) {
         emit(
-          ChatsLoadedState(chats: updatedChats, filteredChats: updatedChats),
+          ChatsLoadedState(chats: filteredChats, filteredChats: filteredChats),
         );
       }
     } catch (e) {
@@ -1497,6 +1537,23 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       emit(ChatsLoadedState(chats: _allChats, filteredChats: _allChats));
     } catch (e) {
       emit(ChatErrorState('Failed to remove chat from list: ${e.toString()}'));
+    }
+  }
+
+  void _onSetDeletionFlag(
+    SetDeletionFlagEvent event,
+    Emitter<ChatState> emit,
+  ) async {
+    try {
+      if (repository != null) {
+        await repository!.setChatDeletionFlag(
+          event.chatId,
+          event.userId,
+          DateTime.now().millisecondsSinceEpoch,
+        );
+      }
+    } catch (e) {
+      emit(ChatErrorState('Failed to set deletion flag: ${e.toString()}'));
     }
   }
 

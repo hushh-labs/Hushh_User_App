@@ -1,6 +1,7 @@
 import 'package:get_it/get_it.dart';
 import '../../../../core/network/network_info.dart';
 import '../domain/repositories/chat_repository.dart';
+import '../domain/usecases/are_users_active.dart';
 import '../domain/usecases/chat_usecase.dart';
 import '../data/datasources/firebase_realtime_chat_datasource.dart';
 import '../data/repositories/chat_repository_impl.dart';
@@ -45,6 +46,7 @@ class ChatModule {
     getIt.registerLazySingleton(() => GetUsers(getIt()));
     getIt.registerLazySingleton(() => GetCurrentUser(getIt()));
     getIt.registerLazySingleton(() => SearchUsers(getIt()));
+    getIt.registerLazySingleton(() => AreUsersActive(getIt()));
 
     // Blocking use cases
     getIt.registerLazySingleton(() => BlockUser(getIt()));

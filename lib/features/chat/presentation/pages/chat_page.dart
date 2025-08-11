@@ -255,17 +255,14 @@ class _ChatViewState extends State<_ChatView> {
   }
 
   void _deleteChat(chat.ChatItem chatItem) {
-    // First clear the chat messages
-    context.read<chat.ChatBloc>().add(
-      chat.ClearChatEvent(
-        chatId: chatItem.id,
-        userId: FirebaseAuth.instance.currentUser?.uid ?? '',
-      ),
-    );
+    final userId = FirebaseAuth.instance.currentUser?.uid;
+    if (userId == null) return;
 
-    // Then remove from chat list
     context.read<chat.ChatBloc>().add(
-      chat.RemoveChatFromListEvent(chatItem.id),
+      chat.SetDeletionFlagEvent(
+        chatId: chatItem.id,
+        userId: userId,
+      ),
     );
 
     ScaffoldMessenger.of(context).showSnackBar(
