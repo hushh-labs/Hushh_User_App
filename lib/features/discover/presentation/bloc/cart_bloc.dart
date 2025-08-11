@@ -5,6 +5,7 @@ import '../../data/models/agent_product_model.dart';
 import '../../data/models/bid_model.dart';
 import '../../domain/entities/cart_notification_entity.dart';
 import '../../domain/usecases/send_cart_notification_usecase.dart';
+import '../../../../core/services/logger_service.dart';
 import '../../domain/usecases/get_valid_bid_for_product_usecase.dart';
 
 // Events
@@ -303,7 +304,28 @@ class CartBloc extends Bloc<CartEvent, CartState> {
           userName: '', // Will be set by use case
           quantity: 1,
         );
-        await _sendCartNotificationUseCase(notification);
+        logger.log(
+          'Sending cart notification: productId=${notification.productId}, agentId=${notification.agentId}',
+          level: LogLevel.debug,
+          tag: 'CartBloc',
+        );
+        final result = await _sendCartNotificationUseCase(notification);
+        result.fold(
+          (failure) {
+            logger.log(
+              'Cart notification failed: ${failure.message}',
+              level: LogLevel.error,
+              tag: 'CartBloc',
+            );
+          },
+          (ok) {
+            logger.log(
+              'Cart notification sent successfully',
+              level: LogLevel.info,
+              tag: 'CartBloc',
+            );
+          },
+        );
       } else if (currentState.currentAgentId == event.agentId) {
         // Same agent, check if product already exists
         final existingItemIndex = currentState.items.indexWhere(
@@ -378,7 +400,28 @@ class CartBloc extends Bloc<CartEvent, CartState> {
             userName: '', // Will be set by use case
             quantity: 1,
           );
-          await _sendCartNotificationUseCase(notification);
+          logger.log(
+            'Sending cart notification: productId=${notification.productId}, agentId=${notification.agentId}',
+            level: LogLevel.debug,
+            tag: 'CartBloc',
+          );
+          final result = await _sendCartNotificationUseCase(notification);
+          result.fold(
+            (failure) {
+              logger.log(
+                'Cart notification failed: ${failure.message}',
+                level: LogLevel.error,
+                tag: 'CartBloc',
+              );
+            },
+            (ok) {
+              logger.log(
+                'Cart notification sent successfully',
+                level: LogLevel.info,
+                tag: 'CartBloc',
+              );
+            },
+          );
         }
       } else {
         // Different agent, emit conflict state
@@ -422,7 +465,28 @@ class CartBloc extends Bloc<CartEvent, CartState> {
         userName: '', // Will be set by use case
         quantity: 1,
       );
-      await _sendCartNotificationUseCase(notification);
+      logger.log(
+        'Sending cart notification: productId=${notification.productId}, agentId=${notification.agentId}',
+        level: LogLevel.debug,
+        tag: 'CartBloc',
+      );
+      final result = await _sendCartNotificationUseCase(notification);
+      result.fold(
+        (failure) {
+          logger.log(
+            'Cart notification failed: ${failure.message}',
+            level: LogLevel.error,
+            tag: 'CartBloc',
+          );
+        },
+        (ok) {
+          logger.log(
+            'Cart notification sent successfully',
+            level: LogLevel.info,
+            tag: 'CartBloc',
+          );
+        },
+      );
     }
   }
 

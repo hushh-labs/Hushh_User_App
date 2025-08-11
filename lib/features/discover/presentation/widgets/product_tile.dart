@@ -146,7 +146,10 @@ class _ProductTileState extends State<ProductTile> {
     if (cartCount == 0) {
       return GestureDetector(
         onTap: widget.product.stockQuantity > 0
-            ? (widget.onAddToCart ?? _incrementCart)
+            ? () {
+                debugPrint('AddToCart button tapped for productId: ${widget.product.id}');
+                (widget.onAddToCart ?? _incrementCart).call();
+              }
             : null,
         child: Container(
           width: 36,

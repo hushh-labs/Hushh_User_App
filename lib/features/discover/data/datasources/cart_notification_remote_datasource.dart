@@ -3,6 +3,7 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
+import '../../../../core/services/logger_service.dart';
 import '../../../../core/errors/failures.dart';
 import '../../../../shared/constants/firestore_constants.dart';
 import '../models/cart_notification_model.dart';
@@ -27,12 +28,12 @@ class CartNotificationRemoteDataSourceImpl
   ) async {
     try {
       final user = _auth.currentUser;
-      debugPrint('Current user: ${user?.uid}');
-      debugPrint('User display name: ${user?.displayName}');
-      debugPrint('User email: ${user?.email}');
+      logger.log('Current user: ${user?.uid}', level: LogLevel.debug, tag: 'CartNotif');
+      logger.log('User display name: ${user?.displayName}', level: LogLevel.debug, tag: 'CartNotif');
+      logger.log('User email: ${user?.email}', level: LogLevel.debug, tag: 'CartNotif');
 
       if (user == null) {
-        debugPrint('User not authenticated - returning error');
+        logger.log('User not authenticated - returning error', level: LogLevel.error, tag: 'CartNotif');
         return Left(ServerFailure('User not authenticated'));
       }
 
@@ -51,14 +52,12 @@ class CartNotificationRemoteDataSourceImpl
               userData?['name'] ??
               user.displayName ??
               'User';
-          debugPrint('User full name from Firestore: $userName');
+          logger.log('User full name from Firestore: $userName', level: LogLevel.debug, tag: 'CartNotif');
         } else {
-          debugPrint(
-            'User document not found in Firestore, using fallback name',
-          );
+          logger.log('User document not found in Firestore, using fallback name', level: LogLevel.warning, tag: 'CartNotif');
         }
       } catch (e) {
-        debugPrint('Error fetching user name from Firestore: $e');
+        logger.log('Error fetching user name from Firestore: $e', level: LogLevel.warning, tag: 'CartNotif');
         userName = user.displayName ?? 'User';
       }
 
@@ -69,19 +68,19 @@ class CartNotificationRemoteDataSourceImpl
         'userName': userName,
       };
 
-      debugPrint('Calling cloud function with data: $notificationData');
+      logger.log('Calling cloud function with data: $notificationData', level: LogLevel.debug, tag: 'CartNotif');
 
       // Call cloud function
       final result = await _functions
           .httpsCallable('sendCartItemNotification')
           .call(notificationData);
 
-      debugPrint('Cart notification sent successfully: ${result.data}');
+      logger.log('Cart notification sent successfully: ${result.data}', level: LogLevel.info, tag: 'CartNotif');
       return const Right(true);
     } catch (error) {
-      debugPrint('Error sending cart notification: $error');
-      debugPrint('Error type: ${error.runtimeType}');
-      debugPrint('Error details: ${error.toString()}');
+      logger.log('Error sending cart notification: $error', level: LogLevel.error, tag: 'CartNotif');
+      logger.log('Error type: ${error.runtimeType}', level: LogLevel.error, tag: 'CartNotif');
+      logger.log('Error details: ${error.toString()}', level: LogLevel.error, tag: 'CartNotif');
       return Left(ServerFailure('Failed to send cart notification: $error'));
     }
   }

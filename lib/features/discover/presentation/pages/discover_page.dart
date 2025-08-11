@@ -1637,6 +1637,7 @@ class AgentProductsSection extends StatelessWidget {
                     onProductInventoryDecremented:
                         onProductInventoryDecremented,
                     onAddToCart: () {
+                      debugPrint('AddToCart tapped for productId: ${product['id']}');
                       onAddToCart(product['id']);
                     },
                   ),
