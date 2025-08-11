@@ -162,6 +162,7 @@ class DiscoverContent extends StatelessWidget {
                     );
                   },
                   onAddToCart: (productId) {
+                    debugPrint('AddToCart (discover_content) for productId: $productId, agentId: ${agent.agentId}');
                     final product = products.firstWhere(
                       (p) => p.id == productId,
                       orElse: () => AgentProductModel(

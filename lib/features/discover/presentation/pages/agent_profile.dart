@@ -755,7 +755,10 @@ class _AgentProfileState extends State<AgentProfile>
                                   ),
                                   InkWell(
                                     borderRadius: BorderRadius.circular(20),
-                                    onTap: () => _handleAddToCart(product),
+                                     onTap: () {
+                                       debugPrint('AddToCart tapped (agent_profile) for productId: ${product['id']}');
+                                       _handleAddToCart(product);
+                                     },
                                     child: Container(
                                       padding: const EdgeInsets.symmetric(
                                         horizontal: 12,

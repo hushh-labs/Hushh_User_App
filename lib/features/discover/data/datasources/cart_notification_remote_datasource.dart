@@ -69,6 +69,7 @@ class CartNotificationRemoteDataSourceImpl
       };
 
       logger.log('Calling cloud function with data: $notificationData', level: LogLevel.debug, tag: 'CartNotif');
+      debugPrint('CartNotif: Calling cloud function sendCartItemNotification with data: $notificationData');
 
       // Call cloud function
       final result = await _functions
@@ -76,11 +77,13 @@ class CartNotificationRemoteDataSourceImpl
           .call(notificationData);
 
       logger.log('Cart notification sent successfully: ${result.data}', level: LogLevel.info, tag: 'CartNotif');
+      debugPrint('CartNotif: Cloud function success: ${result.data}');
       return const Right(true);
     } catch (error) {
       logger.log('Error sending cart notification: $error', level: LogLevel.error, tag: 'CartNotif');
       logger.log('Error type: ${error.runtimeType}', level: LogLevel.error, tag: 'CartNotif');
       logger.log('Error details: ${error.toString()}', level: LogLevel.error, tag: 'CartNotif');
+      debugPrint('CartNotif: Cloud function error: $error');
       return Left(ServerFailure('Failed to send cart notification: $error'));
     }
   }

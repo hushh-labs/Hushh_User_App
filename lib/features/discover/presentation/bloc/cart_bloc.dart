@@ -1,4 +1,5 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter/foundation.dart';
 import 'package:equatable/equatable.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../data/models/agent_product_model.dart';
@@ -309,6 +310,9 @@ class CartBloc extends Bloc<CartEvent, CartState> {
           level: LogLevel.debug,
           tag: 'CartBloc',
         );
+        // Also print to terminal for quick visibility
+        // ignore: avoid_print
+        debugPrint('CartBloc: Sending cart notification → productId=${notification.productId}, agentId=${notification.agentId}');
         final result = await _sendCartNotificationUseCase(notification);
         result.fold(
           (failure) {
@@ -317,6 +321,7 @@ class CartBloc extends Bloc<CartEvent, CartState> {
               level: LogLevel.error,
               tag: 'CartBloc',
             );
+            debugPrint('CartBloc: Cart notification failed → ${failure.message}');
           },
           (ok) {
             logger.log(
@@ -324,6 +329,7 @@ class CartBloc extends Bloc<CartEvent, CartState> {
               level: LogLevel.info,
               tag: 'CartBloc',
             );
+            debugPrint('CartBloc: Cart notification sent successfully');
           },
         );
       } else if (currentState.currentAgentId == event.agentId) {
@@ -405,6 +411,7 @@ class CartBloc extends Bloc<CartEvent, CartState> {
             level: LogLevel.debug,
             tag: 'CartBloc',
           );
+          debugPrint('CartBloc: Sending cart notification → productId=${notification.productId}, agentId=${notification.agentId}');
           final result = await _sendCartNotificationUseCase(notification);
           result.fold(
             (failure) {
@@ -413,6 +420,7 @@ class CartBloc extends Bloc<CartEvent, CartState> {
                 level: LogLevel.error,
                 tag: 'CartBloc',
               );
+              debugPrint('CartBloc: Cart notification failed → ${failure.message}');
             },
             (ok) {
               logger.log(
@@ -420,6 +428,7 @@ class CartBloc extends Bloc<CartEvent, CartState> {
                 level: LogLevel.info,
                 tag: 'CartBloc',
               );
+              debugPrint('CartBloc: Cart notification sent successfully');
             },
           );
         }
@@ -470,6 +479,7 @@ class CartBloc extends Bloc<CartEvent, CartState> {
         level: LogLevel.debug,
         tag: 'CartBloc',
       );
+      debugPrint('CartBloc: Sending cart notification → productId=${notification.productId}, agentId=${notification.agentId}');
       final result = await _sendCartNotificationUseCase(notification);
       result.fold(
         (failure) {
@@ -478,6 +488,7 @@ class CartBloc extends Bloc<CartEvent, CartState> {
             level: LogLevel.error,
             tag: 'CartBloc',
           );
+          debugPrint('CartBloc: Cart notification failed → ${failure.message}');
         },
         (ok) {
           logger.log(
@@ -485,6 +496,7 @@ class CartBloc extends Bloc<CartEvent, CartState> {
             level: LogLevel.info,
             tag: 'CartBloc',
           );
+          debugPrint('CartBloc: Cart notification sent successfully');
         },
       );
     }
