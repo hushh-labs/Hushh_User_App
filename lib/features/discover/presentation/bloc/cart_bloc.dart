@@ -15,6 +15,21 @@ abstract class CartEvent extends Equatable {
   List<Object?> get props => [];
 }
 
+class BidApprovedEvent extends CartEvent {
+  final String agentId;
+  final String productId;
+  final double bidAmount;
+
+  const BidApprovedEvent({
+    required this.agentId,
+    required this.productId,
+    required this.bidAmount,
+  });
+
+  @override
+  List<Object?> get props => [agentId, productId, bidAmount];
+}
+
 class AddToCartEvent extends CartEvent {
   final AgentProductModel product;
   final String agentId;
@@ -222,6 +237,7 @@ class CartBloc extends Bloc<CartEvent, CartState> {
     on<UpdateCartItemQuantityEvent>(_onUpdateCartItemQuantity);
     on<ClearCartEvent>(_onClearCart);
     on<LoadCartEvent>(_onLoadCart);
+    on<BidApprovedEvent>(_onBidApproved);
   }
 
   Future<void> _onAddToCart(
@@ -529,5 +545,36 @@ class CartBloc extends Bloc<CartEvent, CartState> {
         ),
       );
     }
+  }
+
+  void _onBidApproved(
+    BidApprovedEvent event,
+    Emitter<CartState> emit,
+  ) {
+    final currentState = state;
+    if (currentState is! CartLoaded) return;
+
+    final updatedItems = List<CartItem>.from(currentState.items);
+    final index = updatedItems.indexWhere(
+      (item) => item.id == event.productId && item.agentId == event.agentId,
+    );
+    if (index == -1) return;
+
+    final existing = updatedItems[index];
+    updatedItems[index] = existing.copyWith(
+      bidAmount: event.bidAmount,
+      hasValidBid: true,
+    );
+
+    final newTotalItems = updatedItems.fold(0, (sum, i) => sum + i.quantity);
+    final newTotalPrice = updatedItems.fold(0.0, (sum, i) => sum + i.totalPrice);
+
+    emit(
+      currentState.copyWith(
+        items: updatedItems,
+        totalItems: newTotalItems,
+        totalPrice: newTotalPrice,
+      ),
+    );
   }
 }

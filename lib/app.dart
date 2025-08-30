@@ -16,6 +16,7 @@ import 'features/notifications/di/notification_module.dart';
 import 'features/chat/di/chat_module.dart';
 import 'shared/di/dependencies.dart';
 import 'shared/utils/app_local_storage.dart';
+import 'features/discover/presentation/bloc/cart_bloc.dart';
 
 final GetIt getIt = GetIt.instance;
 
@@ -49,6 +50,8 @@ class MyApp extends StatelessWidget {
     return MultiBlocProvider(
       providers: [
         BlocProvider<AuthBloc>(create: (context) => getIt<AuthBloc>()),
+        // Provide CartBloc globally so cart is always available across pages
+        BlocProvider<CartBloc>.value(value: getIt<CartBloc>()),
       ],
       child: BlocListener<AuthBloc, AuthState>(
         listener: (context, state) {

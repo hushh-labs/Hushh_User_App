@@ -49,7 +49,10 @@ class DiscoverModule {
     sl.registerFactory<CardWalletBloc>(() => CardWalletBloc());
     sl.registerFactory<InventoryBloc>(() => InventoryBloc());
     sl.registerFactory<LookBookProductBloc>(() => LookBookProductBloc());
-    sl.registerFactory<CartBloc>(() => CartBloc(sl(), sl()));
+    // Provide CartBloc as singleton so global services (FCM) can access same instance
+    if (!sl.isRegistered<CartBloc>()) {
+      sl.registerLazySingleton<CartBloc>(() => CartBloc(sl(), sl()));
+    }
     sl.registerFactory<BrandBloc>(() => BrandBloc(sl()));
   }
 }
