@@ -27,7 +27,8 @@ class DiscoverPageWrapper extends StatelessWidget {
         BlocProvider<LookBookProductBloc>(
           create: (context) => LookBookProductBloc(),
         ),
-        BlocProvider<CartBloc>(create: (context) => GetIt.instance<CartBloc>()),
+        // Use value provider so the singleton instance is not disposed
+        BlocProvider<CartBloc>.value(value: GetIt.instance<CartBloc>()),
         BlocProvider<AgentsProductsBloc>(
           create: (context) => AgentsProductsBloc(
             DiscoverRepositoryImpl(FirebaseDiscoverDataSourceImpl()),

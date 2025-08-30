@@ -4,6 +4,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:get_it/get_it.dart';
+import '../../../discover/presentation/bloc/cart_bloc.dart';
 
 class FCMService {
   static final FCMService _instance = FCMService._internal();
@@ -32,12 +34,44 @@ class FCMService {
       // Listen for token refresh
       _firebaseMessaging.onTokenRefresh.listen(_onTokenRefresh);
 
+      // Foreground data message handling
+      FirebaseMessaging.onMessage.listen(_onMessage);
+
       _isInitialized = true;
       debugPrint('FCM Service initialized successfully');
     } catch (e) {
       debugPrint('Failed to initialize FCM Service: $e');
       _isInitialized = true;
     }
+  }
+
+  void _onMessage(RemoteMessage message) {
+    try {
+      final data = message.data;
+      final type = data['type']?.toString();
+
+      if (type == 'bid_approved') {
+        final agentId = data['agentId']?.toString() ?? '';
+        final productId = data['productId']?.toString() ?? '';
+        final bidAmount = double.tryParse(data['bidAmount']?.toString() ?? '');
+
+        if (agentId.isEmpty || productId.isEmpty || bidAmount == null) return;
+
+        CartBloc? bloc;
+        try {
+          final instance = GetIt.instance<CartBloc>();
+          if (!instance.isClosed) bloc = instance;
+        } catch (_) {}
+
+        bloc?.add(
+          BidApprovedEvent(
+            agentId: agentId,
+            productId: productId,
+            bidAmount: bidAmount,
+          ),
+        );
+      }
+    } catch (_) {}
   }
 
   /// Request notification permissions
