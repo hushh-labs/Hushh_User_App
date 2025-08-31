@@ -304,39 +304,44 @@ class _AgentProfileState extends State<AgentProfile>
                     ),
                   ),
                   const SizedBox(height: 16),
-                  // Agent Name with enhanced typography
-                  Text(
-                    agent['name'] ?? 'Agent Name',
-                    style: const TextStyle(
-                      fontSize: 26,
-                      fontWeight: FontWeight.w800,
-                      color: Color(0xFF1A1A1A),
-                      letterSpacing: -0.5,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 8),
-                  // Company with better styling
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF0F0F0),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(
-                      agent['company'] ?? 'Company',
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: Color(0xFF666666),
+                  // LinkedIn-style inline identity block (name, headline, location)
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Text(
+                        agent['name'] ?? 'Agent Name',
+                        style: const TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xFF1A1A1A),
+                          letterSpacing: -0.2,
+                        ),
+                        textAlign: TextAlign.center,
                       ),
-                    ),
+                      const SizedBox(height: 6),
+                      Text(
+                        agent['company'] ?? 'Company',
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF666666),
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        (agent['location'] ?? 'Location not available')
+                            .toString(),
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Color(0xFF8A8A8A),
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 20),
-                  // Categories section with improved design
+                  // Categories section
                   if (!isLoadingCategories && categories.isNotEmpty) ...[
                     const Align(
                       alignment: Alignment.centerLeft,
@@ -562,40 +567,76 @@ class _AgentProfileState extends State<AgentProfile>
                 padding: const EdgeInsets.all(16),
                 child: Row(
                   children: [
-                    // Enhanced Product Image
-                    Container(
-                      width: 90,
-                      height: 90,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF5F5F5),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: const Color(0xFFE8E8E8),
-                          width: 1,
-                        ),
-                      ),
-                      child:
-                          product['imageUrl'] != null &&
-                              product['imageUrl']!.isNotEmpty
-                          ? ClipRRect(
-                              borderRadius: BorderRadius.circular(11),
-                              child: Image.network(
-                                product['imageUrl'],
-                                fit: BoxFit.cover,
-                                errorBuilder: (context, error, stackTrace) {
-                                  return const Icon(
-                                    Icons.image_outlined,
-                                    color: Color(0xFFCCCCCC),
-                                    size: 40,
-                                  );
-                                },
-                              ),
-                            )
-                          : const Icon(
-                              Icons.image_outlined,
-                              color: Color(0xFFCCCCCC),
-                              size: 40,
+                    // Enhanced Product Image with price tag overlay
+                    Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        Container(
+                          width: 90,
+                          height: 90,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF5F5F5),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: const Color(0xFFE8E8E8),
+                              width: 1,
                             ),
+                          ),
+                          child: product['imageUrl'] != null &&
+                                  product['imageUrl']!.isNotEmpty
+                              ? ClipRRect(
+                                  borderRadius: BorderRadius.circular(11),
+                                  child: Image.network(
+                                    product['imageUrl'],
+                                    fit: BoxFit.cover,
+                                    errorBuilder:
+                                        (context, error, stackTrace) {
+                                      return const Icon(
+                                        Icons.image_outlined,
+                                        color: Color(0xFFCCCCCC),
+                                        size: 40,
+                                      );
+                                    },
+                                  ),
+                                )
+                              : const Icon(
+                                  Icons.image_outlined,
+                                  color: Color(0xFFCCCCCC),
+                                  size: 40,
+                                ),
+                        ),
+                        Positioned(
+                          top: -6,
+                          left: -6,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withOpacity(0.85),
+                              borderRadius: BorderRadius.circular(12),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.15),
+                                  blurRadius: 6,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
+                            ),
+                            child: Text(
+                              ' \$${((product['price'] ?? 0.0) as num).toStringAsFixed(2)}'
+                                  .replaceFirst('\u0000', ''),
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: 0.2,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                     const SizedBox(width: 16),
                     // Enhanced Product Details
@@ -638,33 +679,8 @@ class _AgentProfileState extends State<AgentProfile>
                           const SizedBox(height: 8),
                           Row(
                             children: [
-                              Expanded(
-                                child: Text.rich(
-                                  TextSpan(
-                                    children: [
-                                      const TextSpan(
-                                        text: '\$',
-                                        style: TextStyle(
-                                          color: Color(0xFFA342FF),
-                                          fontWeight: FontWeight.w800,
-                                          fontSize: 18,
-                                        ),
-                                      ),
-                                      TextSpan(
-                                        text: ((product['price'] ?? 0.0) as num)
-                                            .toStringAsFixed(2),
-                                        style: const TextStyle(
-                                          color: Color(0xFFA342FF),
-                                          fontWeight: FontWeight.w800,
-                                          fontSize: 18,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              // Place Chat and Add to Cart horizontally with wrapping to avoid overflow
+                              const Spacer(),
+                              // Actions aligned to the end
                               Wrap(
                                 spacing: 8,
                                 runSpacing: 6,
