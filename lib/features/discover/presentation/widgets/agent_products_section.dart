@@ -113,8 +113,9 @@ class AgentProductsSection extends StatelessWidget {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (context) =>
-                            AgentProfile(agent: agentWithProducts),
+                        builder: (context) => AgentProfile(
+                          agent: agentWithProducts,
+                        ),
                       ),
                     );
                   },

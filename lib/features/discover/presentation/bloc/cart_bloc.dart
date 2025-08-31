@@ -15,6 +15,23 @@ abstract class CartEvent extends Equatable {
   List<Object?> get props => [];
 }
 
+class BidApprovedEvent extends CartEvent {
+  final String agentId;
+  final String productId;
+  final double bidAmount; // discount amount to apply (original - bid)
+  final String? productName;
+
+  const BidApprovedEvent({
+    required this.agentId,
+    required this.productId,
+    required this.bidAmount,
+    this.productName,
+  });
+
+  @override
+  List<Object?> get props => [agentId, productId, bidAmount, productName ?? ''];
+}
+
 class AddToCartEvent extends CartEvent {
   final AgentProductModel product;
   final String agentId;
@@ -222,6 +239,7 @@ class CartBloc extends Bloc<CartEvent, CartState> {
     on<UpdateCartItemQuantityEvent>(_onUpdateCartItemQuantity);
     on<ClearCartEvent>(_onClearCart);
     on<LoadCartEvent>(_onLoadCart);
+    on<BidApprovedEvent>(_onBidApproved);
   }
 
   Future<void> _onAddToCart(
@@ -529,5 +547,89 @@ class CartBloc extends Bloc<CartEvent, CartState> {
         ),
       );
     }
+  }
+
+  void _onBidApproved(
+    BidApprovedEvent event,
+    Emitter<CartState> emit,
+  ) {
+    final currentState = state;
+    if (currentState is! CartLoaded) return;
+
+    int index = -1;
+    final updatedItems = List<CartItem>.from(currentState.items);
+
+    // Normalized helpers
+    String norm(String s) => s.trim();
+    final normProductId = norm(event.productId);
+    final normAgentId = norm(event.agentId);
+
+    bool matches(CartItem item) {
+      // Optional agent filter: if event has agentId, prefer same agent, otherwise ignore
+      final agentOk = normAgentId.isEmpty || norm(item.agentId) == normAgentId;
+      if (!agentOk) return false;
+
+      final itemId = norm(item.id);
+      if (itemId == normProductId) return true;
+
+      // Handle IDs with commas (e.g., "<id>,<variant>")
+      final prodParts = normProductId.split(',');
+      if (prodParts.isNotEmpty) {
+        final firstSeg = prodParts.first;
+        final lastSeg = prodParts.last;
+        if (itemId == firstSeg || itemId == lastSeg) return true;
+      }
+
+      // Handle composite IDs like "<agentId>_<productId>"
+      if (normProductId.contains('_')) {
+        final parts = normProductId.split('_');
+        final last = parts.isNotEmpty ? parts.last : normProductId;
+        if (itemId == last) return true;
+        if (parts.length == 2) {
+          final maybeA = parts[0];
+          final maybeB = parts[1];
+          if (maybeA == normAgentId && maybeB == itemId) return true;
+          if (maybeB == normAgentId && maybeA == itemId) return true;
+        }
+      }
+
+      // Some items may embed IDs in the item itself (e.g., item.id has commas)
+      if (itemId.contains(',')) {
+        final itemParts = itemId.split(',');
+        if (itemParts.first == normProductId || itemParts.last == normProductId) {
+          return true;
+        }
+      }
+
+      // Fallback: match by product name if provided
+      if (event.productName != null && event.productName!.isNotEmpty) {
+        if (item.product.productName.trim().toLowerCase() ==
+            event.productName!.trim().toLowerCase()) {
+          return true;
+        }
+      }
+
+      return false;
+    }
+
+    index = updatedItems.indexWhere(matches);
+    if (index == -1) return; // no matching item found
+
+    final existing = updatedItems[index];
+    updatedItems[index] = existing.copyWith(
+      bidAmount: event.bidAmount,
+      hasValidBid: true,
+    );
+
+    final newTotalItems = updatedItems.fold(0, (sum, i) => sum + i.quantity);
+    final newTotalPrice = updatedItems.fold(0.0, (sum, i) => sum + i.totalPrice);
+
+    emit(
+      currentState.copyWith(
+        items: updatedItems,
+        totalItems: newTotalItems,
+        totalPrice: newTotalPrice,
+      ),
+    );
   }
 }
