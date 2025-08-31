@@ -259,94 +259,120 @@ class _AgentProfileState extends State<AgentProfile>
                 ],
               ),
               child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Avatar with enhanced design
-                  Container(
-                    padding: const EdgeInsets.all(4),
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [Color(0xFFA342FF), Color(0xFFE54D60)],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                      borderRadius: BorderRadius.circular(60),
-                      boxShadow: [
-                        BoxShadow(
-                          color: const Color(0xFFA342FF).withOpacity(0.3),
-                          blurRadius: 20,
-                          offset: const Offset(0, 8),
+                  // LinkedIn-like header: photo left, identity right
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(3),
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            colors: [Color(0xFFA342FF), Color(0xFFE54D60)],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                          borderRadius: BorderRadius.circular(56),
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xFFA342FF).withOpacity(0.25),
+                              blurRadius: 14,
+                              offset: const Offset(0, 6),
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
-                    child: CircleAvatar(
-                      radius: 56,
-                      backgroundColor: const Color(0xFFF5F5F5),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(56),
-                        child: Image.asset(
-                          'assets/avtar_agent.png',
-                          width: 112,
-                          height: 112,
-                          fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) {
-                            // Fallback to initials if asset fails to load
-                            return Text(
-                              _getInitials(agent['name'] ?? 'A'),
+                        child: CircleAvatar(
+                          radius: 52,
+                          backgroundColor: const Color(0xFFF5F5F5),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(52),
+                            child: Image.asset(
+                              'assets/avtar_agent.png',
+                              width: 104,
+                              height: 104,
+                              fit: BoxFit.cover,
+                              errorBuilder: (context, error, stackTrace) {
+                                return Text(
+                                  _getInitials(agent['name'] ?? 'A'),
+                                  style: const TextStyle(
+                                    fontSize: 24,
+                                    fontWeight: FontWeight.w700,
+                                    color: Color(0xFF666666),
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              agent['name'] ?? 'Agent Name',
                               style: const TextStyle(
-                                fontSize: 28,
-                                fontWeight: FontWeight.w700,
+                                fontSize: 22,
+                                fontWeight: FontWeight.w800,
+                                color: Color(0xFF1A1A1A),
+                                letterSpacing: -0.2,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              agent['company'] ?? 'Company',
+                              style: const TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
                                 color: Color(0xFF666666),
                               ),
-                            );
-                          },
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              (agent['location'] ?? 'Location not available')
+                                  .toString(),
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: Color(0xFF8A8A8A),
+                              ),
+                            ),
+                          ],
                         ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  // LinkedIn-style inline identity block (name, headline, location)
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      Text(
-                        agent['name'] ?? 'Agent Name',
-                        style: const TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.w800,
-                          color: Color(0xFF1A1A1A),
-                          letterSpacing: -0.2,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        agent['company'] ?? 'Company',
-                        style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: Color(0xFF666666),
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        (agent['location'] ?? 'Location not available')
-                            .toString(),
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: Color(0xFF8A8A8A),
-                        ),
-                        textAlign: TextAlign.center,
                       ),
                     ],
                   ),
-                  const SizedBox(height: 20),
-                  // Categories section
+                  const SizedBox(height: 14),
+                  // Description/About section just below header
+                  if ((agent['description'] ?? agent['bio'] ?? agent['about']) !=
+                      null)
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF8F8F8),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        (agent['description'] ??
+                                agent['bio'] ??
+                                agent['about'])
+                            .toString(),
+                        style: const TextStyle(
+                          fontSize: 13,
+                          color: Color(0xFF555555),
+                          height: 1.35,
+                        ),
+                      ),
+                    ),
+                  const SizedBox(height: 16),
+                  // Services section (categories)
                   if (!isLoadingCategories && categories.isNotEmpty) ...[
                     const Align(
                       alignment: Alignment.centerLeft,
                       child: Text(
-                        'Expertise',
+                        'Services',
                         style: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.w700,
