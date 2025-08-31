@@ -74,13 +74,13 @@ class LookBooksListView extends StatelessWidget {
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: Container(
+                child: SizedBox(
                   height: 260,
-                  padding: const EdgeInsets.all(8.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
+                  child: Padding(
+                    padding: const EdgeInsets.all(8.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
                       // Lookbook preview grid
                       SizedBox(
                         height: 160,
@@ -181,36 +181,37 @@ class LookBooksListView extends StatelessWidget {
                           },
                         ),
                       ),
-                      const SizedBox(height: 16),
-                      // Lookbook info
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisAlignment: MainAxisAlignment.start,
-                          children: [
-                            Text(
-                              lookbook.lookbookName,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w600,
-                                fontSize: 16,
+                        const SizedBox(height: 12),
+                        // Lookbook info
+                        Flexible(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisAlignment: MainAxisAlignment.start,
+                            children: [
+                              Text(
+                                lookbook.lookbookName,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 16,
+                                ),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
                               ),
-                              maxLines: 3,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              "Last updated: ${timeago.format(lookbook.createdAt)}",
-                              style: const TextStyle(
-                                fontSize: 12,
-                                color: Color(0xFF637087),
+                              const SizedBox(height: 6),
+                              Text(
+                                "Last updated: ${timeago.format(lookbook.createdAt)}",
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: Color(0xFF637087),
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                               ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ),

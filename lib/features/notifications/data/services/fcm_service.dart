@@ -6,6 +6,9 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:get_it/get_it.dart';
 import '../../../discover/presentation/bloc/cart_bloc.dart';
+import 'notification_service.dart';
+import '../../../../core/routing/navigation_service.dart';
+import 'package:get_it/get_it.dart' as di;
 
 class FCMService {
   static final FCMService _instance = FCMService._internal();
@@ -37,6 +40,14 @@ class FCMService {
       // Foreground data message handling
       FirebaseMessaging.onMessage.listen(_onMessage);
 
+      // iOS: ensure foreground notifications are displayed when sent with notification payload
+      await FirebaseMessaging.instance
+          .setForegroundNotificationPresentationOptions(
+        alert: true,
+        badge: true,
+        sound: true,
+      );
+
       _isInitialized = true;
       debugPrint('FCM Service initialized successfully');
     } catch (e) {
@@ -48,28 +59,70 @@ class FCMService {
   void _onMessage(RemoteMessage message) {
     try {
       final data = message.data;
+      debugPrint('FCM onMessage data: $data');
       final type = data['type']?.toString();
 
-      if (type == 'bid_approved') {
-        final agentId = data['agentId']?.toString() ?? '';
-        final productId = data['productId']?.toString() ?? '';
-        final bidAmount = double.tryParse(data['bidAmount']?.toString() ?? '');
+      // Accept explicit type or infer from presence of bid payload
+      final agentId = (data['agentId'] ?? data['agent_id'] ?? '').toString();
+      final productId = (data['productId'] ?? data['product_id'] ?? data['id'] ?? data['sku'] ?? '').toString();
+      final productName = data['productName']?.toString();
 
-        if (agentId.isEmpty || productId.isEmpty || bidAmount == null) return;
+      // Try to parse values from common keys
+      double? discountAmount = double.tryParse(data['discount']?.toString() ?? '');
+      discountAmount ??=
+          double.tryParse(data['discountAmount']?.toString() ?? '');
+      discountAmount ??=
+          double.tryParse(data['bidAmount']?.toString() ?? ''); // legacy
 
+      final productPrice = double.tryParse(data['productPrice']?.toString() ?? '')
+          ?? double.tryParse(data['price']?.toString() ?? '');
+      final bidPrice = double.tryParse(data['bidPrice']?.toString() ?? '')
+          ?? double.tryParse(data['offerPrice']?.toString() ?? '')
+          ?? double.tryParse(data['finalPrice']?.toString() ?? '');
+
+      // Derive discount from price fields if available
+      double? derivedDiscount;
+      if (productPrice != null && bidPrice != null) {
+        derivedDiscount = (productPrice - bidPrice).clamp(0, double.infinity);
+      }
+
+      final effectiveDiscount = derivedDiscount ?? discountAmount;
+      final looksLikeBid =
+          agentId.isNotEmpty && productId.isNotEmpty && effectiveDiscount != null;
+
+      if (type == 'bid_approved' || looksLikeBid) {
         CartBloc? bloc;
         try {
           final instance = GetIt.instance<CartBloc>();
           if (!instance.isClosed) bloc = instance;
         } catch (_) {}
 
-        bloc?.add(
-          BidApprovedEvent(
-            agentId: agentId,
-            productId: productId,
-            bidAmount: bidAmount,
-          ),
-        );
+        if (bloc != null && looksLikeBid) {
+          bloc.add(
+            BidApprovedEvent(
+              agentId: agentId,
+              productId: productId,
+              bidAmount: effectiveDiscount!,
+              productName: productName,
+            ),
+          );
+
+          // Optional: show a foreground banner so user sees something immediately
+          NotificationService().showLocalNotification(
+            id: 'bid_${productId}_${DateTime.now().millisecondsSinceEpoch}',
+            title: 'Bid received',
+            body: derivedDiscount != null && productPrice != null && bidPrice != null
+                ? 'New price \$${bidPrice.toStringAsFixed(2)} (saved \$${derivedDiscount.toStringAsFixed(2)})'
+                : 'Discount \$${effectiveDiscount.toStringAsFixed(2)} applied',
+          );
+
+          // Optional quick action: navigate to cart or product detail if desired
+          try {
+            final nav = di.GetIt.instance<NavigationService>();
+            // Navigate to a cart or product route if you have named routes set up
+            // nav.navigateTo('cart');
+          } catch (_) {}
+        }
       }
     } catch (_) {}
   }
