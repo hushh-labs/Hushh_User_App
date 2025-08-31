@@ -48,6 +48,15 @@ class FCMService {
         sound: true,
       );
 
+      // Handle notification taps when app is in background/resumed
+      FirebaseMessaging.onMessageOpenedApp.listen(_onMessageOpened);
+
+      // Handle the case when the app was launched by tapping a notification
+      final initialMessage = await FirebaseMessaging.instance.getInitialMessage();
+      if (initialMessage != null) {
+        _onMessageOpened(initialMessage);
+      }
+
       _isInitialized = true;
       debugPrint('FCM Service initialized successfully');
     } catch (e) {
@@ -124,6 +133,54 @@ class FCMService {
           } catch (_) {}
         }
       }
+    } catch (_) {}
+  }
+
+  void _onMessageOpened(RemoteMessage message) {
+    // For tap actions outside the app: apply discount and optionally navigate
+    try {
+      final data = message.data;
+      final agentId = (data['agentId'] ?? data['agent_id'] ?? '').toString();
+      final productId = (data['productId'] ?? data['product_id'] ?? data['id'] ?? data['sku'] ?? '').toString();
+      final productName = data['productName']?.toString();
+
+      double? discountAmount = double.tryParse(data['discount']?.toString() ?? '');
+      discountAmount ??= double.tryParse(data['discountAmount']?.toString() ?? '');
+      discountAmount ??= double.tryParse(data['bidAmount']?.toString() ?? '');
+
+      final productPrice = double.tryParse(data['productPrice']?.toString() ?? '')
+          ?? double.tryParse(data['price']?.toString() ?? '');
+      final bidPrice = double.tryParse(data['bidPrice']?.toString() ?? '')
+          ?? double.tryParse(data['offerPrice']?.toString() ?? '')
+          ?? double.tryParse(data['finalPrice']?.toString() ?? '');
+      double? derivedDiscount;
+      if (productPrice != null && bidPrice != null) {
+        derivedDiscount = (productPrice - bidPrice).clamp(0, double.infinity);
+      }
+      final effectiveDiscount = derivedDiscount ?? discountAmount;
+
+      if (agentId.isEmpty || productId.isEmpty || effectiveDiscount == null) return;
+
+      CartBloc? bloc;
+      try {
+        final instance = GetIt.instance<CartBloc>();
+        if (!instance.isClosed) bloc = instance;
+      } catch (_) {}
+
+      bloc?.add(
+        BidApprovedEvent(
+          agentId: agentId,
+          productId: productId,
+          bidAmount: effectiveDiscount,
+          productName: productName,
+        ),
+      );
+
+      // Optional: navigate to cart
+      try {
+        final nav = di.GetIt.instance<NavigationService>();
+        // nav.navigateTo('cart');
+      } catch (_) {}
     } catch (_) {}
   }
 

@@ -16,7 +16,9 @@ import 'features/notifications/di/notification_module.dart';
 import 'features/chat/di/chat_module.dart';
 import 'shared/di/dependencies.dart';
 import 'shared/utils/app_local_storage.dart';
+import 'features/notifications/data/services/notification_service.dart';
 import 'features/discover/presentation/bloc/cart_bloc.dart';
+import 'features/notifications/domain/repositories/notification_repository.dart';
 
 final GetIt getIt = GetIt.instance;
 
@@ -38,6 +40,13 @@ Future<void> mainApp() async {
   NotificationModule.register();
   ChatModule.init();
   setupDependencies();
+
+  // Initialize local notifications/channels early
+  try {
+    // NotificationRepository is registered in NotificationModule
+    final notificationRepo = getIt<NotificationRepository>();
+    await NotificationService().initialize(notificationRepo);
+  } catch (_) {}
 
   runApp(const MyApp());
 }

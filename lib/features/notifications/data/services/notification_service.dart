@@ -42,6 +42,43 @@ class NotificationService {
       initializationSettings,
       onDidReceiveNotificationResponse: _onNotificationTapped,
     );
+
+    // Create Android notification channels required for OS-displayed notifications
+    final androidPlugin = _localNotifications
+        .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin>();
+
+    if (androidPlugin != null) {
+      // Default channel
+      await androidPlugin.createNotificationChannel(
+        const AndroidNotificationChannel(
+          'default_channel',
+          'Default Channel',
+          description: 'Default notification channel',
+          importance: Importance.max,
+        ),
+      );
+
+      // Bid notifications channel (used by FCM android.notification.channelId)
+      await androidPlugin.createNotificationChannel(
+        const AndroidNotificationChannel(
+          'bid_notifications',
+          'Bid Notifications',
+          description: 'Notifications for agent bids and hushh coins offers',
+          importance: Importance.high,
+        ),
+      );
+
+      // Cart notifications channel
+      await androidPlugin.createNotificationChannel(
+        const AndroidNotificationChannel(
+          'cart_notifications',
+          'Cart Notifications',
+          description: 'Notifications when items are added to cart',
+          importance: Importance.high,
+        ),
+      );
+    }
   }
 
   Future<void> _onNotificationTapped(NotificationResponse response) async {
