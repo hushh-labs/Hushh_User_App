@@ -16,6 +16,9 @@ import 'features/notifications/di/notification_module.dart';
 import 'features/chat/di/chat_module.dart';
 import 'shared/di/dependencies.dart';
 import 'shared/utils/app_local_storage.dart';
+import 'features/notifications/data/services/notification_service.dart';
+import 'features/discover/presentation/bloc/cart_bloc.dart';
+import 'features/notifications/domain/repositories/notification_repository.dart';
 
 final GetIt getIt = GetIt.instance;
 
@@ -38,6 +41,13 @@ Future<void> mainApp() async {
   ChatModule.init();
   setupDependencies();
 
+  // Initialize local notifications/channels early
+  try {
+    // NotificationRepository is registered in NotificationModule
+    final notificationRepo = getIt<NotificationRepository>();
+    await NotificationService().initialize(notificationRepo);
+  } catch (_) {}
+
   runApp(const MyApp());
 }
 
@@ -49,6 +59,8 @@ class MyApp extends StatelessWidget {
     return MultiBlocProvider(
       providers: [
         BlocProvider<AuthBloc>(create: (context) => getIt<AuthBloc>()),
+        // Provide CartBloc globally so cart is always available across pages
+        BlocProvider<CartBloc>.value(value: getIt<CartBloc>()),
       ],
       child: BlocListener<AuthBloc, AuthState>(
         listener: (context, state) {

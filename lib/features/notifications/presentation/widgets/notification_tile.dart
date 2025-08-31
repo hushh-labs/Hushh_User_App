@@ -26,7 +26,7 @@ class NotificationTile extends StatelessWidget {
         padding: const EdgeInsets.only(right: 16),
         child: const Icon(Icons.delete, color: Colors.white),
       ),
-      child: ListTile(
+      child: ExpansionTile(
         leading: _buildLeadingIcon(),
         title: Text(
           notification.title,
@@ -36,38 +36,54 @@ class NotificationTile extends StatelessWidget {
                 : FontWeight.bold,
           ),
         ),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              notification.body,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
-            const SizedBox(height: 4),
-            Row(
+        trailing: _buildTrailingWidget(),
+        // Make tile expand/collapse, but allow icon press to open order details
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(left: 16, right: 16, bottom: 12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(
-                  _getTypeIcon(notification.type),
-                  size: 12,
-                  color: Colors.grey,
+                // Clickable icon area to open details
+                Row(
+                  children: [
+                    GestureDetector(
+                      onTap: onTap,
+                      child: _buildLeadingIcon(),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        notification.body,
+                        style: const TextStyle(fontSize: 14),
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 4),
-                Text(
-                  _getTypeText(notification.type),
-                  style: const TextStyle(fontSize: 12, color: Colors.grey),
-                ),
-                const Spacer(),
-                Text(
-                  _formatDate(notification.createdAt),
-                  style: const TextStyle(fontSize: 12, color: Colors.grey),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Icon(
+                      _getTypeIcon(notification.type),
+                      size: 12,
+                      color: Colors.grey,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      _getTypeText(notification.type),
+                      style: const TextStyle(fontSize: 12, color: Colors.grey),
+                    ),
+                    const Spacer(),
+                    Text(
+                      _formatDate(notification.createdAt),
+                      style: const TextStyle(fontSize: 12, color: Colors.grey),
+                    ),
+                  ],
                 ),
               ],
             ),
-          ],
-        ),
-        trailing: _buildTrailingWidget(),
-        onTap: onTap,
+          ),
+        ],
       ),
     );
   }
