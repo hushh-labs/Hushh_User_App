@@ -2,19 +2,16 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:http/http.dart' as http;
+// import 'package:http/http.dart' as http; // Not needed - using googleapis_auth client
+import 'package:googleapis_auth/auth_io.dart';
 import 'package:hushh_user_app/shared/constants/firestore_constants.dart';
 import 'package:hushh_user_app/features/pda/data/data_sources/pda_data_source.dart';
 import 'package:hushh_user_app/features/pda/data/models/pda_message_model.dart';
+import 'package:hushh_user_app/features/pda/data/config/vertex_ai_config.dart';
 
-class PdaFirebaseDataSourceImpl implements PdaDataSource {
+class PdaVertexAiDataSourceImpl implements PdaDataSource {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
-
-  // Gemini API key
-  static const String _geminiApiKey = 'AIzaSyD192xVzwNr_C4pwgGHenWpuPVOIH5Pa4w';
-  static const String _geminiApiUrl =
-      'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
 
   // Helper method to check authentication state
   String? _getCurrentUserId() {
@@ -25,6 +22,18 @@ class PdaFirebaseDataSourceImpl implements PdaDataSource {
       );
     }
     return currentUserId;
+  }
+
+  // Get authenticated HTTP client for Vertex AI
+  Future<AuthClient> _getAuthenticatedClient() async {
+    final serviceAccountCredentials = ServiceAccountCredentials.fromJson(
+      jsonDecode(VertexAiConfig.serviceAccountKey),
+    );
+
+    return clientViaServiceAccount(
+      serviceAccountCredentials,
+      VertexAiConfig.scopes,
+    );
   }
 
   @override
@@ -40,14 +49,14 @@ class PdaFirebaseDataSourceImpl implements PdaDataSource {
           .doc(currentUserId)
           .collection('pda_messages')
           .orderBy('timestamp', descending: true)
-          .limit(100)
+          .limit(VertexAiConfig.maxStoredMessages)
           .get();
 
       return querySnapshot.docs
           .map((doc) => PdaMessageModel.fromJson({'id': doc.id, ...doc.data()}))
           .toList();
     } catch (e) {
-      debugPrint('❌ [PDA FIREBASE] Error getting messages: $e');
+      debugPrint('❌ [PDA VERTEX AI] Error getting messages: $e');
       throw Exception('Failed to get messages: $e');
     }
   }
@@ -67,7 +76,7 @@ class PdaFirebaseDataSourceImpl implements PdaDataSource {
           .doc(message.id)
           .set(message.toJson());
     } catch (e) {
-      debugPrint('❌ [PDA FIREBASE] Error saving message: $e');
+      debugPrint('❌ [PDA VERTEX AI] Error saving message: $e');
       throw Exception('Failed to save message: $e');
     }
   }
@@ -87,7 +96,7 @@ class PdaFirebaseDataSourceImpl implements PdaDataSource {
           .doc(messageId)
           .delete();
     } catch (e) {
-      debugPrint('❌ [PDA FIREBASE] Error deleting message: $e');
+      debugPrint('❌ [PDA VERTEX AI] Error deleting message: $e');
       throw Exception('Failed to delete message: $e');
     }
   }
@@ -100,19 +109,20 @@ class PdaFirebaseDataSourceImpl implements PdaDataSource {
         throw Exception('User not authenticated');
       }
 
+      final batch = _firestore.batch();
       final querySnapshot = await _firestore
           .collection(FirestoreCollections.users)
           .doc(currentUserId)
           .collection('pda_messages')
           .get();
 
-      final batch = _firestore.batch();
       for (final doc in querySnapshot.docs) {
         batch.delete(doc.reference);
       }
+
       await batch.commit();
     } catch (e) {
-      debugPrint('❌ [PDA FIREBASE] Error clearing messages: $e');
+      debugPrint('❌ [PDA VERTEX AI] Error clearing messages: $e');
       throw Exception('Failed to clear messages: $e');
     }
   }
@@ -128,38 +138,41 @@ class PdaFirebaseDataSourceImpl implements PdaDataSource {
         throw Exception('User not authenticated');
       }
 
+      // Validate Vertex AI configuration
+      if (!VertexAiConfig.isConfigured) {
+        throw Exception(
+          'Vertex AI is not properly configured. Please check your .env file and ensure VERTEX_AI_PROJECT_ID and VERTEX_AI_SERVICE_ACCOUNT_KEY are set.',
+        );
+      }
+
       // Get user context from Firebase
       final userContext = await getUserContext(currentUserId);
 
-      // Prepare conversation history (not used in current implementation but kept for future use)
-      // final conversationHistory = context
-      //     .take(10) // Limit to last 10 messages for context
-      //     .map(
-      //       (msg) => {
-      //         'role': msg.isFromUser ? 'user' : 'assistant',
-      //         'parts': [
-      //           {'text': msg.content},
-      //         ],
-      //       },
-      //     )
-      //     .toList();
+      // Get authenticated client
+      final client = await _getAuthenticatedClient();
 
-      // Prepare the request body
+      // Prepare the request URL for Vertex AI Claude
+      final url =
+          'https://${VertexAiConfig.location}-aiplatform.googleapis.com/v1/projects/${VertexAiConfig.projectId}/locations/${VertexAiConfig.location}/publishers/anthropic/models/${VertexAiConfig.model}:streamRawPredict';
+
+      // Prepare conversation history for Claude
+      final conversationHistory = _formatConversationForClaude(context);
+
+      // Prepare the request body for Claude via Vertex AI streamRawPredict endpoint
       final requestBody = {
-        'contents': [
+        'anthropic_version': VertexAiConfig.anthropicVersion,
+        'messages': [
           {
             'role': 'user',
-            'parts': [
-              {
-                'text':
-                    '''
+            'content':
+                '''
 You are Hush, a personal digital assistant for the Hushh app - a platform that connects users with agents who sell products and services. You help users navigate the app, understand features, and get the most out of their Hushh experience.
 
 User Context:
 ${_formatUserContext(userContext)}
 
 Conversation History:
-${_formatConversationHistory(context)}
+$conversationHistory
 
 Current Message: $message
 
@@ -172,43 +185,47 @@ Please provide helpful responses related to:
 - General questions about the Hushh platform
 
 Keep responses relevant to the Hushh app ecosystem and user experience. If the user asks about unrelated topics, politely redirect them to Hushh-related assistance.
+
+Be conversational, helpful, and concise in your responses.
 ''',
-              },
-            ],
           },
         ],
-        'generationConfig': {
-          'temperature': 0.7,
-          'topK': 40,
-          'topP': 0.95,
-          'maxOutputTokens': 1024,
-        },
+        'max_tokens': VertexAiConfig.maxTokens,
+        'temperature': VertexAiConfig.temperature,
+        'top_p': VertexAiConfig.topP,
+        'top_k': VertexAiConfig.topK,
       };
 
-      final response = await http.post(
-        Uri.parse('$_geminiApiUrl?key=$_geminiApiKey'),
+      final response = await client.post(
+        Uri.parse(url),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode(requestBody),
       );
 
+      // Close the authenticated client
+      client.close();
+
       if (response.statusCode == 200) {
         final responseData = jsonDecode(response.body);
-        final candidates = responseData['candidates'] as List;
-        if (candidates.isNotEmpty) {
-          final content = candidates.first['content'];
-          final parts = content['parts'] as List;
-          if (parts.isNotEmpty) {
-            return parts.first['text'] as String;
+
+        // Parse Claude streamRawPredict response format
+        if (responseData['content'] != null &&
+            responseData['content'] is List &&
+            (responseData['content'] as List).isNotEmpty) {
+          final content = responseData['content'][0];
+          if (content['text'] != null) {
+            return content['text'] as String;
           }
         }
-        throw Exception('Invalid response format from Gemini API');
+
+        throw Exception('Invalid response format from Vertex AI API');
       } else {
         throw Exception(
-          'Gemini API error: ${response.statusCode} - ${response.body}',
+          'Vertex AI Claude API error: ${response.statusCode} - ${response.body}',
         );
       }
     } catch (e) {
-      debugPrint('❌ [PDA FIREBASE] Error sending to Gemini: $e');
+      debugPrint('❌ [PDA VERTEX AI] Error sending to Claude: $e');
       throw Exception('Failed to get response from AI: $e');
     }
   }
@@ -216,7 +233,7 @@ Keep responses relevant to the Hushh app ecosystem and user experience. If the u
   @override
   Future<void> prewarmUserContext(String hushhId) async {
     debugPrint(
-      '🚀 [PDA PREWARM] Starting PDA context prewarming for user: $hushhId',
+      '🚀 [PDA PREWARM] Starting PDA context prewarming for user: \$hushhId',
     );
     try {
       final currentUserId = _getCurrentUserId();
@@ -249,7 +266,7 @@ Keep responses relevant to the Hushh app ecosystem and user experience. If the u
           .get();
 
       if (!userDoc.exists) {
-        debugPrint('⚠️ [PDA FIREBASE] User document not found');
+        debugPrint('⚠️ [PDA VERTEX AI] User document not found');
         return {};
       }
 
@@ -261,7 +278,7 @@ Keep responses relevant to the Hushh app ecosystem and user experience. If the u
           .doc(currentUserId)
           .collection('pda_messages')
           .orderBy('timestamp', descending: true)
-          .limit(20)
+          .limit(VertexAiConfig.maxRecentMessages)
           .get();
 
       final recentMessages = messagesQuery.docs
@@ -274,7 +291,7 @@ Keep responses relevant to the Hushh app ecosystem and user experience. If the u
         'timestamp': DateTime.now().toIso8601String(),
       };
     } catch (e) {
-      debugPrint('❌ [PDA FIREBASE] Error getting user context: $e');
+      debugPrint('❌ [PDA VERTEX AI] Error getting user context: $e');
       return {};
     }
   }
@@ -285,19 +302,40 @@ Keep responses relevant to the Hushh app ecosystem and user experience. If the u
     final userProfile = context['user_profile'] as Map<String, dynamic>?;
     if (userProfile == null) return 'No user profile available.';
 
+    final name =
+        (userProfile['name'] ?? userProfile['fullName']) ?? 'Not provided';
+    final email = userProfile['email'] ?? 'Not provided';
+    final createdAt = userProfile['createdAt'] ?? 'Not provided';
+    final updatedAt =
+        (userProfile['updatedAt'] ?? userProfile['updated_at']) ??
+        'Not provided';
+    final phoneNumber = userProfile['phoneNumber'] ?? 'Not provided';
+    final isActive = userProfile['isActive'];
+    final isPhoneVerified = userProfile['isPhoneVerified'];
+    final platform = userProfile['platform'] ?? 'Not provided';
+    final userId =
+        (userProfile['userId'] ?? userProfile['id']) ?? 'Not provided';
+
     return '''
-Name: ${userProfile['name'] ?? 'Not provided'}
-Email: ${userProfile['email'] ?? 'Not provided'}
-Created: ${userProfile['createdAt'] ?? 'Not provided'}
-Last Updated: ${userProfile['updatedAt'] ?? 'Not provided'}
+Name: $name
+Email: $email
+Phone: $phoneNumber
+User ID: $userId
+Platform: $platform
+Active: ${isActive is bool ? (isActive ? 'true' : 'false') : (isActive?.toString() ?? 'Not provided')}
+Phone Verified: ${isPhoneVerified is bool ? (isPhoneVerified ? 'true' : 'false') : (isPhoneVerified?.toString() ?? 'Not provided')}
+Account Created: $createdAt
+Last Updated: $updatedAt
 ''';
   }
 
-  String _formatConversationHistory(List<PdaMessageModel> context) {
+  String _formatConversationForClaude(List<PdaMessageModel> context) {
     if (context.isEmpty) return 'No conversation history.';
 
     return context
-        .take(5) // Limit to last 5 messages for brevity
+        .take(
+          VertexAiConfig.maxConversationHistory,
+        ) // Limit to last messages for brevity
         .map(
           (msg) => '${msg.isFromUser ? 'User' : 'Assistant'}: ${msg.content}',
         )

@@ -30,15 +30,15 @@ class PdaSendMessageUseCase {
       );
     }
 
-    // Send to Gemini and get response
-    final geminiResult = await repository.sendToGemini(message, context);
-    if (geminiResult.isLeft()) {
+    // Send to Vertex AI Claude and get response
+    final vertexAiResult = await repository.sendToVertexAI(message, context);
+    if (vertexAiResult.isLeft()) {
       return Left(
-        geminiResult.fold((error) => error, (r) => throw Exception()),
+        vertexAiResult.fold((error) => error, (r) => throw Exception()),
       );
     }
 
-    final geminiResponse = geminiResult.fold(
+    final vertexAiResponse = vertexAiResult.fold(
       (error) => throw Exception(),
       (response) => response,
     );
@@ -47,7 +47,7 @@ class PdaSendMessageUseCase {
     final aiMessage = PdaMessage(
       id: const Uuid().v4(),
       hushhId: hushhId,
-      content: geminiResponse,
+      content: vertexAiResponse,
       isFromUser: false,
       timestamp: DateTime.now(),
     );

@@ -18,7 +18,6 @@ class PdaLoadingAnimation extends StatefulWidget {
 class _PdaLoadingAnimationState extends State<PdaLoadingAnimation>
     with TickerProviderStateMixin {
   late AnimationController _animationController;
-  bool _minimumTimeElapsed = false;
 
   @override
   void initState() {
@@ -36,9 +35,7 @@ class _PdaLoadingAnimationState extends State<PdaLoadingAnimation>
     // Set a timer for minimum 1.5 seconds - this is the ONLY thing that should end the animation
     Future.delayed(const Duration(milliseconds: 1500), () {
       if (mounted) {
-        setState(() {
-          _minimumTimeElapsed = true;
-        });
+        // Minimum time elapsed
         // Always complete after 1.5 seconds, regardless of loading state
         if (widget.onAnimationComplete != null) {
           _animationController.stop();
@@ -59,7 +56,7 @@ class _PdaLoadingAnimationState extends State<PdaLoadingAnimation>
   @override
   Widget build(BuildContext context) {
     return Center(
-      child: Container(
+      child: SizedBox(
         width: 350,
         height: 350,
         child: Center(

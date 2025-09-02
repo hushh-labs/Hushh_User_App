@@ -1,6 +1,6 @@
 import 'package:get_it/get_it.dart';
 import 'package:hushh_user_app/features/pda/data/data_sources/pda_data_source.dart';
-import 'package:hushh_user_app/features/pda/data/data_sources/pda_firebase_data_source_impl.dart';
+import 'package:hushh_user_app/features/pda/data/data_sources/pda_vertex_ai_data_source_impl.dart';
 import 'package:hushh_user_app/features/pda/data/repository_impl/pda_repository_impl.dart';
 import 'package:hushh_user_app/features/pda/domain/repository/pda_repository.dart';
 import 'package:hushh_user_app/features/pda/domain/usecases/clear_messages_use_case.dart';
@@ -15,7 +15,7 @@ class PdaModule {
 
     // Data Sources
     getIt.registerLazySingleton<PdaDataSource>(
-      () => PdaFirebaseDataSourceImpl(),
+      () => PdaVertexAiDataSourceImpl(),
     );
 
     // Repository

@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'app.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'features/notifications/data/services/notification_service.dart';
@@ -24,15 +25,21 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
       final productName = data['productName']?.toString() ?? 'Product';
       final agentName = data['agentName']?.toString() ?? 'Agent';
       final bidAmount = double.tryParse(data['bidAmount']?.toString() ?? '');
-      final productPrice = double.tryParse(data['productPrice']?.toString() ?? '');
-      final discountedPrice = double.tryParse(data['discountedPrice']?.toString() ?? '');
+      final productPrice = double.tryParse(
+        data['productPrice']?.toString() ?? '',
+      );
+      final discountedPrice = double.tryParse(
+        data['discountedPrice']?.toString() ?? '',
+      );
 
       title = 'Hushh Coins Offer!';
       if (bidAmount != null) {
-        body = '$agentName offered you \$${bidAmount.toStringAsFixed(2)} for $productName';
+        body =
+            '$agentName offered you \$${bidAmount.toStringAsFixed(2)} for $productName';
       } else if (productPrice != null && discountedPrice != null) {
         final save = (productPrice - discountedPrice).clamp(0, double.infinity);
-        body = '$agentName: new price \$${discountedPrice.toStringAsFixed(2)} (save \$${save.toStringAsFixed(2)}) for $productName';
+        body =
+            '$agentName: new price \$${discountedPrice.toStringAsFixed(2)} (save \$${save.toStringAsFixed(2)}) for $productName';
       } else {
         body = '$agentName sent you a bid for $productName';
       }
@@ -49,6 +56,18 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 void main() async {
   // Ensure binding is initialized before using any platform channels
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Load environment variables
+  try {
+    await dotenv.load(fileName: ".env");
+  } catch (e) {
+    // If .env file doesn't exist, continue with defaults
+    // This allows the app to run even without .env file
+    if (kDebugMode) {
+      print('Warning: .env file not found. Using default configuration.');
+    }
+  }
+
   // Override debugPrint function to capture all prints
   debugPrint = capturePrint;
 
