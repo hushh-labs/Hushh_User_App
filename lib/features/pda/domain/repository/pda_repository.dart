@@ -7,7 +7,7 @@ abstract class PdaRepository {
   Future<Either<Failure, void>> saveMessage(PdaMessage message);
   Future<Either<Failure, void>> deleteMessage(String messageId);
   Future<Either<Failure, void>> clearMessages(String userId);
-  Future<Either<Failure, String>> sendToGemini(
+  Future<Either<Failure, String>> sendToVertexAI(
     String message,
     List<PdaMessage> context,
   );

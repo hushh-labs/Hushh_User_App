@@ -54,7 +54,7 @@ class PdaRepositoryImpl implements PdaRepository {
   }
 
   @override
-  Future<Either<Failure, String>> sendToGemini(
+  Future<Either<Failure, String>> sendToVertexAI(
     String message,
     List<PdaMessage> context,
   ) async {
@@ -62,7 +62,7 @@ class PdaRepositoryImpl implements PdaRepository {
       final contextModels = context
           .map((msg) => PdaMessageModel.fromDomain(msg))
           .toList();
-      final response = await dataSource.sendToGemini(message, contextModels);
+      final response = await dataSource.sendToVertexAI(message, contextModels);
       return Right(response);
     } catch (e) {
       return Left(ServerFailure(e.toString()));

@@ -80,6 +80,13 @@ dependencies:
   # HTTP and Network dependencies
   http: ^1.1.2
   
+  # Google Cloud Vertex AI dependencies
+  googleapis_auth: ^1.6.0
+  googleapis: ^14.0.0
+  
+  # Environment variables support
+  flutter_dotenv: ^5.1.0
+  
   # File handling dependencies
   file_picker: ^10.2.0
   image_picker: ^1.0.7
@@ -168,6 +175,7 @@ flutter:
     - assets/logos/
     - assets/banner/
     - assets/animations/
+    - .env
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images
