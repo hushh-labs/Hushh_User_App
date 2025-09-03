@@ -36,7 +36,7 @@ class GmailConnectorService {
       try {
         // Using the Web Client ID for server-side token exchange
         // This should match your OAuth 2.0 Web client from Google Cloud Console
-        const webClientId = '53407187172-nremqtd8hlmnqbcc6jkfavlk6iljq803.apps.googleusercontent.com';
+        const webClientId = '53407187172-kg46cau2e5vomuuqvh3c9tndgeig9epd.apps.googleusercontent.com';
         
         _googleSignIn = GoogleSignIn(
           scopes: [
