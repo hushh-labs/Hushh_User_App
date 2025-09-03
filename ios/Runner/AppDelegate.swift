@@ -3,6 +3,7 @@ import UIKit
 import Firebase
 import FirebaseMessaging
 import UserNotifications
+import GoogleSignIn
 
 @main
 @objc class AppDelegate: FlutterAppDelegate {
@@ -61,6 +62,23 @@ import UserNotifications
     
     GeneratedPluginRegistrant.register(with: self)
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
+  }
+  
+  // Handle Google Sign-In URL scheme
+  override func application(_ app: UIApplication,
+                          open url: URL,
+                          options: [UIApplication.OpenURLOptionsKey : Any] = [:]) -> Bool {
+    print("=== URL SCHEME HANDLER CALLED ===")
+    print("URL: \(url)")
+    
+    // Handle Google Sign-In
+    if GIDSignIn.sharedInstance.handle(url) {
+      print("✅ Google Sign-In handled URL successfully")
+      return true
+    }
+    
+    // Fall back to super implementation for other URL schemes
+    return super.application(app, open: url, options: options)
   }
   
   // Handle APNS token registration

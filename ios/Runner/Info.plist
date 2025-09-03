@@ -29,6 +29,16 @@
 			<string>Editor</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
+				<!-- iOS OAuth Client ID from GoogleService-Info.plist -->
+				<string>com.googleusercontent.apps.53407187172-t9oqptv6mhqmrlf0rb3b50hfip2nmgm2</string>
+			</array>
+		</dict>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<!-- Web OAuth Client ID for server-side token exchange -->
 				<string>com.googleusercontent.apps.53407187172-nremqtd8hlmnqbcc6jkfavlk6iljq803</string>
 			</array>
 		</dict>
@@ -37,6 +47,7 @@
 			<string>Editor</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
+				<!-- Firebase Dynamic Links -->
 				<string>app-1-53407187172-ios-03a4f4a395604f9cb32cf1</string>
 			</array>
 		</dict>

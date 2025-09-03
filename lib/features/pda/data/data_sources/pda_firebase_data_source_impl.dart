@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:http/http.dart' as http;
 import 'package:hushh_user_app/shared/constants/firestore_constants.dart';
 import 'package:hushh_user_app/features/pda/data/data_sources/pda_data_source.dart';
@@ -10,6 +11,7 @@ import 'package:hushh_user_app/features/pda/data/models/pda_message_model.dart';
 class PdaFirebaseDataSourceImpl implements PdaDataSource {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
+  final FirebaseFunctions _functions = FirebaseFunctions.instance;
 
   // Gemini API key
   static const String _geminiApiKey = 'AIzaSyD192xVzwNr_C4pwgGHenWpuPVOIH5Pa4w';
@@ -225,6 +227,29 @@ Keep responses relevant to the Hushh app ecosystem and user experience. If the u
         return;
       }
 
+      // Call Cloud Function to prewarm PDA with email context
+      debugPrint('🧠 [PDA PREWARM] Calling prewarmPDA Cloud Function...');
+      final callable = _functions.httpsCallable('prewarmPDA');
+      final result = await callable.call();
+
+      final data = result.data as Map<String, dynamic>;
+
+      if (data['success'] == true) {
+        if (data['hasGmailData'] == true) {
+          debugPrint('✅ [PDA PREWARM] PDA prewarmed with email context');
+          debugPrint(
+            '📧 [PDA PREWARM] Email stats: ${data['context']?['emailStats']}',
+          );
+        } else {
+          debugPrint(
+            'ℹ️ [PDA PREWARM] PDA prewarmed without email data (Gmail not connected)',
+          );
+        }
+      } else {
+        debugPrint('⚠️ [PDA PREWARM] PDA prewarming completed with warnings');
+      }
+
+      // Also get local user context
       await getUserContext(currentUserId);
       debugPrint(
         '🚀 [PDA PREWARM] ✅ PDA context prewarming completed successfully',
@@ -268,9 +293,29 @@ Keep responses relevant to the Hushh app ecosystem and user experience. If the u
           .map((doc) => doc.data())
           .toList();
 
+      // Get email context from PDA context collection
+      Map<String, dynamic> emailContext = {};
+      try {
+        final pdaContextDoc = await _firestore
+            .collection('pdaContext')
+            .doc(currentUserId)
+            .get();
+
+        if (pdaContextDoc.exists) {
+          final pdaData = pdaContextDoc.data() as Map<String, dynamic>;
+          emailContext = pdaData['emailContext'] ?? {};
+          debugPrint(
+            '📧 [PDA CONTEXT] Email context loaded: ${emailContext['emailStats']?['totalMessages'] ?? 0} messages',
+          );
+        }
+      } catch (e) {
+        debugPrint('⚠️ [PDA CONTEXT] Could not load email context: $e');
+      }
+
       return {
         'user_profile': userData,
         'recent_messages': recentMessages,
+        'email_context': emailContext,
         'timestamp': DateTime.now().toIso8601String(),
       };
     } catch (e) {
@@ -285,11 +330,39 @@ Keep responses relevant to the Hushh app ecosystem and user experience. If the u
     final userProfile = context['user_profile'] as Map<String, dynamic>?;
     if (userProfile == null) return 'No user profile available.';
 
+    final emailContext = context['email_context'] as Map<String, dynamic>?;
+
+    String emailInfo = '';
+    if (emailContext != null && emailContext.isNotEmpty) {
+      final emailStats = emailContext['emailStats'] as Map<String, dynamic>?;
+      final emailInsights = emailContext['emailInsights'] as List<dynamic>?;
+
+      if (emailStats != null) {
+        emailInfo =
+            '''
+Email Data:
+- Total Threads: ${emailStats['totalThreads'] ?? 0}
+- Total Messages: ${emailStats['totalMessages'] ?? 0}
+- Recent Threads: ${emailStats['recentThreads'] ?? 0}
+- Recent Messages: ${emailStats['recentMessages'] ?? 0}
+''';
+      }
+
+      if (emailInsights != null && emailInsights.isNotEmpty) {
+        emailInfo += '\nEmail Insights:\n';
+        for (final insight in emailInsights.take(3)) {
+          emailInfo += '- ${insight['message']}\n';
+        }
+      }
+    }
+
     return '''
 Name: ${userProfile['name'] ?? 'Not provided'}
 Email: ${userProfile['email'] ?? 'Not provided'}
 Created: ${userProfile['createdAt'] ?? 'Not provided'}
 Last Updated: ${userProfile['updatedAt'] ?? 'Not provided'}
+
+$emailInfo
 ''';
   }
 
