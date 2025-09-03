@@ -17,6 +17,11 @@ class PdaModule {
     getIt.registerLazySingleton<PdaDataSource>(
       () => PdaVertexAiDataSourceImpl(),
     );
+    
+    // Register concrete implementation for email monitoring
+    getIt.registerLazySingleton<PdaVertexAiDataSourceImpl>(
+      () => getIt<PdaDataSource>() as PdaVertexAiDataSourceImpl,
+    );
 
     // Repository
     getIt.registerLazySingleton<PdaRepository>(

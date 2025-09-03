@@ -9,6 +9,8 @@ import 'package:hushh_user_app/features/pda/domain/usecases/get_messages_use_cas
 import 'package:hushh_user_app/features/pda/domain/usecases/clear_messages_use_case.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:hushh_user_app/features/pda/presentation/components/pda_loading_animation.dart';
+import 'package:hushh_user_app/shared/services/gmail_connector_service.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 
 import 'package:hushh_user_app/shared/utils/app_local_storage.dart';
 
@@ -23,11 +25,14 @@ class _PdaSimplePageState extends State<PdaSimplePage> {
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final GetIt _getIt = GetIt.instance;
+  final GmailConnectorService _gmailService = GmailConnectorService();
 
   List<PdaMessage> _messages = [];
   bool _isLoadingMessages =
       false; // Separate loading state for initial messages
   bool _isSendingMessage = false; // Separate loading state for sending
+  bool _isGmailConnected = false; // Gmail connection status
+  bool _isConnectingGmail = false; // Gmail connection loading state
   String? _error;
 
   // Single source of truth for suggestions - Hushh app specific options
@@ -54,6 +59,7 @@ class _PdaSimplePageState extends State<PdaSimplePage> {
   void initState() {
     super.initState();
     _loadMessages();
+    _checkGmailConnectionStatus();
     _messageController.addListener(_updateSendButtonState);
   }
 
@@ -232,6 +238,178 @@ class _PdaSimplePageState extends State<PdaSimplePage> {
         ],
       ),
     );
+  }
+
+  /// Check Gmail connection status on page load
+  Future<void> _checkGmailConnectionStatus() async {
+    try {
+      final isConnected = await _gmailService.isGmailConnected();
+      setState(() {
+        _isGmailConnected = isConnected;
+      });
+    } catch (e) {
+      debugPrint('Error checking Gmail connection status: $e');
+    }
+  }
+
+  /// Handle Gmail connection
+  Future<void> _onConnectGmailPressed() async {
+    if (_isGmailConnected) {
+      // If already connected, show sync option or disconnect
+      _showGmailOptionsDialog();
+      return;
+    }
+
+    setState(() {
+      _isConnectingGmail = true;
+      _error = null;
+    });
+
+    try {
+      final result = await _gmailService.connectGmail();
+      
+      if (result.isSuccess) {
+        setState(() {
+          _isGmailConnected = true;
+          _isConnectingGmail = false;
+        });
+        
+        // Show success message
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('✅ Gmail connected successfully! Your PDA will now have access to your email context.'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 3),
+          ),
+        );
+        
+        // Trigger initial sync
+        _triggerGmailSync();
+      } else {
+        setState(() {
+          _isConnectingGmail = false;
+          _error = 'Failed to connect Gmail: ${result.error}';
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _isConnectingGmail = false;
+        _error = 'An error occurred while connecting Gmail: $e';
+      });
+    }
+  }
+
+  /// Show Gmail options when already connected
+  void _showGmailOptionsDialog() {
+    showCupertinoDialog(
+      context: context,
+      builder: (context) => CupertinoAlertDialog(
+        title: const Text('Gmail Connected'),
+        content: const Text(
+          'Your Gmail is already connected. What would you like to do?',
+        ),
+        actions: [
+          CupertinoDialogAction(
+            onPressed: () {
+              Navigator.pop(context);
+              _triggerGmailSync();
+            },
+            child: const Text('Sync Now'),
+          ),
+          CupertinoDialogAction(
+            onPressed: () {
+              Navigator.pop(context);
+              _disconnectGmail();
+            },
+            isDestructiveAction: true,
+            child: const Text('Disconnect'),
+          ),
+          CupertinoDialogAction(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Trigger Gmail sync
+  Future<void> _triggerGmailSync() async {
+    try {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('🔄 Syncing Gmail...'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+
+      final result = await _gmailService.syncGmailNow();
+      
+      if (result.isSuccess) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              '✅ Gmail sync completed! Found ${result.threadsCount} email threads.',
+            ),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 3),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('⚠️ Gmail sync failed: ${result.error}'),
+            backgroundColor: Colors.orange,
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('❌ Error during Gmail sync: $e'),
+          backgroundColor: Colors.red,
+          duration: Duration(seconds: 3),
+        ),
+      );
+    }
+  }
+
+  /// Disconnect Gmail
+  Future<void> _disconnectGmail() async {
+    try {
+      final result = await _gmailService.disconnectGmail();
+      
+      if (result.isSuccess) {
+        setState(() {
+          _isGmailConnected = false;
+        });
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Gmail disconnected successfully'),
+            backgroundColor: Colors.blue,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to disconnect Gmail: ${result.error}'),
+            backgroundColor: Colors.red,
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error disconnecting Gmail: $e'),
+          backgroundColor: Colors.red,
+          duration: Duration(seconds: 3),
+        ),
+      );
+    }
   }
 
   @override
@@ -573,6 +751,17 @@ class _PdaSimplePageState extends State<PdaSimplePage> {
                     height: 1.6, // Improved line height
                   ),
                 ),
+                const SizedBox(height: 20),
+                _buildConnectGmailButton(),
+                const SizedBox(height: 6),
+                Text(
+                  'for personalised answers',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: Colors.grey[600],
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
                 const SizedBox(height: 32), // Increased space
                 // Feature highlights with a more refined look
                 Row(
@@ -596,6 +785,63 @@ class _PdaSimplePageState extends State<PdaSimplePage> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildConnectGmailButton() {
+    if (_isGmailConnected) {
+      return SizedBox(
+        width: double.infinity,
+        child: ElevatedButton.icon(
+          onPressed: _onConnectGmailPressed,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.green,
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+          icon: const Icon(Icons.check_circle_outline_rounded, size: 20),
+          label: const Text(
+            'Gmail Connected',
+            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+          ),
+        ),
+      );
+    }
+
+    return SizedBox(
+      width: double.infinity,
+      child: OutlinedButton.icon(
+        onPressed: _isConnectingGmail ? null : _onConnectGmailPressed,
+        style: OutlinedButton.styleFrom(
+          foregroundColor: primaryPurple,
+          side: BorderSide(
+            color: primaryPurple.withValues(alpha: 0.5),
+            width: 1,
+          ),
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          backgroundColor: Colors.white,
+        ),
+        icon: _isConnectingGmail
+            ? SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation<Color>(primaryPurple),
+                ),
+              )
+            : Icon(Icons.mail_outline_rounded, color: primaryPurple, size: 20),
+        label: Text(
+          _isConnectingGmail ? 'Connecting...' : 'Connect Gmail',
+          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+        ),
       ),
     );
   }

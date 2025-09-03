@@ -4,6 +4,7 @@ import 'package:get_it/get_it.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import 'core/config/firebase_init.dart';
+import 'core/config/supabase_init.dart';
 import 'core/routing/app_router.dart';
 import 'core/routing/route_paths.dart';
 import 'di/core_module.dart';
@@ -19,6 +20,8 @@ import 'shared/utils/app_local_storage.dart';
 import 'features/notifications/data/services/notification_service.dart';
 import 'features/discover/presentation/bloc/cart_bloc.dart';
 import 'features/notifications/domain/repositories/notification_repository.dart';
+import 'shared/services/gmail_connector_service.dart';
+import 'features/pda/data/data_sources/pda_vertex_ai_data_source_impl.dart';
 
 final GetIt getIt = GetIt.instance;
 
@@ -27,6 +30,9 @@ Future<void> mainApp() async {
 
   // Initialize Firebase
   await FirebaseInit.initialize();
+
+  // Initialize Supabase
+  await SupabaseInit.initialize();
 
   // Initialize guest mode state
   await AppLocalStorage.initializeGuestMode();
@@ -62,36 +68,7 @@ class MyApp extends StatelessWidget {
         // Provide CartBloc globally so cart is always available across pages
         BlocProvider<CartBloc>.value(value: getIt<CartBloc>()),
       ],
-      child: BlocListener<AuthBloc, AuthState>(
-        listener: (context, state) {
-          // Handle authentication state changes
-          if (state is SignedOutState) {
-            // Navigate to auth page when user signs out
-            AppRouter.router.go(RoutePaths.mainAuth);
-          } else if (state is AuthStateCheckedState) {
-            // Handle authentication state check
-            if (state.isAuthenticated && state.user != null) {
-              // User is authenticated, check if they have completed their profile
-              context.read<AuthBloc>().add(
-                CheckUserProfileCompletionEvent(state.user!.uid),
-              );
-            }
-          } else if (state is UserProfileCompletedState) {
-            // Handle user profile completion check result
-            if (state.isCompleted) {
-              // User has completed profile, navigate to discover page
-              AppRouter.router.go(RoutePaths.discover);
-            } else {
-              // User hasn't completed profile, navigate to create first card page
-              AppRouter.router.go(RoutePaths.createFirstCard);
-            }
-          } else if (state is UserProfileCheckFailureState) {
-            // Handle user profile check failure - default to create first card
-            AppRouter.router.go(RoutePaths.createFirstCard);
-          }
-        },
-        child: _AppContent(),
-      ),
+      child: _AppContent(),
     );
   }
 }
@@ -102,6 +79,9 @@ class _AppContent extends StatefulWidget {
 }
 
 class _AppContentState extends State<_AppContent> {
+  final GmailConnectorService _gmailService = GmailConnectorService();
+  PdaVertexAiDataSourceImpl? _pdaDataSource;
+
   @override
   void initState() {
     super.initState();
@@ -112,29 +92,120 @@ class _AppContentState extends State<_AppContent> {
   }
 
   @override
+  void dispose() {
+    _stopEmailMonitoring();
+    super.dispose();
+  }
+
+  /// Start email monitoring for real-time updates
+  Future<void> _startEmailMonitoring() async {
+    try {
+      debugPrint('📧 [APP] Starting Gmail email monitoring...');
+
+      // Start Gmail connector monitoring
+      await _gmailService.startEmailMonitoring();
+
+      // Start PDA email monitoring
+      try {
+        _pdaDataSource = getIt<PdaVertexAiDataSourceImpl>();
+        await _pdaDataSource?.startEmailMonitoring();
+      } catch (e) {
+        debugPrint('📧 [APP] PDA service not available: $e');
+      }
+
+      debugPrint('📧 [APP] Email monitoring started successfully');
+    } catch (e) {
+      debugPrint('❌ [APP] Error starting email monitoring: $e');
+    }
+  }
+
+  /// Stop email monitoring
+  void _stopEmailMonitoring() {
+    try {
+      debugPrint('📧 [APP] Stopping Gmail email monitoring...');
+
+      _gmailService.stopEmailMonitoring();
+      _pdaDataSource?.stopEmailMonitoring();
+      _pdaDataSource = null;
+
+      debugPrint('📧 [APP] Email monitoring stopped');
+    } catch (e) {
+      debugPrint('❌ [APP] Error stopping email monitoring: $e');
+    }
+  }
+
+  /// Prewarm PDA with user context and email data
+  Future<void> _prewarmPDA(String userId) async {
+    try {
+      debugPrint('🧠 [APP] Starting PDA prewarming for user: $userId');
+
+      // Get PDA data source and prewarm context
+      _pdaDataSource = getIt<PdaVertexAiDataSourceImpl>();
+      await _pdaDataSource?.prewarmUserContext(userId);
+
+      debugPrint('🧠 [APP] PDA prewarming completed');
+    } catch (e) {
+      debugPrint('❌ [APP] Error prewarming PDA: $e');
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return MaterialApp.router(
-      title: 'Hushh User App',
-      theme: ThemeData(
-        primarySwatch: Colors.blue,
-        useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFFA342FF),
-          primary: const Color(0xFFA342FF),
-          secondary: const Color(0xFFE54D60),
-        ),
-        elevatedButtonTheme: ElevatedButtonThemeData(
-          style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.white,
-            foregroundColor: Colors.black,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(8),
+    return BlocListener<AuthBloc, AuthState>(
+      listener: (context, state) {
+        // Handle authentication state changes
+        if (state is SignedOutState) {
+          // Stop email monitoring when user signs out
+          _stopEmailMonitoring();
+          // Navigate to auth page when user signs out
+          AppRouter.router.go(RoutePaths.mainAuth);
+        } else if (state is AuthStateCheckedState) {
+          // Handle authentication state check
+          if (state.isAuthenticated && state.user != null) {
+            // User is authenticated, start email monitoring and check profile completion
+            _startEmailMonitoring();
+            _prewarmPDA(state.user!.uid);
+            context.read<AuthBloc>().add(
+              CheckUserProfileCompletionEvent(state.user!.uid),
+            );
+          }
+        } else if (state is UserProfileCompletedState) {
+          // Handle user profile completion check result
+          if (state.isCompleted) {
+            // User has completed profile, navigate to discover page
+            AppRouter.router.go(RoutePaths.discover);
+          } else {
+            // User hasn't completed profile, navigate to create first card page
+            AppRouter.router.go(RoutePaths.createFirstCard);
+          }
+        } else if (state is UserProfileCheckFailureState) {
+          // Handle user profile check failure - default to create first card
+          AppRouter.router.go(RoutePaths.createFirstCard);
+        }
+      },
+      child: MaterialApp.router(
+        title: 'Hushh User App',
+        theme: ThemeData(
+          primarySwatch: Colors.blue,
+          useMaterial3: true,
+          colorScheme: ColorScheme.fromSeed(
+            seedColor: const Color(0xFFA342FF),
+            primary: const Color(0xFFA342FF),
+            secondary: const Color(0xFFE54D60),
+          ),
+          elevatedButtonTheme: ElevatedButtonThemeData(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.white,
+              foregroundColor: Colors.black,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
             ),
           ),
         ),
+        routerConfig: AppRouter.router,
+        debugShowCheckedModeBanner: false,
       ),
-      routerConfig: AppRouter.router,
-      debugShowCheckedModeBanner: false,
     );
   }
 }
