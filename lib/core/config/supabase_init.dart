@@ -5,6 +5,7 @@ class SupabaseInit {
   static Future<void> initialize() async {
     // Get credentials from .env file
     final supabaseUrl = dotenv.env['SUPABASE_URL'];
+    // Use anonymous key for client operations (RLS disabled on table)
     final supabaseAnonKey = dotenv.env['SUPABASE_ANON_KEY'];
 
     if (supabaseUrl == null || supabaseAnonKey == null) {

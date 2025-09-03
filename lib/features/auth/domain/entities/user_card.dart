@@ -3,6 +3,7 @@ class UserCard {
   final String userId;
   final String? email;
   final String? fullName;
+  final String? phoneNumber;
   final String? videoUrl;
   final DateTime? createdAt;
   final DateTime? updatedAt;
@@ -13,6 +14,7 @@ class UserCard {
     required this.userId,
     this.email,
     this.fullName,
+    this.phoneNumber,
     this.videoUrl,
     this.createdAt,
     this.updatedAt,
@@ -24,6 +26,7 @@ class UserCard {
     String? userId,
     String? email,
     String? fullName,
+    String? phoneNumber,
     String? videoUrl,
     DateTime? createdAt,
     DateTime? updatedAt,
@@ -34,6 +37,7 @@ class UserCard {
       userId: userId ?? this.userId,
       email: email ?? this.email,
       fullName: fullName ?? this.fullName,
+      phoneNumber: phoneNumber ?? this.phoneNumber,
       videoUrl: videoUrl ?? this.videoUrl,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
@@ -47,6 +51,7 @@ class UserCard {
       'userId': userId,
       'email': email,
       'fullName': fullName,
+      'phoneNumber': phoneNumber,
       'videoUrl': videoUrl,
       'createdAt': createdAt?.toIso8601String(),
       'updatedAt': updatedAt?.toIso8601String(),
@@ -60,6 +65,7 @@ class UserCard {
       userId: json['userId'] as String,
       email: json['email'] as String?,
       fullName: json['fullName'] as String?,
+      phoneNumber: json['phoneNumber'] as String?,
       videoUrl: json['videoUrl'] as String?,
       createdAt: json['createdAt'] != null
           ? DateTime.parse(json['createdAt'] as String)

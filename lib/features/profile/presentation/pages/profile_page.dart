@@ -12,6 +12,7 @@ import 'package:hushh_user_app/features/auth/presentation/bloc/auth_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:hushh_user_app/core/routing/route_paths.dart';
 import 'package:hushh_user_app/core/services/firebase_service.dart';
+import 'package:hushh_user_app/features/auth/domain/usecases/delete_user_data_dual_usecase.dart';
 import 'package:get_it/get_it.dart';
 import 'package:hushh_user_app/shared/utils/app_local_storage.dart';
 import 'package:hushh_user_app/shared/utils/guest_access_control.dart';
@@ -27,6 +28,7 @@ class _ProfilePageState extends State<ProfilePage>
     with TickerProviderStateMixin {
   String _appVersion = '';
   String _buildNumber = '';
+  bool _isDeleting = false;
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
   late Animation<Offset> _slideAnimation;
@@ -577,13 +579,19 @@ class _ProfilePageState extends State<ProfilePage>
             _showComingSoonSnackBar('Send Feedback');
           }),
           if (!kIsWeb) ...[
-            _MenuItemData('Delete Account', Icons.delete_outline, () {
-              try {
-                _showDeleteAccountVerification();
-              } catch (e) {
-                _showErrorSnackBar('Unable to open Delete Account');
-              }
-            }),
+            _MenuItemData(
+              _isDeleting ? 'Deleting Account...' : 'Delete Account',
+              _isDeleting ? Icons.hourglass_empty : Icons.delete_outline,
+              _isDeleting
+                  ? () {}
+                  : () {
+                      try {
+                        _showDeleteAccountVerification();
+                      } catch (e) {
+                        _showErrorSnackBar('Unable to open Delete Account');
+                      }
+                    },
+            ),
           ],
         ]),
       ],
@@ -1461,7 +1469,7 @@ class _ProfilePageState extends State<ProfilePage>
         return CupertinoAlertDialog(
           title: const Text('Delete Account'),
           content: const Text(
-            'Are you absolutely sure you want to delete your account? This action cannot be undone.',
+            'Are you absolutely sure you want to delete your account? This action cannot be undone and all your data will be permanently removed from all systems (Firebase and Supabase).',
           ),
           actions: [
             CupertinoDialogAction(
@@ -1469,17 +1477,56 @@ class _ProfilePageState extends State<ProfilePage>
               child: const Text('Cancel'),
             ),
             CupertinoDialogAction(
-              onPressed: () {
-                Navigator.pop(context);
-                context.go(RoutePaths.deleteAccount);
-              },
+              onPressed: _isDeleting
+                  ? null
+                  : () {
+                      Navigator.pop(context);
+                      _deleteAccount();
+                    },
               isDestructiveAction: true,
-              child: const Text('Delete Account'),
+              child: _isDeleting
+                  ? const CupertinoActivityIndicator()
+                  : const Text('Delete Account'),
             ),
           ],
         );
       },
     );
+  }
+
+  Future<void> _deleteAccount() async {
+    setState(() {
+      _isDeleting = true;
+    });
+
+    try {
+      final firebaseService = GetIt.instance<FirebaseService>();
+      final deleteUseCase = GetIt.instance<DeleteUserDataDualUseCase>();
+      final currentUser = firebaseService.getCurrentUser();
+
+      if (currentUser == null) {
+        throw Exception('No user is currently signed in');
+      }
+
+      // Delete user data from both Firebase and Supabase
+      await deleteUseCase(currentUser.uid);
+
+      // Sign out the user after deleting data
+      await firebaseService.signOut();
+
+      // Navigate to auth page
+      if (mounted) {
+        context.go(RoutePaths.mainAuth);
+      }
+    } catch (e) {
+      setState(() {
+        _isDeleting = false;
+      });
+
+      if (mounted) {
+        _showErrorSnackBar('Failed to delete account: ${e.toString()}');
+      }
+    }
   }
 }
 

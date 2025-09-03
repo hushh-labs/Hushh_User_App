@@ -24,7 +24,6 @@ class RoutePaths {
   // Feature routes (add more as you create features)
   static const String settings = '/settings';
   static const String notifications = '/notifications';
-  static const String deleteAccount = '/delete-account';
 }
 
 class RouteNames {
@@ -52,5 +51,4 @@ class RouteNames {
   // Feature route names
   static const String settings = 'settings';
   static const String notifications = 'notifications';
-  static const String deleteAccount = 'deleteAccount';
 }

@@ -8,6 +8,9 @@ import '../../data/models/countries_model.dart';
 import '../../domain/usecases/send_phone_otp_usecase.dart';
 import '../../domain/usecases/verify_phone_otp_usecase.dart';
 import '../../domain/usecases/create_user_card_usecase.dart';
+import '../../domain/usecases/create_user_card_dual_usecase.dart';
+import '../../domain/usecases/update_user_card_dual_usecase.dart';
+import '../../domain/usecases/store_phone_data_dual_usecase.dart';
 import '../../domain/usecases/sign_out_usecase.dart';
 import '../../domain/entities/user_card.dart';
 import '../../domain/enums.dart';
@@ -62,6 +65,16 @@ class CheckUserProfileCompletionEvent extends AuthEvent {
 class CreateUserCardEvent extends AuthEvent {
   final UserCard userCard;
   CreateUserCardEvent(this.userCard);
+}
+
+class CreateUserCardDualEvent extends AuthEvent {
+  final UserCard userCard;
+  CreateUserCardDualEvent(this.userCard);
+}
+
+class UpdateUserCardDualEvent extends AuthEvent {
+  final UserCard userCard;
+  UpdateUserCardDualEvent(this.userCard);
 }
 
 class SignOutEvent extends AuthEvent {}
@@ -142,6 +155,15 @@ class UserCardCreationFailureState extends AuthState {
   UserCardCreationFailureState(this.message);
 }
 
+class UpdatingUserCardState extends AuthState {}
+
+class UserCardUpdatedState extends AuthState {}
+
+class UserCardUpdateFailureState extends AuthState {
+  final String message;
+  UserCardUpdateFailureState(this.message);
+}
+
 class SigningOutState extends AuthState {}
 
 class SignedOutState extends AuthState {}
@@ -193,6 +215,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   final SendPhoneOtpUseCase _sendPhoneOtpUseCase;
   final VerifyPhoneOtpUseCase _verifyPhoneOtpUseCase;
   final CreateUserCardUseCase _createUserCardUseCase;
+  final CreateUserCardDualUseCase _createUserCardDualUseCase;
+  final UpdateUserCardDualUseCase _updateUserCardDualUseCase;
+  final StorePhoneDataDualUseCase _storePhoneDataDualUseCase;
   final SignOutUseCase _signOutUseCase;
 
   // FCM Service
@@ -202,11 +227,17 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     required SendPhoneOtpUseCase sendPhoneOtpUseCase,
     required VerifyPhoneOtpUseCase verifyPhoneOtpUseCase,
     required CreateUserCardUseCase createUserCardUseCase,
+    required CreateUserCardDualUseCase createUserCardDualUseCase,
+    required UpdateUserCardDualUseCase updateUserCardDualUseCase,
+    required StorePhoneDataDualUseCase storePhoneDataDualUseCase,
     required SignOutUseCase signOutUseCase,
     required FCMService fcmService,
   }) : _sendPhoneOtpUseCase = sendPhoneOtpUseCase,
        _verifyPhoneOtpUseCase = verifyPhoneOtpUseCase,
        _createUserCardUseCase = createUserCardUseCase,
+       _createUserCardDualUseCase = createUserCardDualUseCase,
+       _updateUserCardDualUseCase = updateUserCardDualUseCase,
+       _storePhoneDataDualUseCase = storePhoneDataDualUseCase,
        _signOutUseCase = signOutUseCase,
        _fcmService = fcmService,
        super(AuthInitialState()) {
@@ -216,6 +247,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     on<SendPhoneOtpEvent>(onSendPhoneOtpEvent);
     on<VerifyPhoneOtpEvent>(onVerifyPhoneOtpEvent);
     on<CreateUserCardEvent>(onCreateUserCardEvent);
+    on<CreateUserCardDualEvent>(onCreateUserCardDualEvent);
+    on<UpdateUserCardDualEvent>(onUpdateUserCardDualEvent);
     on<SignOutEvent>(onSignOutEvent);
     on<CheckAuthStateEvent>(onCheckAuthStateEvent);
     on<CheckUserProfileCompletionEvent>(onCheckUserProfileCompletionEvent);
@@ -372,6 +405,21 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       (userCredential) async {
         // Store the login type as phone
         await AppLocalStorage.setLoginType(OtpVerificationType.phone);
+
+        // Store phone number immediately in dual storage (Firebase + Supabase)
+        try {
+          await _storePhoneDataDualUseCase(
+            userCredential.user!.uid,
+            event.phoneNumber,
+          );
+          debugPrint(
+            '✅ Phone number stored in dual storage: ${event.phoneNumber}',
+          );
+        } catch (e) {
+          debugPrint('⚠️ Failed to store phone number in dual storage: $e');
+          // Don't fail the entire authentication flow if dual storage fails
+        }
+
         if (!emit.isDone) {
           emit(OtpVerifiedState(userCredential));
         }
@@ -422,6 +470,34 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       (failure) => emit(UserCardCreationFailureState(failure.message)),
       (_) => emit(UserCardCreatedState()),
     );
+  }
+
+  FutureOr<void> onCreateUserCardDualEvent(
+    CreateUserCardDualEvent event,
+    Emitter<AuthState> emit,
+  ) async {
+    emit(CreatingUserCardState());
+
+    try {
+      await _createUserCardDualUseCase(event.userCard);
+      emit(UserCardCreatedState());
+    } catch (e) {
+      emit(UserCardCreationFailureState(e.toString()));
+    }
+  }
+
+  FutureOr<void> onUpdateUserCardDualEvent(
+    UpdateUserCardDualEvent event,
+    Emitter<AuthState> emit,
+  ) async {
+    emit(UpdatingUserCardState());
+
+    try {
+      await _updateUserCardDualUseCase(event.userCard);
+      emit(UserCardUpdatedState());
+    } catch (e) {
+      emit(UserCardUpdateFailureState(e.toString()));
+    }
   }
 
   FutureOr<void> onSignOutEvent(

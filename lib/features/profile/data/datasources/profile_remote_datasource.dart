@@ -4,6 +4,7 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'dart:io';
 import '../models/profile_model.dart';
 import '../../../../shared/constants/firestore_constants.dart';
+import '../../../auth/domain/repositories/auth_repository.dart';
 
 abstract class ProfileRemoteDataSource {
   Future<ProfileModel> getProfile();
@@ -16,6 +17,9 @@ class ProfileRemoteDataSourceImpl implements ProfileRemoteDataSource {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseStorage _storage = FirebaseStorage.instance;
+  final AuthRepository _authRepository;
+
+  ProfileRemoteDataSourceImpl(this._authRepository);
 
   @override
   Future<ProfileModel> getProfile() async {
@@ -45,11 +49,8 @@ class ProfileRemoteDataSourceImpl implements ProfileRemoteDataSource {
               user.phoneNumber != null, // Set to true if phone number exists
         };
 
-        // Save the default profile
-        await _firestore
-            .collection(FirestoreCollections.users)
-            .doc(user.uid)
-            .set(defaultProfile);
+        // Save the default profile using dual storage
+        await _authRepository.createUserDataDual(user.uid, defaultProfile);
 
         return ProfileModel.fromJson(defaultProfile);
       }
@@ -59,14 +60,14 @@ class ProfileRemoteDataSourceImpl implements ProfileRemoteDataSource {
 
       // Update phone number if it's missing but user has one
       if (profileData['phoneNumber'] == null && user.phoneNumber != null) {
-        await _firestore
-            .collection(FirestoreCollections.users)
-            .doc(user.uid)
-            .update({
-              'phoneNumber': user.phoneNumber,
-              'isPhoneVerified': true,
-              'updatedAt': DateTime.now().toIso8601String(),
-            });
+        final phoneUpdateData = {
+          'phoneNumber': user.phoneNumber,
+          'isPhoneVerified': true,
+          'updatedAt': DateTime.now().toIso8601String(),
+        };
+
+        // Update both Firebase and Supabase (phone data is relevant for both)
+        await _authRepository.updateUserDataDual(user.uid, phoneUpdateData);
 
         // Update the profile data with the phone number
         profileData['phoneNumber'] = user.phoneNumber;
@@ -98,10 +99,8 @@ class ProfileRemoteDataSourceImpl implements ProfileRemoteDataSource {
         updateData['avatar'] = avatar;
       }
 
-      await _firestore
-          .collection(FirestoreCollections.users)
-          .doc(user.uid)
-          .update(updateData);
+      // Use selective dual storage - automatically filters out avatar/video fields for Supabase
+      await _authRepository.updateUserDataSelective(user.uid, updateData);
 
       return await getProfile();
     } catch (e) {
