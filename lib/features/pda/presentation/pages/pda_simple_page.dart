@@ -9,8 +9,10 @@ import 'package:hushh_user_app/features/pda/domain/usecases/get_messages_use_cas
 import 'package:hushh_user_app/features/pda/domain/usecases/clear_messages_use_case.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:hushh_user_app/features/pda/presentation/components/pda_loading_animation.dart';
-import 'package:hushh_user_app/shared/services/gmail_connector_service.dart';
-import 'package:cloud_functions/cloud_functions.dart';
+
+import '../../data/services/supabase_gmail_service.dart';
+import '../widgets/gmail_sync_dialog.dart';
+import '../../domain/repositories/gmail_repository.dart';
 
 import 'package:hushh_user_app/shared/utils/app_local_storage.dart';
 
@@ -25,7 +27,7 @@ class _PdaSimplePageState extends State<PdaSimplePage> {
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final GetIt _getIt = GetIt.instance;
-  final GmailConnectorService _gmailService = GmailConnectorService();
+  final SupabaseGmailService _supabaseGmailService = SupabaseGmailService();
 
   List<PdaMessage> _messages = [];
   bool _isLoadingMessages =
@@ -243,10 +245,20 @@ class _PdaSimplePageState extends State<PdaSimplePage> {
   /// Check Gmail connection status on page load
   Future<void> _checkGmailConnectionStatus() async {
     try {
-      final isConnected = await _gmailService.isGmailConnected();
+      final isConnected = await _supabaseGmailService.isGmailConnected();
       setState(() {
         _isGmailConnected = isConnected;
       });
+
+      // Check if sync is needed on startup
+      if (isConnected) {
+        final needsSync = await _supabaseGmailService.checkSyncNeeded();
+        if (needsSync) {
+          debugPrint('🔄 [PDA] Gmail sync needed on startup');
+          // Perform automatic sync for new emails
+          _triggerQuickSync();
+        }
+      }
     } catch (e) {
       debugPrint('Error checking Gmail connection status: $e');
     }
@@ -255,7 +267,7 @@ class _PdaSimplePageState extends State<PdaSimplePage> {
   /// Handle Gmail connection
   Future<void> _onConnectGmailPressed() async {
     if (_isGmailConnected) {
-      // If already connected, show sync option or disconnect
+      // If already connected, show sync options
       _showGmailOptionsDialog();
       return;
     }
@@ -266,25 +278,28 @@ class _PdaSimplePageState extends State<PdaSimplePage> {
     });
 
     try {
-      final result = await _gmailService.connectGmail();
-      
+      // First connect using the new Supabase service
+      final result = await _supabaseGmailService.connectGmail();
+
       if (result.isSuccess) {
         setState(() {
           _isGmailConnected = true;
           _isConnectingGmail = false;
         });
-        
-        // Show success message
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('✅ Gmail connected successfully! Your PDA will now have access to your email context.'),
-            backgroundColor: Colors.green,
-            duration: Duration(seconds: 3),
-          ),
-        );
-        
-        // Trigger initial sync
-        _triggerGmailSync();
+
+        // Show success message and sync dialog
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('✅ Gmail connected successfully!'),
+              backgroundColor: Colors.green,
+              duration: Duration(seconds: 2),
+            ),
+          );
+
+          // Show sync options dialog
+          _showInitialSyncDialog();
+        }
       } else {
         setState(() {
           _isConnectingGmail = false;
@@ -297,6 +312,16 @@ class _PdaSimplePageState extends State<PdaSimplePage> {
         _error = 'An error occurred while connecting Gmail: $e';
       });
     }
+  }
+
+  /// Show initial sync dialog after connection
+  Future<void> _showInitialSyncDialog() async {
+    await showGmailSyncDialog(
+      context,
+      onSyncSelected: (syncOptions) async {
+        await _triggerGmailSyncWithOptions(syncOptions);
+      },
+    );
   }
 
   /// Show Gmail options when already connected
@@ -312,9 +337,16 @@ class _PdaSimplePageState extends State<PdaSimplePage> {
           CupertinoDialogAction(
             onPressed: () {
               Navigator.pop(context);
-              _triggerGmailSync();
+              _showSyncOptionsDialog();
             },
-            child: const Text('Sync Now'),
+            child: const Text('Sync Again'),
+          ),
+          CupertinoDialogAction(
+            onPressed: () {
+              Navigator.pop(context);
+              _triggerQuickSync();
+            },
+            child: const Text('Quick Sync'),
           ),
           CupertinoDialogAction(
             onPressed: () {
@@ -333,26 +365,40 @@ class _PdaSimplePageState extends State<PdaSimplePage> {
     );
   }
 
-  /// Trigger Gmail sync
-  Future<void> _triggerGmailSync() async {
-    try {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('🔄 Syncing Gmail...'),
-          duration: Duration(seconds: 2),
-        ),
-      );
+  /// Show sync options dialog for existing connections
+  Future<void> _showSyncOptionsDialog() async {
+    await showGmailSyncDialog(
+      context,
+      onSyncSelected: (syncOptions) async {
+        await _triggerGmailSyncWithOptions(syncOptions);
+      },
+    );
+  }
 
-      final result = await _gmailService.syncGmailNow();
-      
-      if (result.isSuccess) {
+  /// Trigger Gmail sync with options
+  Future<void> _triggerGmailSyncWithOptions(SyncOptions syncOptions) async {
+    try {
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              '✅ Gmail sync completed! Found ${result.threadsCount} email threads.',
+              '🔄 Syncing Gmail (${syncOptions.duration.displayName})...',
+            ),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+
+      final result = await _supabaseGmailService.syncEmails(syncOptions);
+
+      if (result.isSuccess && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              '✅ Gmail sync completed! Stored ${result.messagesCount} emails.',
             ),
             backgroundColor: Colors.green,
-            duration: Duration(seconds: 3),
+            duration: const Duration(seconds: 3),
           ),
         );
       } else {
@@ -360,7 +406,7 @@ class _PdaSimplePageState extends State<PdaSimplePage> {
           SnackBar(
             content: Text('⚠️ Gmail sync failed: ${result.error}'),
             backgroundColor: Colors.orange,
-            duration: Duration(seconds: 3),
+            duration: const Duration(seconds: 3),
           ),
         );
       }
@@ -369,7 +415,49 @@ class _PdaSimplePageState extends State<PdaSimplePage> {
         SnackBar(
           content: Text('❌ Error during Gmail sync: $e'),
           backgroundColor: Colors.red,
-          duration: Duration(seconds: 3),
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    }
+  }
+
+  /// Trigger quick sync for new emails
+  Future<void> _triggerQuickSync() async {
+    try {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('🔄 Quick syncing new emails...'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+
+      final result = await _supabaseGmailService.syncGmailNow();
+
+      if (result.isSuccess) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              '✅ Quick sync completed! Found ${result.messagesCount} total emails.',
+            ),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('⚠️ Quick sync failed: ${result.error}'),
+            backgroundColor: Colors.orange,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('❌ Error during quick sync: $e'),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 3),
         ),
       );
     }
@@ -378,13 +466,13 @@ class _PdaSimplePageState extends State<PdaSimplePage> {
   /// Disconnect Gmail
   Future<void> _disconnectGmail() async {
     try {
-      final result = await _gmailService.disconnectGmail();
-      
+      final result = await _supabaseGmailService.disconnectGmail();
+
       if (result.isSuccess) {
         setState(() {
           _isGmailConnected = false;
         });
-        
+
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Gmail disconnected successfully'),

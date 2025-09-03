@@ -1,0 +1,191 @@
+import '../../domain/entities/gmail_email.dart';
+
+class GmailEmailModel extends GmailEmail {
+  const GmailEmailModel({
+    super.id,
+    required super.userId,
+    required super.messageId,
+    required super.threadId,
+    super.historyId,
+    super.subject,
+    super.fromEmail,
+    super.fromName,
+    super.toEmails,
+    super.ccEmails,
+    super.bccEmails,
+    super.bodyText,
+    super.bodyHtml,
+    super.snippet,
+    super.isRead = false,
+    super.isImportant = false,
+    super.isStarred = false,
+    super.labels,
+    super.attachments,
+    required super.receivedAt,
+    super.sentAt,
+    super.syncedAt,
+  });
+
+  factory GmailEmailModel.fromJson(Map<String, dynamic> json) {
+    return GmailEmailModel(
+      id: json['id'] as int?,
+      userId: json['userId'] as String,
+      messageId: json['messageId'] as String,
+      threadId: json['threadId'] as String,
+      historyId: json['historyId'] as String?,
+      subject: json['subject'] as String?,
+      fromEmail: json['fromEmail'] as String?,
+      fromName: json['fromName'] as String?,
+      toEmails: (json['toEmails'] as List?)?.cast<String>(),
+      ccEmails: (json['ccEmails'] as List?)?.cast<String>(),
+      bccEmails: (json['bccEmails'] as List?)?.cast<String>(),
+      bodyText: json['bodyText'] as String?,
+      bodyHtml: json['bodyHtml'] as String?,
+      snippet: json['snippet'] as String?,
+      isRead: json['isRead'] as bool? ?? false,
+      isImportant: json['isImportant'] as bool? ?? false,
+      isStarred: json['isStarred'] as bool? ?? false,
+      labels: (json['labels'] as List?)?.cast<String>(),
+      attachments: json['attachments'] as List<dynamic>?,
+      receivedAt: DateTime.parse(json['receivedAt'] as String),
+      sentAt: json['sentAt'] != null
+          ? DateTime.parse(json['sentAt'] as String)
+          : null,
+      syncedAt: json['syncedAt'] != null
+          ? DateTime.parse(json['syncedAt'] as String)
+          : null,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      if (id != null) 'id': id,
+      'userId': userId,
+      'messageId': messageId,
+      'threadId': threadId,
+      'historyId': historyId,
+      'subject': subject,
+      'fromEmail': fromEmail,
+      'fromName': fromName,
+      'toEmails': toEmails,
+      'ccEmails': ccEmails,
+      'bccEmails': bccEmails,
+      'bodyText': bodyText,
+      'bodyHtml': bodyHtml,
+      'snippet': snippet,
+      'isRead': isRead,
+      'isImportant': isImportant,
+      'isStarred': isStarred,
+      'labels': labels,
+      'attachments': attachments ?? [],
+      'receivedAt': receivedAt.toIso8601String(),
+      'sentAt': sentAt?.toIso8601String(),
+      'syncedAt': (syncedAt ?? DateTime.now()).toIso8601String(),
+    };
+  }
+
+  factory GmailEmailModel.fromEntity(GmailEmail entity) {
+    return GmailEmailModel(
+      id: entity.id,
+      userId: entity.userId,
+      messageId: entity.messageId,
+      threadId: entity.threadId,
+      historyId: entity.historyId,
+      subject: entity.subject,
+      fromEmail: entity.fromEmail,
+      fromName: entity.fromName,
+      toEmails: entity.toEmails,
+      ccEmails: entity.ccEmails,
+      bccEmails: entity.bccEmails,
+      bodyText: entity.bodyText,
+      bodyHtml: entity.bodyHtml,
+      snippet: entity.snippet,
+      isRead: entity.isRead,
+      isImportant: entity.isImportant,
+      isStarred: entity.isStarred,
+      labels: entity.labels,
+      attachments: entity.attachments,
+      receivedAt: entity.receivedAt,
+      sentAt: entity.sentAt,
+      syncedAt: entity.syncedAt,
+    );
+  }
+
+  GmailEmail toEntity() {
+    return GmailEmail(
+      id: id,
+      userId: userId,
+      messageId: messageId,
+      threadId: threadId,
+      historyId: historyId,
+      subject: subject,
+      fromEmail: fromEmail,
+      fromName: fromName,
+      toEmails: toEmails,
+      ccEmails: ccEmails,
+      bccEmails: bccEmails,
+      bodyText: bodyText,
+      bodyHtml: bodyHtml,
+      snippet: snippet,
+      isRead: isRead,
+      isImportant: isImportant,
+      isStarred: isStarred,
+      labels: labels,
+      attachments: attachments,
+      receivedAt: receivedAt,
+      sentAt: sentAt,
+      syncedAt: syncedAt,
+    );
+  }
+
+  @override
+  GmailEmailModel copyWith({
+    int? id,
+    String? userId,
+    String? messageId,
+    String? threadId,
+    String? historyId,
+    String? subject,
+    String? fromEmail,
+    String? fromName,
+    List<String>? toEmails,
+    List<String>? ccEmails,
+    List<String>? bccEmails,
+    String? bodyText,
+    String? bodyHtml,
+    String? snippet,
+    bool? isRead,
+    bool? isImportant,
+    bool? isStarred,
+    List<String>? labels,
+    List<dynamic>? attachments,
+    DateTime? receivedAt,
+    DateTime? sentAt,
+    DateTime? syncedAt,
+  }) {
+    return GmailEmailModel(
+      id: id ?? this.id,
+      userId: userId ?? this.userId,
+      messageId: messageId ?? this.messageId,
+      threadId: threadId ?? this.threadId,
+      historyId: historyId ?? this.historyId,
+      subject: subject ?? this.subject,
+      fromEmail: fromEmail ?? this.fromEmail,
+      fromName: fromName ?? this.fromName,
+      toEmails: toEmails ?? this.toEmails,
+      ccEmails: ccEmails ?? this.ccEmails,
+      bccEmails: bccEmails ?? this.bccEmails,
+      bodyText: bodyText ?? this.bodyText,
+      bodyHtml: bodyHtml ?? this.bodyHtml,
+      snippet: snippet ?? this.snippet,
+      isRead: isRead ?? this.isRead,
+      isImportant: isImportant ?? this.isImportant,
+      isStarred: isStarred ?? this.isStarred,
+      labels: labels ?? this.labels,
+      attachments: attachments ?? this.attachments,
+      receivedAt: receivedAt ?? this.receivedAt,
+      sentAt: sentAt ?? this.sentAt,
+      syncedAt: syncedAt ?? this.syncedAt,
+    );
+  }
+}
