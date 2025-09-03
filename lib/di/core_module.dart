@@ -4,6 +4,7 @@ import '../core/network/network_info.dart';
 import '../core/network/network_info_impl.dart';
 import '../core/services/firebase_service.dart';
 import '../core/services/firebase_service_impl.dart';
+import '../core/services/supabase_service.dart';
 import '../core/routing/navigation_service.dart';
 import '../core/routing/navigation_service_impl.dart';
 import '../core/routing/app_router.dart';
@@ -18,6 +19,9 @@ class CoreModule {
 
     // Firebase Service
     sl.registerLazySingleton<FirebaseService>(() => FirebaseServiceImpl());
+
+    // Supabase Service
+    sl.registerLazySingleton<SupabaseService>(() => SupabaseService());
 
     // Navigation Service
     sl.registerLazySingleton<NavigationService>(

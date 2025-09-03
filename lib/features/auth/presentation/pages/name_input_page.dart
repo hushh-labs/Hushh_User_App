@@ -33,15 +33,23 @@ class _NameInputPageState extends State<NameInputPage> {
       return;
     }
 
+    // Get phone number from Firebase user if available
+    String? phoneNumber;
+    if (currentUser.phoneNumber != null &&
+        currentUser.phoneNumber!.isNotEmpty) {
+      phoneNumber = currentUser.phoneNumber;
+    }
+
     final userCard = UserCard(
       id: currentUser.uid,
       userId: currentUser.uid,
       email: widget.email,
       fullName: _nameController.text.trim(),
+      phoneNumber: phoneNumber, // Include phone number from Firebase auth
       videoUrl: null, // Will be set later in video recording
     );
 
-    context.read<AuthBloc>().add(CreateUserCardEvent(userCard));
+    context.read<AuthBloc>().add(CreateUserCardDualEvent(userCard));
   }
 
   @override

@@ -9,7 +9,6 @@ import 'package:hushh_user_app/features/auth/presentation/pages/create_first_car
 import 'package:hushh_user_app/features/auth/presentation/pages/card_created_success_page.dart';
 import 'package:hushh_user_app/features/auth/presentation/pages/video_recording_page.dart';
 import 'package:hushh_user_app/features/pda/presentation/pages/pda_simple_page.dart';
-import 'package:hushh_user_app/features/profile/presentation/pages/delete_account_page.dart';
 
 import 'route_paths.dart';
 import 'auth_guard.dart';
@@ -77,12 +76,7 @@ class AppRouter {
         name: RouteNames.pda,
         builder: (context, state) => const PdaSimplePage(),
       ),
-      // Delete account page
-      GoRoute(
-        path: RoutePaths.deleteAccount,
-        name: RouteNames.deleteAccount,
-        builder: (context, state) => const DeleteAccountPage(),
-      ),
+
       // Auth routes for login/register pages
       // GoRoute(
       //   path: RoutePaths.login,

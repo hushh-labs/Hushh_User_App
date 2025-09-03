@@ -6,6 +6,7 @@ import '../domain/usecases/get_profile_usecase.dart';
 import '../domain/usecases/update_profile_usecase.dart';
 import '../domain/usecases/upload_profile_image_usecase.dart';
 import '../presentation/bloc/profile_bloc.dart';
+import '../../auth/domain/repositories/auth_repository.dart';
 
 final getIt = GetIt.instance;
 
@@ -13,7 +14,7 @@ class ProfileModule {
   static void init() {
     // Data sources
     getIt.registerLazySingleton<ProfileRemoteDataSource>(
-      () => ProfileRemoteDataSourceImpl(),
+      () => ProfileRemoteDataSourceImpl(getIt<AuthRepository>()),
     );
 
     // Repository
