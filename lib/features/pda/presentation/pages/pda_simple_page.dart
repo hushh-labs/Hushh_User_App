@@ -11,6 +11,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:hushh_user_app/features/pda/presentation/components/pda_loading_animation.dart';
 
 import '../../data/services/supabase_gmail_service.dart';
+import '../../data/services/simple_linkedin_service.dart';
 import '../widgets/gmail_sync_dialog.dart';
 import '../../domain/repositories/gmail_repository.dart';
 
@@ -28,6 +29,8 @@ class _PdaSimplePageState extends State<PdaSimplePage> {
   final ScrollController _scrollController = ScrollController();
   final GetIt _getIt = GetIt.instance;
   final SupabaseGmailService _supabaseGmailService = SupabaseGmailService();
+  final SupabaseLinkedInService _supabaseLinkedInService =
+      SupabaseLinkedInService();
 
   List<PdaMessage> _messages = [];
   bool _isLoadingMessages =
@@ -35,6 +38,8 @@ class _PdaSimplePageState extends State<PdaSimplePage> {
   bool _isSendingMessage = false; // Separate loading state for sending
   bool _isGmailConnected = false; // Gmail connection status
   bool _isConnectingGmail = false; // Gmail connection loading state
+  bool _isLinkedInConnected = false; // LinkedIn connection status
+  bool _isConnectingLinkedIn = false; // LinkedIn connection loading state
   String? _error;
 
   // Single source of truth for suggestions - Hushh app specific options
@@ -62,6 +67,7 @@ class _PdaSimplePageState extends State<PdaSimplePage> {
     super.initState();
     _loadMessages();
     _checkGmailConnectionStatus();
+    _checkLinkedInConnectionStatus();
     _messageController.addListener(_updateSendButtonState);
   }
 
@@ -261,6 +267,20 @@ class _PdaSimplePageState extends State<PdaSimplePage> {
       }
     } catch (e) {
       debugPrint('Error checking Gmail connection status: $e');
+    }
+  }
+
+  /// Check LinkedIn connection status on page load
+  Future<void> _checkLinkedInConnectionStatus() async {
+    try {
+      final isConnected = await _supabaseLinkedInService.isLinkedInConnected();
+      setState(() {
+        _isLinkedInConnected = isConnected;
+      });
+
+      debugPrint('🔗 [PDA] LinkedIn connection status: $isConnected');
+    } catch (e) {
+      debugPrint('❌ [PDA] Error checking LinkedIn connection: $e');
     }
   }
 
@@ -493,6 +513,164 @@ class _PdaSimplePageState extends State<PdaSimplePage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Error disconnecting Gmail: $e'),
+          backgroundColor: Colors.red,
+          duration: Duration(seconds: 3),
+        ),
+      );
+    }
+  }
+
+  /// Handle LinkedIn connection
+  Future<void> _onConnectLinkedInPressed() async {
+    if (_isLinkedInConnected) {
+      // If already connected, show LinkedIn options
+      _showLinkedInOptionsDialog();
+      return;
+    }
+
+    setState(() {
+      _isConnectingLinkedIn = true;
+      _error = null;
+    });
+
+    try {
+      final result = await _supabaseLinkedInService.connectLinkedIn();
+
+      if (result.success) {
+        setState(() {
+          _isLinkedInConnected = true;
+          _isConnectingLinkedIn = false;
+        });
+
+        // Show success message
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('✅ LinkedIn connected successfully!'),
+              backgroundColor: Colors.green,
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+      } else {
+        setState(() {
+          _isConnectingLinkedIn = false;
+          _error = 'Failed to connect LinkedIn: ${result.message}';
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _isConnectingLinkedIn = false;
+        _error = 'An error occurred while connecting LinkedIn: $e';
+      });
+    }
+  }
+
+  /// Show LinkedIn options when already connected
+  void _showLinkedInOptionsDialog() {
+    showCupertinoDialog(
+      context: context,
+      builder: (context) => CupertinoAlertDialog(
+        title: const Text('LinkedIn Connected'),
+        content: const Text(
+          'Your LinkedIn is already connected. What would you like to do?',
+        ),
+        actions: [
+          CupertinoDialogAction(
+            onPressed: () {
+              Navigator.pop(context);
+              _triggerLinkedInSync();
+            },
+            child: const Text('Sync Data'),
+          ),
+          CupertinoDialogAction(
+            onPressed: () {
+              Navigator.pop(context);
+              _disconnectLinkedIn();
+            },
+            isDestructiveAction: true,
+            child: const Text('Disconnect'),
+          ),
+          CupertinoDialogAction(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Trigger LinkedIn data sync
+  Future<void> _triggerLinkedInSync() async {
+    try {
+      // Use comprehensive sync options
+      const syncOptions = LinkedInSyncOptions(
+        includeProfile: true,
+        includePosts: true,
+      );
+
+      final result = await _supabaseLinkedInService.syncLinkedInData(
+        syncOptions,
+      );
+
+      if (result) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('✅ LinkedIn data synced successfully!'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Failed to sync LinkedIn data. Please try again.'),
+            backgroundColor: Colors.red,
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error syncing LinkedIn data: $e'),
+          backgroundColor: Colors.red,
+          duration: Duration(seconds: 3),
+        ),
+      );
+    }
+  }
+
+  /// Disconnect LinkedIn account
+  Future<void> _disconnectLinkedIn() async {
+    try {
+      final result = await _supabaseLinkedInService.disconnectLinkedIn();
+
+      if (result) {
+        setState(() {
+          _isLinkedInConnected = false;
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('LinkedIn disconnected successfully'),
+            backgroundColor: Colors.blue,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Failed to disconnect LinkedIn'),
+            backgroundColor: Colors.red,
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error disconnecting LinkedIn: $e'),
           backgroundColor: Colors.red,
           duration: Duration(seconds: 3),
         ),
@@ -840,7 +1018,7 @@ class _PdaSimplePageState extends State<PdaSimplePage> {
                   ),
                 ),
                 const SizedBox(height: 20),
-                _buildConnectGmailButton(),
+                _buildConnectionButtons(),
                 const SizedBox(height: 6),
                 Text(
                   'for personalised answers',
@@ -874,6 +1052,18 @@ class _PdaSimplePageState extends State<PdaSimplePage> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildConnectionButtons() {
+    return Column(
+      children: [
+        // Gmail Button
+        _buildConnectGmailButton(),
+        const SizedBox(height: 8),
+        // LinkedIn Button
+        _buildConnectLinkedInButton(),
+      ],
     );
   }
 
@@ -928,6 +1118,67 @@ class _PdaSimplePageState extends State<PdaSimplePage> {
             : Icon(Icons.mail_outline_rounded, color: primaryPurple, size: 20),
         label: Text(
           _isConnectingGmail ? 'Connecting...' : 'Connect Gmail',
+          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildConnectLinkedInButton() {
+    if (_isLinkedInConnected) {
+      return SizedBox(
+        width: double.infinity,
+        child: ElevatedButton.icon(
+          onPressed: _onConnectLinkedInPressed,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Color(0xFF0077B5), // LinkedIn blue
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+          icon: const Icon(Icons.check_circle_outline_rounded, size: 20),
+          label: const Text(
+            'LinkedIn Connected',
+            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+          ),
+        ),
+      );
+    }
+
+    return SizedBox(
+      width: double.infinity,
+      child: OutlinedButton.icon(
+        onPressed: _isConnectingLinkedIn ? null : _onConnectLinkedInPressed,
+        style: OutlinedButton.styleFrom(
+          foregroundColor: Color(0xFF0077B5), // LinkedIn blue
+          side: BorderSide(
+            color: Color(0xFF0077B5).withValues(alpha: 0.5),
+            width: 1,
+          ),
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          backgroundColor: Colors.white,
+        ),
+        icon: _isConnectingLinkedIn
+            ? SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF0077B5)),
+                ),
+              )
+            : Icon(
+                Icons.work_outline_rounded,
+                color: Color(0xFF0077B5),
+                size: 20,
+              ),
+        label: Text(
+          _isConnectingLinkedIn ? 'Connecting...' : 'Connect LinkedIn',
           style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
         ),
       ),
