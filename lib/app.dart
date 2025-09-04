@@ -12,6 +12,7 @@ import 'features/auth/di/auth_module.dart';
 import 'features/auth/presentation/bloc/auth_bloc.dart';
 import 'features/pda/di/pda_module.dart';
 import 'features/pda/di/gmail_module.dart';
+import 'features/pda/di/linkedin_module.dart';
 import 'features/profile/di/profile_module.dart';
 import 'features/discover/di/discover_module.dart';
 import 'features/notifications/di/notification_module.dart';
@@ -43,6 +44,7 @@ Future<void> mainApp() async {
   AuthModule.register();
   PdaModule.register();
   GmailModule.register();
+  LinkedInModule.register();
   ProfileModule.init();
   DiscoverModule.init();
   NotificationModule.register();
