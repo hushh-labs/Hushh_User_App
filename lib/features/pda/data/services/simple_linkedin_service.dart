@@ -9,6 +9,7 @@ import 'package:firebase_auth/firebase_auth.dart' as firebase_auth;
 import '../../domain/entities/simple_linkedin_account.dart';
 import '../../domain/entities/simple_linkedin_post.dart';
 import '../../domain/repositories/simple_linkedin_repository.dart';
+import 'linkedin_context_prewarm_service.dart';
 
 class LinkedInConnectionResult {
   final bool success;
@@ -34,6 +35,8 @@ class LinkedInSyncOptions {
 
 class SupabaseLinkedInService {
   final GetIt _getIt = GetIt.instance;
+  final LinkedInContextPrewarmService _prewarmService =
+      LinkedInContextPrewarmService();
 
   // Stream controllers for real-time updates
   final StreamController<LinkedInAccount?> _accountController =
@@ -135,21 +138,14 @@ class SupabaseLinkedInService {
       final authUrl = _generateLinkedInAuthUrl();
       debugPrint('🔐 [LINKEDIN SERVICE] Auth URL: $authUrl');
 
-      // Launch OAuth in app WebView
+      // Launch OAuth in external browser
       final uri = Uri.parse(authUrl);
-      final result = await launchUrl(
-        uri,
-        mode: LaunchMode.inAppWebView,
-        webViewConfiguration: const WebViewConfiguration(
-          enableJavaScript: true,
-          enableDomStorage: true,
-        ),
-      );
+      final result = await launchUrl(uri, mode: LaunchMode.externalApplication);
 
-      debugPrint('🔐 [LINKEDIN SERVICE] WebView launched: $result');
+      debugPrint('🔐 [LINKEDIN SERVICE] External browser launched: $result');
 
       if (result) {
-        // For in-app OAuth, give user time to complete the flow
+        // Give user time to complete the OAuth flow in external browser
         debugPrint('🔐 [LINKEDIN SERVICE] Waiting for OAuth completion...');
 
         // Wait a bit for user to complete OAuth, then check connection status
@@ -163,6 +159,10 @@ class SupabaseLinkedInService {
             _connectionController.add(true);
             await _refreshDataStreams();
             final account = await getLinkedInAccount();
+
+            // Pre-warm PDA with LinkedIn context after successful connection
+            _prewarmService.prewarmLinkedInContext();
+
             return LinkedInConnectionResult.success(
               'LinkedIn connected successfully!',
               account: account,
@@ -188,8 +188,13 @@ class SupabaseLinkedInService {
 
   /// Generate LinkedIn OAuth authorization URL (simplified scopes)
   String _generateLinkedInAuthUrl() {
-    // Using only OpenID Connect scopes that are currently approved
-    final scopes = ['openid', 'profile', 'email'].join(' ');
+    // Enhanced scopes for comprehensive data access with Share on LinkedIn product
+    final scopes = [
+      'openid',
+      'profile',
+      'email',
+      'w_member_social', // Share on LinkedIn - allows posting and reading social content
+    ].join(' ');
     final user = _auth;
     if (user == null) {
       throw Exception('User not authenticated');
@@ -197,14 +202,11 @@ class SupabaseLinkedInService {
     final userId = user.uid; // Get current user ID
     final state = '${DateTime.now().millisecondsSinceEpoch}-$userId';
 
-    // Add API key to redirect URI for Supabase Edge Function authentication
-    final supabaseAnonKey = dotenv.env['SUPABASE_ANON_KEY'];
-    final redirectUriWithAuth = '$_linkedInRedirectUri?apikey=$supabaseAnonKey';
-
+    // Use clean redirect URI (no API key needed since OAuth callback is now allowed)
     final params = {
       'response_type': 'code',
       'client_id': _linkedInClientId,
-      'redirect_uri': redirectUriWithAuth,
+      'redirect_uri': _linkedInRedirectUri,
       'scope': scopes,
       'state': state,
     };
@@ -216,7 +218,11 @@ class SupabaseLinkedInService {
         )
         .join('&');
 
-    return 'https://www.linkedin.com/oauth/v2/authorization?$query';
+    final authUrl = 'https://www.linkedin.com/oauth/v2/authorization?$query';
+    debugPrint('🔗 [LINKEDIN SERVICE] Generated Auth URL: $authUrl');
+    debugPrint('🔗 [LINKEDIN SERVICE] Redirect URI: $_linkedInRedirectUri');
+
+    return authUrl;
   }
 
   /// Disconnect LinkedIn account
@@ -233,6 +239,9 @@ class SupabaseLinkedInService {
         _connectionController.add(false);
         _accountController.add(null);
         _postsController.add([]);
+
+        // Clear LinkedIn context cache when disconnected
+        _prewarmService.clearLinkedInContextCache();
       }
 
       return success;
@@ -280,6 +289,10 @@ class SupabaseLinkedInService {
         if (response.status == 200) {
           // Update local last_synced_at
           await _repository.syncData(userId, syncOptions);
+
+          // Pre-warm PDA with updated LinkedIn context after sync
+          _prewarmService.prewarmLinkedInContext();
+
           return true;
         } else {
           debugPrint('❌ [LINKEDIN SERVICE] Sync failed: ${response.status}');

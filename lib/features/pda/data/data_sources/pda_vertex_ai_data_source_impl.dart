@@ -10,12 +10,18 @@ import 'package:hushh_user_app/features/pda/data/data_sources/pda_data_source.da
 import 'package:hushh_user_app/features/pda/data/models/pda_message_model.dart';
 import 'package:hushh_user_app/features/pda/data/config/vertex_ai_config.dart';
 import 'package:hushh_user_app/shared/services/gmail_connector_service.dart';
+import '../services/linkedin_context_prewarm_service.dart';
+import '../services/gmail_context_prewarm_service.dart';
 
 class PdaVertexAiDataSourceImpl implements PdaDataSource {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final GmailConnectorService _gmailService = GmailConnectorService();
-  
+  final LinkedInContextPrewarmService _linkedInPrewarmService =
+      LinkedInContextPrewarmService();
+  final GmailContextPrewarmService _gmailPrewarmService =
+      GmailContextPrewarmService();
+
   // Stream subscription for email events
   StreamSubscription<EmailEvent>? _emailEventSubscription;
   List<String> _cachedEmailSummaries = [];
@@ -156,8 +162,11 @@ class PdaVertexAiDataSourceImpl implements PdaDataSource {
       // Get user context from Firebase
       final userContext = await getUserContext(currentUserId);
 
-      // Get email summaries for enhanced context (if Gmail is connected)
-      final emailSummaries = await _getEmailSummariesForContext();
+      // Get Gmail context from Supabase for enhanced responses (if Gmail is connected)
+      final gmailContext = await _getGmailContextForPda();
+
+      // Get LinkedIn context for enhanced responses (if LinkedIn is connected)
+      final linkedInContext = await _getLinkedInContextForPda();
 
       // Get authenticated client
       final client = await _getAuthenticatedClient();
@@ -169,9 +178,14 @@ class PdaVertexAiDataSourceImpl implements PdaDataSource {
       // Prepare conversation history for Claude
       final conversationHistory = _formatConversationForClaude(context);
 
-      // Prepare enhanced context with email summaries
-      final emailContext = emailSummaries.isNotEmpty 
-          ? '\n\nRecent Email Activity:\n${emailSummaries.join('\n')}'
+      // Prepare Gmail context
+      final gmailContextText = gmailContext.isNotEmpty
+          ? '\n\nGmail Context:\n$gmailContext'
+          : '';
+
+      // Prepare LinkedIn context
+      final linkedInContextText = linkedInContext.isNotEmpty
+          ? '\n\nLinkedIn Professional Context:\n$linkedInContext'
           : '';
 
       // Prepare the request body for Claude via Vertex AI streamRawPredict endpoint
@@ -185,7 +199,7 @@ class PdaVertexAiDataSourceImpl implements PdaDataSource {
 You are Hush, a personal digital assistant for the Hushh app - a platform that connects users with agents who sell products and services. You help users navigate the app, understand features, and get the most out of their Hushh experience.
 
 User Context:
-${_formatUserContext(userContext)}$emailContext
+${_formatUserContext(userContext)}$gmailContextText$linkedInContextText
 
 Conversation History:
 $conversationHistory
@@ -199,9 +213,12 @@ Please provide helpful responses related to:
 - Account management and settings
 - App troubleshooting and support
 - General questions about the Hushh platform
-- Email-related insights (if email data is available)
+- Gmail-related insights and email management (if Gmail data is available)
+- LinkedIn professional insights and networking advice (if LinkedIn data is available)
 
-When email context is available, you can reference relevant emails to provide more personalized assistance. For example, if the user mentions a product or order, you can check if there are related emails and provide insights.
+When Gmail context is available, you can reference relevant emails to provide more personalized assistance. For example, if the user mentions a product or order, you can check if there are related emails and provide insights. You can also help with email management, unread emails, and important messages.
+
+When LinkedIn context is available, you can provide professional insights, networking advice, and career-related assistance based on the user's LinkedIn profile, connections, and activity.
 
 Keep responses relevant to the Hushh app ecosystem and user experience. If the user asks about unrelated topics, politely redirect them to Hushh-related assistance.
 
@@ -261,7 +278,17 @@ Be conversational, helpful, and concise in your responses.
         return;
       }
 
+      // Pre-warm user context
       await getUserContext(currentUserId);
+
+      // Pre-warm Gmail and LinkedIn context in parallel for faster loading
+      final gmailPrewarmFuture = _gmailPrewarmService.prewarmGmailContext();
+      final linkedInPrewarmFuture = _linkedInPrewarmService
+          .prewarmLinkedInContext();
+
+      // Wait for both to complete
+      await Future.wait([gmailPrewarmFuture, linkedInPrewarmFuture]);
+
       debugPrint(
         '🚀 [PDA PREWARM] ✅ PDA context prewarming completed successfully',
       );
@@ -361,38 +388,23 @@ Last Updated: $updatedAt
         .join('\n');
   }
 
-  /// Get email summaries for PDA context enhancement
-  Future<List<String>> _getEmailSummariesForContext() async {
+  /// Get Gmail context for PDA responses
+  Future<String> _getGmailContextForPda() async {
     try {
-      // Use cached summaries if available and monitoring is active
-      if (_isMonitoringEmails && _cachedEmailSummaries.isNotEmpty) {
-        debugPrint('📧 [PDA EMAIL CONTEXT] Using cached email summaries');
-        return _cachedEmailSummaries;
-      }
-      
-      // Check if Gmail is connected
-      final isConnected = await _gmailService.isGmailConnected();
-      if (!isConnected) {
-        debugPrint('📧 [PDA EMAIL CONTEXT] Gmail not connected, skipping email context');
-        return [];
-      }
-
-      debugPrint('📧 [PDA EMAIL CONTEXT] Fetching email summaries for PDA context...');
-      
-      // Get recent email summaries (limit to 10 for context)
-      final emailSummaries = await _gmailService.getRecentEmailSummaries(limit: 10);
-      
-      // Cache the summaries
-      _cachedEmailSummaries = emailSummaries;
-      
-      if (emailSummaries.isNotEmpty) {
-        debugPrint('📧 [PDA EMAIL CONTEXT] Found ${emailSummaries.length} email summaries');
-      }
-      
-      return emailSummaries;
+      return await _gmailPrewarmService.getGmailContextForPda();
     } catch (e) {
-      debugPrint('❌ [PDA EMAIL CONTEXT] Error getting email summaries: $e');
-      return [];
+      debugPrint('❌ [PDA GMAIL CONTEXT] Error getting Gmail context: $e');
+      return '';
+    }
+  }
+
+  /// Get LinkedIn context for PDA responses
+  Future<String> _getLinkedInContextForPda() async {
+    try {
+      return await _linkedInPrewarmService.getLinkedInContextForPda();
+    } catch (e) {
+      debugPrint('❌ [PDA LINKEDIN CONTEXT] Error getting LinkedIn context: $e');
+      return '';
     }
   }
 
@@ -406,7 +418,9 @@ Last Updated: $updatedAt
 
       final isConnected = await _gmailService.isGmailConnected();
       if (!isConnected) {
-        debugPrint('📧 [PDA EMAIL MONITOR] Gmail not connected, skipping email monitoring');
+        debugPrint(
+          '📧 [PDA EMAIL MONITOR] Gmail not connected, skipping email monitoring',
+        );
         return;
       }
 
@@ -421,7 +435,15 @@ Last Updated: $updatedAt
       });
 
       _isMonitoringEmails = true;
-      debugPrint('📧 [PDA EMAIL MONITOR] Email monitoring started successfully');
+      debugPrint(
+        '📧 [PDA EMAIL MONITOR] Email monitoring started successfully',
+      );
+
+      // Also start Gmail and LinkedIn monitoring
+      _gmailPrewarmService.startGmailMonitoring();
+      _linkedInPrewarmService.startLinkedInMonitoring();
+      debugPrint('📧 [PDA GMAIL MONITOR] Gmail monitoring started');
+      debugPrint('🔗 [PDA LINKEDIN MONITOR] LinkedIn monitoring started');
     } catch (e) {
       debugPrint('❌ [PDA EMAIL MONITOR] Error starting email monitoring: $e');
     }
@@ -460,25 +482,38 @@ Last Updated: $updatedAt
   void _handleNewEmails(List<EmailThreadSummary> newThreads) {
     if (newThreads.isEmpty) return;
 
-    debugPrint('📧 [PDA EMAIL MONITOR] Processing ${newThreads.length} new email threads');
+    debugPrint(
+      '📧 [PDA EMAIL MONITOR] Processing ${newThreads.length} new email threads',
+    );
 
     // Update cached summaries with new emails
-    final newSummaries = newThreads.map((thread) => thread.formattedSummary).toList();
-    
-    // Add new summaries to the beginning of the cache and limit to 10
-    _cachedEmailSummaries = [...newSummaries, ..._cachedEmailSummaries].take(10).toList();
+    final newSummaries = newThreads
+        .map((thread) => thread.formattedSummary)
+        .toList();
 
-    debugPrint('📧 [PDA EMAIL MONITOR] Updated PDA email context with ${newSummaries.length} new emails');
+    // Add new summaries to the beginning of the cache and limit to 10
+    _cachedEmailSummaries = [
+      ...newSummaries,
+      ..._cachedEmailSummaries,
+    ].take(10).toList();
+
+    debugPrint(
+      '📧 [PDA EMAIL MONITOR] Updated PDA email context with ${newSummaries.length} new emails',
+    );
   }
 
   /// Refresh email context by re-fetching summaries
   Future<void> _refreshEmailContext() async {
     debugPrint('📧 [PDA EMAIL MONITOR] Refreshing email context...');
-    
+
     try {
-      final freshSummaries = await _gmailService.getRecentEmailSummaries(limit: 10);
+      final freshSummaries = await _gmailService.getRecentEmailSummaries(
+        limit: 10,
+      );
       _cachedEmailSummaries = freshSummaries;
-      debugPrint('📧 [PDA EMAIL MONITOR] Email context refreshed with ${freshSummaries.length} summaries');
+      debugPrint(
+        '📧 [PDA EMAIL MONITOR] Email context refreshed with ${freshSummaries.length} summaries',
+      );
     } catch (e) {
       debugPrint('❌ [PDA EMAIL MONITOR] Error refreshing email context: $e');
     }
@@ -487,5 +522,7 @@ Last Updated: $updatedAt
   /// Dispose resources
   void dispose() {
     stopEmailMonitoring();
+    _gmailPrewarmService.dispose();
+    _linkedInPrewarmService.dispose();
   }
 }
