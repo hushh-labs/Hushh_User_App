@@ -14,6 +14,7 @@ import '../../domain/entities/linkedin_education.dart';
 import '../../domain/entities/linkedin_skill.dart';
 import '../../domain/entities/linkedin_certification.dart';
 import '../../domain/entities/linkedin_message.dart';
+import 'linkedin_context_prewarm_service.dart';
 
 /// Result class for LinkedIn operations
 class LinkedInConnectionResult {
@@ -54,6 +55,8 @@ class SupabaseLinkedInService {
 
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final GetIt _getIt = GetIt.instance;
+  final LinkedInContextPrewarmService _prewarmService =
+      LinkedInContextPrewarmService();
 
   // Stream controllers for real-time updates
   final StreamController<List<LinkedInPost>> _postsController =
@@ -155,20 +158,16 @@ class SupabaseLinkedInService {
       final authUrl = _generateLinkedInAuthUrl();
       debugPrint('🔐 [LINKEDIN SERVICE] Auth URL: $authUrl');
 
-      // Launch the OAuth URL in WebView
+      // Launch the OAuth URL in external browser
       if (await canLaunchUrl(Uri.parse(authUrl))) {
         final result = await launchUrl(
           Uri.parse(authUrl),
-          mode: LaunchMode.inAppWebView,
-          webViewConfiguration: const WebViewConfiguration(
-            enableJavaScript: true,
-            enableDomStorage: true,
-          ),
+          mode: LaunchMode.externalApplication,
         );
 
-        debugPrint('🔐 [LINKEDIN SERVICE] WebView launched: $result');
+        debugPrint('🔐 [LINKEDIN SERVICE] External browser launched: $result');
 
-        // For in-app OAuth, give user time to complete the flow
+        // Give user time to complete the OAuth flow in external browser
         // The OAuth will redirect to our Edge function which handles token exchange
         debugPrint('🔐 [LINKEDIN SERVICE] Waiting for OAuth completion...');
 
@@ -182,6 +181,10 @@ class SupabaseLinkedInService {
             debugPrint('✅ [LINKEDIN SERVICE] OAuth completed successfully!');
             _connectionController.add(true);
             await _refreshDataStreams();
+
+            // Pre-warm PDA with LinkedIn context after successful connection
+            _prewarmService.prewarmLinkedInContext();
+
             return LinkedInConnectionResult.success();
           }
           // Wait a bit more before checking again
@@ -202,8 +205,13 @@ class SupabaseLinkedInService {
 
   /// Generate LinkedIn OAuth authorization URL
   String _generateLinkedInAuthUrl() {
-    // Using only OpenID Connect scopes that are currently approved
-    final scopes = ['openid', 'profile', 'email'].join(' ');
+    // Enhanced scopes for comprehensive data access with Share on LinkedIn product
+    final scopes = [
+      'openid',
+      'profile',
+      'email',
+      'w_member_social', // Share on LinkedIn - allows posting and reading social content
+    ].join(' ');
     final state = DateTime.now().millisecondsSinceEpoch.toString();
 
     final params = {
@@ -264,6 +272,9 @@ class SupabaseLinkedInService {
 
         // Refresh data streams
         await _refreshDataStreams();
+
+        // Pre-warm PDA with updated LinkedIn context after sync
+        _prewarmService.prewarmLinkedInContext();
 
         debugPrint('✅ [LINKEDIN SERVICE] Data sync completed successfully');
         return LinkedInConnectionResult.success();
@@ -561,6 +572,9 @@ class SupabaseLinkedInService {
         _skillsController.add([]);
         _certificationsController.add([]);
         _messagesController.add([]);
+
+        // Clear LinkedIn context cache when disconnected
+        _prewarmService.clearLinkedInContextCache();
 
         debugPrint('✅ [LINKEDIN SERVICE] LinkedIn disconnected successfully');
       }

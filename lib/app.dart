@@ -24,6 +24,8 @@ import 'features/discover/presentation/bloc/cart_bloc.dart';
 import 'features/notifications/domain/repositories/notification_repository.dart';
 import 'shared/services/gmail_connector_service.dart';
 import 'features/pda/data/data_sources/pda_vertex_ai_data_source_impl.dart';
+import 'features/pda/data/services/linkedin_context_prewarm_service.dart';
+import 'features/pda/data/services/gmail_context_prewarm_service.dart';
 
 final GetIt getIt = GetIt.instance;
 
@@ -84,6 +86,10 @@ class _AppContent extends StatefulWidget {
 
 class _AppContentState extends State<_AppContent> {
   final GmailConnectorService _gmailService = GmailConnectorService();
+  final LinkedInContextPrewarmService _linkedInPrewarmService =
+      LinkedInContextPrewarmService();
+  final GmailContextPrewarmService _gmailPrewarmService =
+      GmailContextPrewarmService();
   PdaVertexAiDataSourceImpl? _pdaDataSource;
 
   @override
@@ -138,7 +144,7 @@ class _AppContentState extends State<_AppContent> {
     }
   }
 
-  /// Prewarm PDA with user context and email data
+  /// Prewarm PDA with user context, email data, and LinkedIn context
   Future<void> _prewarmPDA(String userId) async {
     try {
       debugPrint('🧠 [APP] Starting PDA prewarming for user: $userId');
@@ -146,6 +152,10 @@ class _AppContentState extends State<_AppContent> {
       // Get PDA data source and prewarm context
       _pdaDataSource = getIt<PdaVertexAiDataSourceImpl>();
       await _pdaDataSource?.prewarmUserContext(userId);
+
+      // Also pre-warm Gmail and LinkedIn context in parallel for faster loading
+      _gmailPrewarmService.prewarmGmailContext();
+      _linkedInPrewarmService.prewarmLinkedInContext();
 
       debugPrint('🧠 [APP] PDA prewarming completed');
     } catch (e) {

@@ -51,6 +51,15 @@
 				<string>app-1-53407187172-ios-03a4f4a395604f9cb32cf1</string>
 			</array>
 		</dict>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<!-- LinkedIn OAuth redirect -->
+				<string>hushhapp</string>
+			</array>
+		</dict>
 	</array>
 	<key>CFBundleVersion</key>
 	<string>$(FLUTTER_BUILD_NUMBER)</string>

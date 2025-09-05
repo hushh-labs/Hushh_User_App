@@ -77,6 +77,14 @@ import GoogleSignIn
       return true
     }
     
+    // Handle LinkedIn OAuth redirect
+    if url.scheme == "hushhapp" && url.host == "oauth" {
+      print("✅ LinkedIn OAuth redirect handled: \(url)")
+      // The app will automatically return to the foreground
+      // The Dart side will detect the connection through polling
+      return true
+    }
+    
     // Fall back to super implementation for other URL schemes
     return super.application(app, open: url, options: options)
   }
