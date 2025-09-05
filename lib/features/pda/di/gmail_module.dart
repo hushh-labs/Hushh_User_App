@@ -18,10 +18,7 @@ class GmailModule {
 
     // Repositories
     getIt.registerLazySingleton<GmailRepository>(
-      () => GmailRepositoryImpl(
-        getIt<SupabaseGmailDataSource>(),
-        getIt<SupabaseService>(),
-      ),
+      () => GmailRepositoryImpl(getIt<SupabaseGmailDataSource>()),
     );
 
     // Use Cases

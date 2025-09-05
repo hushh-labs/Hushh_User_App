@@ -5,20 +5,17 @@ import '../../domain/entities/gmail_account.dart';
 import '../../domain/entities/gmail_email.dart';
 import '../../domain/repositories/gmail_repository.dart';
 import '../data_sources/supabase_gmail_datasource.dart';
-import '../models/gmail_account_model.dart';
-import '../../../../core/services/supabase_service.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 class GmailRepositoryImpl implements GmailRepository {
   final SupabaseGmailDataSource _dataSource;
-  final SupabaseService _supabaseService;
   // Stream controllers for real-time updates
   final StreamController<bool> _connectionStatusController =
       StreamController<bool>.broadcast();
   final StreamController<List<GmailEmail>> _emailsController =
       StreamController<List<GmailEmail>>.broadcast();
 
-  GmailRepositoryImpl(this._dataSource, this._supabaseService);
+  GmailRepositoryImpl(this._dataSource);
 
   // Get Supabase URL and key from environment
   String get _supabaseUrl =>

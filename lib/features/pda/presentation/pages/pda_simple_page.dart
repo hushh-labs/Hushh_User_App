@@ -16,6 +16,8 @@ import '../widgets/gmail_sync_dialog.dart';
 import '../../domain/repositories/gmail_repository.dart';
 
 import 'package:hushh_user_app/shared/utils/app_local_storage.dart';
+import 'package:go_router/go_router.dart';
+import 'package:hushh_user_app/core/routing/route_paths.dart';
 
 class PdaSimplePage extends StatefulWidget {
   const PdaSimplePage({super.key});
@@ -439,6 +441,34 @@ class _PdaSimplePageState extends State<PdaSimplePage> {
         ),
       );
     }
+  }
+
+  Widget _buildVaultButton() {
+    return SizedBox(
+      width: double.infinity,
+      child: OutlinedButton.icon(
+        onPressed: () {
+          context.push(RoutePaths.vault);
+        },
+        style: OutlinedButton.styleFrom(
+          foregroundColor: primaryPurple,
+          side: BorderSide(
+            color: primaryPurple.withValues(alpha: 0.5),
+            width: 1,
+          ),
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          backgroundColor: Colors.white,
+        ),
+        icon: Icon(Icons.folder_open_rounded, color: primaryPurple, size: 20),
+        label: const Text(
+          'Vault',
+          style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+        ),
+      ),
+    );
   }
 
   /// Trigger quick sync for new emails
@@ -1063,6 +1093,9 @@ class _PdaSimplePageState extends State<PdaSimplePage> {
         const SizedBox(height: 8),
         // LinkedIn Button
         _buildConnectLinkedInButton(),
+        const SizedBox(height: 8),
+        // Vault Button
+        _buildVaultButton(),
       ],
     );
   }

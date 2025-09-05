@@ -17,6 +17,7 @@ import 'features/profile/di/profile_module.dart';
 import 'features/discover/di/discover_module.dart';
 import 'features/notifications/di/notification_module.dart';
 import 'features/chat/di/chat_module.dart';
+import 'features/vault/di/vault_module.dart';
 import 'shared/di/dependencies.dart';
 import 'shared/utils/app_local_storage.dart';
 import 'features/notifications/data/services/notification_service.dart';
@@ -51,6 +52,7 @@ Future<void> mainApp() async {
   DiscoverModule.init();
   NotificationModule.register();
   ChatModule.init();
+  VaultModule.init(getIt);
   setupDependencies();
 
   // Initialize local notifications/channels early

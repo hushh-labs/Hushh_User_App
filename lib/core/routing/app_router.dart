@@ -9,6 +9,10 @@ import 'package:hushh_user_app/features/auth/presentation/pages/create_first_car
 import 'package:hushh_user_app/features/auth/presentation/pages/card_created_success_page.dart';
 import 'package:hushh_user_app/features/auth/presentation/pages/video_recording_page.dart';
 import 'package:hushh_user_app/features/pda/presentation/pages/pda_simple_page.dart';
+import 'package:hushh_user_app/features/vault/presentation/pages/vault_page.dart';
+import 'package:hushh_user_app/features/vault/presentation/bloc/vault_bloc.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:get_it/get_it.dart';
 
 import 'route_paths.dart';
 import 'auth_guard.dart';
@@ -75,6 +79,15 @@ class AppRouter {
         path: RoutePaths.pda,
         name: RouteNames.pda,
         builder: (context, state) => const PdaSimplePage(),
+      ),
+      // Vault page
+      GoRoute(
+        path: RoutePaths.vault,
+        name: RouteNames.vault,
+        builder: (context, state) => BlocProvider(
+          create: (context) => GetIt.instance<VaultBloc>(),
+          child: const VaultPage(),
+        ),
       ),
 
       // Auth routes for login/register pages
