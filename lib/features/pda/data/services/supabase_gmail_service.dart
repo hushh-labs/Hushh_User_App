@@ -11,8 +11,6 @@ import '../../domain/usecases/connect_gmail_usecase.dart';
 import '../../domain/usecases/sync_gmail_usecase.dart';
 import '../../domain/usecases/get_gmail_emails_usecase.dart';
 import '../../domain/entities/gmail_email.dart';
-import '../../../../core/services/supabase_service.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 /// Result class for Gmail operations
 class GmailConnectionResult {
@@ -72,11 +70,6 @@ class SupabaseGmailService {
   SyncGmailUseCase get _syncUseCase => _getIt<SyncGmailUseCase>();
   GetGmailEmailsUseCase get _getEmailsUseCase =>
       _getIt<GetGmailEmailsUseCase>();
-  SupabaseService get _supabaseService => _getIt<SupabaseService>();
-
-  String get _supabaseUrl =>
-      dotenv.env['SUPABASE_URL'] ?? 'https://biiqwforuvzgubrrkfgq.supabase.co';
-  String get _supabaseKey => dotenv.env['SUPABASE_ANON_KEY'] ?? '';
 
   // Initialize Google Sign-In with proper configuration
   GoogleSignIn _getGoogleSignIn() {

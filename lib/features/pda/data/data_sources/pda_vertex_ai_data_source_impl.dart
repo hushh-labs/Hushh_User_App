@@ -12,6 +12,7 @@ import 'package:hushh_user_app/features/pda/data/config/vertex_ai_config.dart';
 import 'package:hushh_user_app/shared/services/gmail_connector_service.dart';
 import '../services/linkedin_context_prewarm_service.dart';
 import '../services/gmail_context_prewarm_service.dart';
+import 'package:hushh_user_app/features/vault/data/services/supabase_document_context_prewarm_service.dart';
 
 class PdaVertexAiDataSourceImpl implements PdaDataSource {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -21,6 +22,8 @@ class PdaVertexAiDataSourceImpl implements PdaDataSource {
       LinkedInContextPrewarmService();
   final GmailContextPrewarmService _gmailPrewarmService =
       GmailContextPrewarmService();
+  final SupabaseDocumentContextPrewarmService _documentPrewarmService =
+      SupabaseDocumentContextPrewarmServiceImpl();
 
   // Stream subscription for email events
   StreamSubscription<EmailEvent>? _emailEventSubscription;
@@ -167,6 +170,7 @@ class PdaVertexAiDataSourceImpl implements PdaDataSource {
 
       // Get LinkedIn context for enhanced responses (if LinkedIn is connected)
       final linkedInContext = await _getLinkedInContextForPda();
+      final documentContext = await _getDocumentContextForPda();
 
       // Get authenticated client
       final client = await _getAuthenticatedClient();
@@ -188,6 +192,11 @@ class PdaVertexAiDataSourceImpl implements PdaDataSource {
           ? '\n\nLinkedIn Professional Context:\n$linkedInContext'
           : '';
 
+      // Prepare Document context
+      final documentContextText = documentContext.isNotEmpty
+          ? '\n\nUser Document Context:\n$documentContext'
+          : '';
+
       // Prepare the request body for Claude via Vertex AI streamRawPredict endpoint
       final requestBody = {
         'anthropic_version': VertexAiConfig.anthropicVersion,
@@ -199,7 +208,7 @@ class PdaVertexAiDataSourceImpl implements PdaDataSource {
 You are Hush, a personal digital assistant for the Hushh app - a platform that connects users with agents who sell products and services. You help users navigate the app, understand features, and get the most out of their Hushh experience.
 
 User Context:
-${_formatUserContext(userContext)}$gmailContextText$linkedInContextText
+${_formatUserContext(userContext)}$gmailContextText$linkedInContextText$documentContextText
 
 Conversation History:
 $conversationHistory
@@ -215,10 +224,13 @@ Please provide helpful responses related to:
 - General questions about the Hushh platform
 - Gmail-related insights and email management (if Gmail data is available)
 - LinkedIn professional insights and networking advice (if LinkedIn data is available)
+- Document-related insights and information retrieval (if user documents are available)
 
 When Gmail context is available, you can reference relevant emails to provide more personalized assistance. For example, if the user mentions a product or order, you can check if there are related emails and provide insights. You can also help with email management, unread emails, and important messages.
 
 When LinkedIn context is available, you can provide professional insights, networking advice, and career-related assistance based on the user's LinkedIn profile, connections, and activity.
+
+When Document context is available, you can reference relevant documents to provide more personalized assistance. For example, if the user asks about a topic, you can check if there are related documents and provide insights or summaries from them.
 
 Keep responses relevant to the Hushh app ecosystem and user experience. If the user asks about unrelated topics, politely redirect them to Hushh-related assistance.
 
@@ -285,9 +297,16 @@ Be conversational, helpful, and concise in your responses.
       final gmailPrewarmFuture = _gmailPrewarmService.prewarmGmailContext();
       final linkedInPrewarmFuture = _linkedInPrewarmService
           .prewarmLinkedInContext();
+      final documentPrewarmFuture = _documentPrewarmService.getPrewarmedContext(
+        userId: currentUserId,
+      );
 
-      // Wait for both to complete
-      await Future.wait([gmailPrewarmFuture, linkedInPrewarmFuture]);
+      // Wait for all to complete
+      await Future.wait([
+        gmailPrewarmFuture,
+        linkedInPrewarmFuture,
+        documentPrewarmFuture,
+      ]);
 
       debugPrint(
         '🚀 [PDA PREWARM] ✅ PDA context prewarming completed successfully',
@@ -444,6 +463,11 @@ Last Updated: $updatedAt
       _linkedInPrewarmService.startLinkedInMonitoring();
       debugPrint('📧 [PDA GMAIL MONITOR] Gmail monitoring started');
       debugPrint('🔗 [PDA LINKEDIN MONITOR] LinkedIn monitoring started');
+      // Also start document monitoring if applicable (e.g., for real-time updates on document processing)
+      // _documentPrewarmService.startDocumentMonitoring(); // If such a method exists
+      debugPrint(
+        '📄 [PDA DOCUMENT MONITOR] Document monitoring started (if applicable)',
+      );
     } catch (e) {
       debugPrint('❌ [PDA EMAIL MONITOR] Error starting email monitoring: $e');
     }
@@ -519,10 +543,69 @@ Last Updated: $updatedAt
     }
   }
 
+  /// Get Document context for PDA responses
+  Future<String> _getDocumentContextForPda() async {
+    try {
+      final currentUserId = _getCurrentUserId();
+      if (currentUserId == null) return '';
+
+      final context = await _documentPrewarmService.getPrewarmedContext(
+        userId: currentUserId,
+      );
+      return _formatDocumentContext(context);
+    } catch (e) {
+      debugPrint('❌ [PDA DOCUMENT CONTEXT] Error getting document context: $e');
+      return '';
+    }
+  }
+
+  String _formatDocumentContext(Map<String, dynamic> context) {
+    if (context.isEmpty) return 'No document context available.';
+
+    final totalDocuments = context['totalDocuments'] ?? 0;
+    final recentDocuments = context['recentDocuments'] as List<dynamic>? ?? [];
+    final documentCategories =
+        context['documentCategories'] as Map<String, dynamic>? ?? {};
+    final summary = context['summary'] ?? 'No overall summary.';
+    final keywords = context['keywords'] as List<dynamic>? ?? [];
+
+    String formattedRecentDocuments = '';
+    if (recentDocuments.isNotEmpty) {
+      formattedRecentDocuments = recentDocuments
+          .map((doc) {
+            final title = doc['title'] ?? 'Untitled';
+            final docSummary = doc['summary'] ?? 'No summary.';
+            return '- $title: $docSummary';
+          })
+          .join('\n');
+    } else {
+      formattedRecentDocuments = 'No recent documents.';
+    }
+
+    String formattedCategories = '';
+    if (documentCategories.isNotEmpty) {
+      formattedCategories = documentCategories.entries
+          .map((entry) => '${entry.key}: ${entry.value}')
+          .join(', ');
+    } else {
+      formattedCategories = 'No document categories.';
+    }
+
+    return '''
+Total Documents: $totalDocuments
+Recent Documents:
+$formattedRecentDocuments
+Document Categories: $formattedCategories
+Overall Document Summary: $summary
+Keywords: ${keywords.join(', ')}
+''';
+  }
+
   /// Dispose resources
   void dispose() {
     stopEmailMonitoring();
     _gmailPrewarmService.dispose();
     _linkedInPrewarmService.dispose();
+    // No explicit dispose needed for DocumentContextPrewarmService as it doesn't manage streams or external resources
   }
 }

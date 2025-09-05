@@ -218,7 +218,7 @@ class LinkedInPosition extends Equatable {
       'Nov',
       'Dec',
     ];
-    return months[month] ?? '';
+    return months[month];
   }
 
   /// Check if this is a current position
@@ -253,4 +253,3 @@ class LinkedInPosition extends Equatable {
     }
   }
 }
-
