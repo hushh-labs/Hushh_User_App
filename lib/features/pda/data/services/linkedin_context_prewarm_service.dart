@@ -291,9 +291,9 @@ class LinkedInContextPrewarmService {
       final user = _auth.currentUser;
       if (user == null) return;
 
-      // Store in Firestore under user's PDA context
+      // Store in Firestore under user's PDA context (using HushUsers collection)
       await _firestore
-          .collection('users')
+          .collection('HushUsers')
           .doc(user.uid)
           .collection('pda_context')
           .doc('linkedin')
