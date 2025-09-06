@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:hushh_user_app/core/config/supabase_init.dart';
 
 abstract class SupabaseStorageDataSource {
   Future<String> uploadFile({
@@ -15,7 +16,8 @@ class SupabaseStorageDataSourceImpl implements SupabaseStorageDataSource {
   final SupabaseClient _supabase;
 
   SupabaseStorageDataSourceImpl({SupabaseClient? supabase})
-    : _supabase = supabase ?? Supabase.instance.client;
+    : _supabase =
+          supabase ?? (SupabaseInit.serviceClient ?? Supabase.instance.client);
 
   @override
   Future<String> uploadFile({
@@ -24,22 +26,54 @@ class SupabaseStorageDataSourceImpl implements SupabaseStorageDataSource {
     required String filename,
   }) async {
     try {
+      print('Storage: Starting upload for user: $userId, file: $filename');
+      print(
+        'Storage: Using service client: ${SupabaseInit.serviceClient != null}',
+      );
+
+      // First, ensure the bucket exists
+      await _ensureBucketExists();
+
       // Create the file path in Supabase Storage
+      // Use Firebase UID as the user identifier
       final filePath = 'vault/$userId/$filename';
+      print('Storage: File path: $filePath');
 
       // Upload the file to Supabase Storage
-      await _supabase.storage
+      final result = await _supabase.storage
           .from('vault-files')
           .uploadBinary(filePath, await file.readAsBytes());
+
+      print('Storage: Upload result: $result');
 
       // Get the public URL for the uploaded file
       final publicUrl = _supabase.storage
           .from('vault-files')
           .getPublicUrl(filePath);
 
+      print('Storage: Public URL: $publicUrl');
       return publicUrl;
     } catch (e) {
+      print('Storage: Upload failed: $e');
       throw Exception('Supabase Storage Error: $e');
+    }
+  }
+
+  /// Ensure the vault-files bucket exists, create it if it doesn't
+  Future<void> _ensureBucketExists() async {
+    try {
+      // Try to get the bucket, if it doesn't exist, create it
+      await _supabase.storage.getBucket('vault-files');
+    } catch (e) {
+      // Bucket doesn't exist, create it
+      await _supabase.storage.createBucket(
+        'vault-files',
+        BucketOptions(
+          public: true,
+          allowedMimeTypes: null, // Allow all file types
+          fileSizeLimit: '50MB', // 50MB limit
+        ),
+      );
     }
   }
 

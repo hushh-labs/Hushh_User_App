@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:hushh_user_app/features/vault/presentation/bloc/vault_bloc.dart';
 import 'package:hushh_user_app/features/vault/presentation/bloc/vault_state.dart';
 import 'package:hushh_user_app/features/vault/presentation/bloc/vault_event.dart';
@@ -41,29 +42,33 @@ class _VaultPageState extends State<VaultPage> {
   }
 
   void _loadDocuments() {
-    // TODO: Get actual user ID from authentication
-    const String userId = 'current_user_id';
+    // Get actual user ID from Firebase Auth
+    final userId = FirebaseAuth.instance.currentUser?.uid ?? 'anonymous';
     context.read<VaultBloc>().add(LoadVaultDocuments(userId: userId));
   }
 
   void _showUploadModal() {
+    final vaultBloc = context.read<VaultBloc>();
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black26,
-              blurRadius: 20,
-              offset: Offset(0, -5),
-            ),
-          ],
+      builder: (context) => BlocProvider.value(
+        value: vaultBloc,
+        child: Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black26,
+                blurRadius: 20,
+                offset: Offset(0, -5),
+              ),
+            ],
+          ),
+          child: const DocumentUploadModal(),
         ),
-        child: const DocumentUploadModal(),
       ),
     );
   }
@@ -121,6 +126,19 @@ class _VaultPageState extends State<VaultPage> {
             return _buildErrorState(state.message);
           }
           return _buildWelcomeState();
+        },
+      ),
+      floatingActionButton: BlocBuilder<VaultBloc, VaultState>(
+        builder: (context, state) {
+          // Only show FAB when documents are loaded and not empty
+          if (state is VaultLoaded && state.documents.isNotEmpty) {
+            return FloatingActionButton(
+              onPressed: _showUploadModal,
+              backgroundColor: VaultTheme.primaryPurple,
+              child: const Icon(Icons.add, color: Colors.white),
+            );
+          }
+          return const SizedBox.shrink();
         },
       ),
     );
@@ -243,6 +261,7 @@ class _VaultPageState extends State<VaultPage> {
             const SizedBox(height: 32),
             // Primary CTA Button
             Container(
+              width: double.infinity,
               decoration: BoxDecoration(
                 gradient: VaultTheme.primaryGradient,
                 borderRadius: BorderRadius.circular(12),
@@ -259,19 +278,30 @@ class _VaultPageState extends State<VaultPage> {
                 child: InkWell(
                   borderRadius: BorderRadius.circular(12),
                   onTap: _showUploadModal,
-                  child: const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 24,
+                      vertical: 16,
+                    ),
                     child: Row(
-                      mainAxisSize: MainAxisSize.min,
+                      mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.upload_file, color: Colors.white, size: 20),
-                        SizedBox(width: 12),
-                        Text(
-                          'Choose Your First Document',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
+                        const Icon(
+                          Icons.upload_file,
+                          color: Colors.white,
+                          size: 20,
+                        ),
+                        const SizedBox(width: 12),
+                        Flexible(
+                          child: Text(
+                            'Choose Your First Document',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            textAlign: TextAlign.center,
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
                       ],
@@ -384,6 +414,28 @@ class _VaultPageState extends State<VaultPage> {
                   ],
                 ),
               ),
+              // Upload button in header
+              Container(
+                decoration: BoxDecoration(
+                  gradient: VaultTheme.primaryGradient,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(8),
+                    onTap: _showUploadModal,
+                    child: const Padding(
+                      padding: EdgeInsets.all(8.0),
+                      child: Icon(
+                        Icons.upload_file,
+                        color: Colors.white,
+                        size: 20,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
             ],
           ),
         ),
@@ -482,9 +534,12 @@ class _VaultPageState extends State<VaultPage> {
   }
 
   void _showDeleteConfirmation(BuildContext context, document) {
+    // Capture the VaultBloc reference before showing the dialog
+    final vaultBloc = context.read<VaultBloc>();
+
     showDialog(
       context: context,
-      builder: (BuildContext context) {
+      builder: (BuildContext dialogContext) {
         return AlertDialog(
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
@@ -498,15 +553,14 @@ class _VaultPageState extends State<VaultPage> {
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.of(context).pop(),
+              onPressed: () => Navigator.of(dialogContext).pop(),
               child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
             ),
             ElevatedButton(
               onPressed: () {
-                Navigator.of(context).pop();
-                context.read<VaultBloc>().add(
-                  DeleteVaultDocument(documentId: document.id),
-                );
+                Navigator.of(dialogContext).pop();
+                // Use the captured VaultBloc reference instead of trying to read from dialog context
+                vaultBloc.add(DeleteVaultDocument(documentId: document.id));
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.red,

@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:hushh_user_app/features/vault/presentation/bloc/vault_bloc.dart';
 import 'package:hushh_user_app/features/vault/presentation/bloc/vault_event.dart';
 
@@ -62,9 +63,8 @@ class _DocumentUploadModalState extends State<DocumentUploadModal> {
     });
 
     try {
-      // Assuming userId is available from authentication bloc or similar
-      const String userId =
-          'current_user_id'; // TODO: Replace with actual user ID
+      // Get actual user ID from Firebase Auth
+      final userId = FirebaseAuth.instance.currentUser?.uid ?? 'anonymous';
       context.read<VaultBloc>().add(
         UploadVaultDocument(
           userId: userId,

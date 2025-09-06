@@ -76,8 +76,9 @@ class _AgentProfileState extends State<AgentProfile>
         createdAt: DateTime.now(),
       );
       context.read<CartBloc>().add(
-        AddToCartEvent(product: model, agentId: agentId, agentName: agentName),
-      );
+            AddToCartEvent(
+                product: model, agentId: agentId, agentName: agentName),
+          );
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('Added to cart')));
@@ -345,7 +346,9 @@ class _AgentProfileState extends State<AgentProfile>
                   ),
                   const SizedBox(height: 14),
                   // Description/About section just below header
-                  if ((agent['description'] ?? agent['bio'] ?? agent['about']) !=
+                  if ((agent['description'] ??
+                          agent['bio'] ??
+                          agent['about']) !=
                       null)
                     Container(
                       width: double.infinity,
@@ -355,9 +358,7 @@ class _AgentProfileState extends State<AgentProfile>
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Text(
-                        (agent['description'] ??
-                                agent['bio'] ??
-                                agent['about'])
+                        (agent['description'] ?? agent['bio'] ?? agent['about'])
                             .toString(),
                         style: const TextStyle(
                           fontSize: 13,
@@ -615,8 +616,7 @@ class _AgentProfileState extends State<AgentProfile>
                                   child: Image.network(
                                     product['imageUrl'],
                                     fit: BoxFit.cover,
-                                    errorBuilder:
-                                        (context, error, stackTrace) {
+                                    errorBuilder: (context, error, stackTrace) {
                                       return const Icon(
                                         Icons.image_outlined,
                                         color: Color(0xFFCCCCCC),
@@ -651,7 +651,7 @@ class _AgentProfileState extends State<AgentProfile>
                               ],
                             ),
                             child: Text(
-                              ' \$${((product['price'] ?? 0.0) as num).toStringAsFixed(2)}'
+                              '${((product['price'] ?? 0.0) as num).toStringAsFixed(2)}'
                                   .replaceFirst('\u0000', ''),
                               style: const TextStyle(
                                 color: Colors.white,
@@ -899,8 +899,7 @@ class _AgentProfileState extends State<AgentProfile>
       final productSku = product['id'] ?? 'N/A';
 
       // Create inquiry message
-      final inquiryMessage =
-          '''
+      final inquiryMessage = '''
 Hi! I'm interested in learning more about your $productName.
 
 Product Details:

@@ -13,6 +13,7 @@ import 'package:hushh_user_app/shared/services/gmail_connector_service.dart';
 import '../services/linkedin_context_prewarm_service.dart';
 import '../services/gmail_context_prewarm_service.dart';
 import 'package:hushh_user_app/features/vault/data/services/supabase_document_context_prewarm_service.dart';
+import 'package:hushh_user_app/features/vault/data/services/local_file_cache_service.dart';
 
 class PdaVertexAiDataSourceImpl implements PdaDataSource {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -24,6 +25,7 @@ class PdaVertexAiDataSourceImpl implements PdaDataSource {
       GmailContextPrewarmService();
   final SupabaseDocumentContextPrewarmService _documentPrewarmService =
       SupabaseDocumentContextPrewarmServiceImpl();
+  final LocalFileCacheService _cacheService = LocalFileCacheService();
 
   // Stream subscription for email events
   StreamSubscription<EmailEvent>? _emailEventSubscription;
@@ -197,14 +199,15 @@ class PdaVertexAiDataSourceImpl implements PdaDataSource {
           ? '\n\nUser Document Context:\n$documentContext'
           : '';
 
-      // Prepare the request body for Claude via Vertex AI streamRawPredict endpoint
-      final requestBody = {
-        'anthropic_version': VertexAiConfig.anthropicVersion,
-        'messages': [
-          {
-            'role': 'user',
-            'content':
-                '''
+      // Get document files for multimodal input
+      final documentFiles = await _getDocumentFilesForClaude();
+
+      // Prepare content with text and files
+      final List<Map<String, dynamic>> contentParts = [
+        {
+          'type': 'text',
+          'text':
+              '''
 You are Hush, a personal digital assistant for the Hushh app - a platform that connects users with agents who sell products and services. You help users navigate the app, understand features, and get the most out of their Hushh experience.
 
 User Context:
@@ -236,7 +239,17 @@ Keep responses relevant to the Hushh app ecosystem and user experience. If the u
 
 Be conversational, helpful, and concise in your responses.
 ''',
-          },
+        },
+      ];
+
+      // Add document files to content
+      contentParts.addAll(documentFiles);
+
+      // Prepare the request body for Claude via Vertex AI streamRawPredict endpoint
+      final requestBody = {
+        'anthropic_version': VertexAiConfig.anthropicVersion,
+        'messages': [
+          {'role': 'user', 'content': contentParts},
         ],
         'max_tokens': VertexAiConfig.maxTokens,
         'temperature': VertexAiConfig.temperature,
@@ -570,14 +583,48 @@ Last Updated: $updatedAt
     final keywords = context['keywords'] as List<dynamic>? ?? [];
 
     String formattedRecentDocuments = '';
+    List<String> documentsWithFullContent = [];
+
     if (recentDocuments.isNotEmpty) {
       formattedRecentDocuments = recentDocuments
           .map((doc) {
             final title = doc['title'] ?? 'Untitled';
             final docSummary = doc['summary'] ?? 'No summary.';
-            return '- $title: $docSummary';
+            final fileType = doc['fileType'] ?? 'unknown';
+            final fileSize = doc['fileSize'] ?? 0;
+            final uploadDate = doc['uploadDate'] ?? '';
+            final category = doc['category'] ?? 'uncategorized';
+            final originalName = doc['originalName'] ?? title;
+            final wordCount = doc['wordCount'] ?? 0;
+            final keywords = doc['keywords'] as List<dynamic>? ?? [];
+            final hasFullContent = doc['hasFullContent'] ?? false;
+            final fullContent = doc['fullContent'] ?? '';
+
+            String docInfo =
+                '- $title ($fileType, ${_formatFileSize(fileSize)})';
+            docInfo += '\n  Summary: $docSummary';
+            docInfo += '\n  Category: $category';
+            docInfo += '\n  Upload Date: ${_formatDate(uploadDate)}';
+            docInfo += '\n  Word Count: $wordCount';
+
+            if (keywords.isNotEmpty) {
+              docInfo += '\n  Keywords: ${keywords.join(', ')}';
+            }
+
+            final hasFileData = doc['hasFileData'] ?? false;
+            final mimeType = doc['mimeType'] ?? '';
+
+            if (hasFileData) {
+              docInfo += '\n  📄 ACTUAL FILE AVAILABLE TO CLAUDE';
+              docInfo += '\n  MIME Type: $mimeType';
+              documentsWithFullContent.add('$title ($originalName)');
+            } else {
+              docInfo += '\n  ⚠️ File not available - only summary provided';
+            }
+
+            return docInfo;
           })
-          .join('\n');
+          .join('\n\n');
     } else {
       formattedRecentDocuments = 'No recent documents.';
     }
@@ -591,14 +638,141 @@ Last Updated: $updatedAt
       formattedCategories = 'No document categories.';
     }
 
+    String contentInstructions = '';
+    if (documentsWithFullContent.isNotEmpty) {
+      contentInstructions =
+          '''
+
+📄 ACTUAL DOCUMENT FILES AVAILABLE:
+The following documents are directly accessible to you as files:
+${documentsWithFullContent.map((doc) => '• $doc').join('\n')}
+
+IMPORTANT INSTRUCTIONS FOR DOCUMENT ANALYSIS:
+1. You have direct access to the actual document files (PDFs, images, etc.)
+2. You can analyze the complete document content, including text, images, tables, charts, and formatting
+3. For PDFs: Read and analyze all text, extract data from tables, understand document structure
+4. For Images: Analyze visual content, read text in images (OCR), describe what you see
+5. For Office documents: Access full content including formatting, tables, and embedded elements
+6. When users ask questions about these documents, analyze the actual files directly
+7. Provide detailed, accurate answers based on the complete document analysis
+8. Reference specific sections, pages, or visual elements from the documents when relevant
+
+CAPABILITIES WITH ACTUAL FILES:
+- Complete document analysis (text, images, tables, charts)
+- Visual content analysis for images and diagrams
+- Data extraction from structured documents
+- Document comparison and cross-referencing
+- Detailed content summarization
+- Specific information lookup within documents
+- Format-aware analysis (understanding document structure)
+''';
+    }
+
+    final lastUpdated = context['updated_at'] ?? context['lastUpdated'] ?? '';
+    final updatedInfo = lastUpdated.isNotEmpty
+        ? '\nLast Updated: ${_formatDate(lastUpdated)}'
+        : '';
+
     return '''
 Total Documents: $totalDocuments
 Recent Documents:
 $formattedRecentDocuments
 Document Categories: $formattedCategories
 Overall Document Summary: $summary
-Keywords: ${keywords.join(', ')}
+Keywords: ${keywords.join(', ')}$updatedInfo$contentInstructions
 ''';
+  }
+
+  String _formatFileSize(int bytes) {
+    if (bytes < 1024) return '${bytes}B';
+    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)}KB';
+    return '${(bytes / (1024 * 1024)).toStringAsFixed(1)}MB';
+  }
+
+  String _formatDate(String dateString) {
+    try {
+      final date = DateTime.parse(dateString);
+      return '${date.day}/${date.month}/${date.year}';
+    } catch (e) {
+      return dateString;
+    }
+  }
+
+  /// Get document files for Claude multimodal input
+  Future<List<Map<String, dynamic>>> _getDocumentFilesForClaude() async {
+    try {
+      final currentUserId = _getCurrentUserId();
+      if (currentUserId == null) return [];
+
+      // Initialize cache service
+      await _cacheService.initialize();
+
+      final context = await _documentPrewarmService.getPrewarmedContext(
+        userId: currentUserId,
+      );
+
+      final recentDocuments =
+          context['recentDocuments'] as List<dynamic>? ?? [];
+      final List<Map<String, dynamic>> documentFiles = [];
+
+      debugPrint(
+        '📄 [CLAUDE FILES] Processing ${recentDocuments.length} documents for Claude',
+      );
+
+      for (int i = 0; i < recentDocuments.length; i++) {
+        final doc = recentDocuments[i];
+        final hasFileData = doc['hasFileData'] ?? false;
+        final cachedLocally = doc['cachedLocally'] ?? false;
+        final mimeType = doc['mimeType'] ?? '';
+        final originalName = doc['originalName'] ?? 'Unknown';
+
+        debugPrint(
+          '📄 [CLAUDE FILES] Document $i: $originalName - hasFileData: $hasFileData, cachedLocally: $cachedLocally, mimeType: $mimeType',
+        );
+
+        if (hasFileData && cachedLocally && mimeType.isNotEmpty) {
+          // Retrieve file data from local cache
+          final cachedFileData = await _cacheService.getCachedFileData(
+            userId: currentUserId,
+            fileName: originalName,
+          );
+
+          if (cachedFileData != null) {
+            // Add file to multimodal content
+            documentFiles.add({
+              'type':
+                  'image', // Claude uses 'image' type for all file types including PDFs
+              'source': {
+                'type': 'base64',
+                'media_type': mimeType,
+                'data': cachedFileData,
+              },
+            });
+
+            debugPrint(
+              '📄 [CLAUDE FILES] ✅ Added cached file to multimodal input: $originalName ($mimeType)',
+            );
+          } else {
+            debugPrint(
+              '📄 [CLAUDE FILES] ❌ Failed to retrieve cached file data for: $originalName',
+            );
+          }
+        } else {
+          debugPrint(
+            '📄 [CLAUDE FILES] Skipping file $originalName - hasFileData: $hasFileData, cachedLocally: $cachedLocally, mimeType: $mimeType',
+          );
+        }
+      }
+
+      debugPrint(
+        '📄 [CLAUDE FILES] Total files prepared for Claude: ${documentFiles.length}',
+      );
+
+      return documentFiles;
+    } catch (e) {
+      debugPrint('❌ [CLAUDE FILES] Error preparing document files: $e');
+      return [];
+    }
   }
 
   /// Dispose resources

@@ -5,19 +5,24 @@ import 'package:hushh_user_app/features/vault/data/data_sources/supabase_storage
 import 'package:hushh_user_app/features/vault/data/data_sources/supabase_vault_datasource.dart';
 import 'package:hushh_user_app/features/vault/data/models/vault_document_model.dart';
 import 'package:hushh_user_app/features/vault/data/models/document_metadata_model.dart';
+import 'package:hushh_user_app/features/vault/data/services/supabase_document_context_prewarm_service.dart';
 import 'package:uuid/uuid.dart';
+import 'package:flutter/foundation.dart';
 
 class VaultRepositoryImpl implements VaultRepository {
   final SupabaseStorageDataSource _supabaseStorageDataSource;
   final SupabaseVaultDataSource _supabaseVaultDataSource;
+  final SupabaseDocumentContextPrewarmService _documentPrewarmService;
   final Uuid _uuid;
 
   VaultRepositoryImpl({
     required SupabaseStorageDataSource supabaseStorageDataSource,
     required SupabaseVaultDataSource supabaseVaultDataSource,
+    required SupabaseDocumentContextPrewarmService documentPrewarmService,
     Uuid? uuid,
   }) : _supabaseStorageDataSource = supabaseStorageDataSource,
        _supabaseVaultDataSource = supabaseVaultDataSource,
+       _documentPrewarmService = documentPrewarmService,
        _uuid = uuid ?? const Uuid();
 
   @override
@@ -64,6 +69,24 @@ class VaultRepositoryImpl implements VaultRepository {
         document: documentModel,
       );
 
+      // Prewarm PDA context with the new document
+      try {
+        debugPrint(
+          '🧠 [VAULT] Prewarming PDA context with new document: ${documentModel.originalName}',
+        );
+        await _documentPrewarmService.prewarmDocumentContext(
+          userId: userId,
+          document: documentModel,
+        );
+        debugPrint(
+          '🧠 [VAULT] ✅ PDA context prewarming completed for document: ${documentModel.originalName}',
+        );
+      } catch (e) {
+        debugPrint('⚠️ [VAULT] Failed to prewarm PDA context for document: $e');
+        // Don't throw error here as the document upload was successful
+        // PDA context prewarming is a secondary operation
+      }
+
       return documentModel;
     } catch (e) {
       throw Exception('Failed to upload document: $e');
@@ -85,6 +108,23 @@ class VaultRepositoryImpl implements VaultRepository {
         userId: userId,
         documentId: documentId,
       );
+
+      // Remove document from PDA context
+      try {
+        debugPrint(
+          '🧠 [VAULT] Removing document from PDA context: $documentId',
+        );
+        await _documentPrewarmService.removeDocumentContext(
+          userId: userId,
+          documentId: documentId,
+        );
+        debugPrint(
+          '🧠 [VAULT] ✅ Document removed from PDA context: $documentId',
+        );
+      } catch (e) {
+        debugPrint('⚠️ [VAULT] Failed to remove document from PDA context: $e');
+        // Don't throw error here as the document deletion was successful
+      }
     } catch (e) {
       throw Exception('Failed to delete document: $e');
     }
