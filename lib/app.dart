@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:get_it/get_it.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 import 'core/config/firebase_init.dart';
 import 'core/config/supabase_init.dart';
@@ -165,6 +166,26 @@ class _AppContentState extends State<_AppContent> {
   Future<void> _prewarmPDA(String userId) async {
     try {
       debugPrint('🧠 [APP] Starting PDA prewarming for user: $userId');
+
+      // Clear local file cache and Firestore context on app restart to ensure fresh data
+      try {
+        final cacheService = getIt<LocalFileCacheService>();
+        await cacheService.clearUserCache(userId);
+        debugPrint('🗑️ [APP] Cleared local file cache for fresh restart');
+
+        // Also clear the Firestore vault context to force rebuild
+        await FirebaseFirestore.instance
+            .collection('HushUsers')
+            .doc(userId)
+            .collection('pda_context')
+            .doc('vault')
+            .delete();
+        debugPrint(
+          '🗑️ [APP] Cleared Firestore vault context for fresh restart',
+        );
+      } catch (e) {
+        debugPrint('⚠️ [APP] Error clearing cache: $e');
+      }
 
       // Get PDA data source and prewarm context
       _pdaDataSource = getIt<PdaVertexAiDataSourceImpl>();
