@@ -99,16 +99,20 @@ class _PdaSimplePageState extends State<PdaSimplePage> {
   Future<void> _loadMessages() async {
     final currentUser = FirebaseAuth.instance.currentUser;
     if (currentUser == null) {
-      setState(() {
-        _error = 'User not authenticated';
-      });
+      if (mounted) {
+        setState(() {
+          _error = 'User not authenticated';
+        });
+      }
       return;
     }
 
-    setState(() {
-      _isLoadingMessages = true;
-      _error = null;
-    });
+    if (mounted) {
+      setState(() {
+        _isLoadingMessages = true;
+        _error = null;
+      });
+    }
 
     try {
       final getMessagesUseCase = _getIt<GetMessagesUseCase>();
@@ -116,24 +120,30 @@ class _PdaSimplePageState extends State<PdaSimplePage> {
 
       result.fold(
         (failure) {
-          setState(() {
-            _error = failure.toString();
-            _isLoadingMessages = false;
-          });
+          if (mounted) {
+            setState(() {
+              _error = failure.toString();
+              _isLoadingMessages = false;
+            });
+          }
         },
         (messages) {
-          setState(() {
-            _messages = messages;
-            _isLoadingMessages = false;
-          });
-          _scrollToBottom();
+          if (mounted) {
+            setState(() {
+              _messages = messages;
+              _isLoadingMessages = false;
+            });
+            _scrollToBottom();
+          }
         },
       );
     } catch (e) {
-      setState(() {
-        _error = e.toString();
-        _isLoadingMessages = false;
-      });
+      if (mounted) {
+        setState(() {
+          _error = e.toString();
+          _isLoadingMessages = false;
+        });
+      }
     }
   }
 

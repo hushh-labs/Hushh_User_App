@@ -423,6 +423,31 @@ Last Updated: $updatedAt
   /// Get Gmail context for PDA responses
   Future<String> _getGmailContextForPda() async {
     try {
+      final currentUserId = _getCurrentUserId();
+      if (currentUserId == null) return '';
+
+      // First try to get from Firestore cache (fastest)
+      final doc = await _firestore
+          .collection('HushUsers')
+          .doc(currentUserId)
+          .collection('pda_context')
+          .doc('gmail')
+          .get();
+
+      if (doc.exists) {
+        final data = doc.data() as Map<String, dynamic>;
+        final context = data['context'] as Map<String, dynamic>? ?? {};
+        final summary = context['summary'] as String?;
+        if (summary != null && summary.isNotEmpty) {
+          debugPrint('📦 [PDA GMAIL CONTEXT] Using cached Gmail context');
+          return summary;
+        }
+      }
+
+      // Fallback to prewarm service if no cache
+      debugPrint(
+        '📦 [PDA GMAIL CONTEXT] No cached context, fetching fresh data',
+      );
       return await _gmailPrewarmService.getGmailContextForPda();
     } catch (e) {
       debugPrint('❌ [PDA GMAIL CONTEXT] Error getting Gmail context: $e');
@@ -433,6 +458,31 @@ Last Updated: $updatedAt
   /// Get LinkedIn context for PDA responses
   Future<String> _getLinkedInContextForPda() async {
     try {
+      final currentUserId = _getCurrentUserId();
+      if (currentUserId == null) return '';
+
+      // First try to get from Firestore cache (fastest)
+      final doc = await _firestore
+          .collection('HushUsers')
+          .doc(currentUserId)
+          .collection('pda_context')
+          .doc('linkedin')
+          .get();
+
+      if (doc.exists) {
+        final data = doc.data() as Map<String, dynamic>;
+        final context = data['context'] as Map<String, dynamic>? ?? {};
+        final summary = context['summary'] as String?;
+        if (summary != null && summary.isNotEmpty) {
+          debugPrint('📦 [PDA LINKEDIN CONTEXT] Using cached LinkedIn context');
+          return summary;
+        }
+      }
+
+      // Fallback to prewarm service if no cache
+      debugPrint(
+        '📦 [PDA LINKEDIN CONTEXT] No cached context, fetching fresh data',
+      );
       return await _linkedInPrewarmService.getLinkedInContextForPda();
     } catch (e) {
       debugPrint('❌ [PDA LINKEDIN CONTEXT] Error getting LinkedIn context: $e');
