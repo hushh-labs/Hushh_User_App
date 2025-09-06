@@ -1,4 +1,5 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:hushh_user_app/core/config/supabase_init.dart';
 import 'package:hushh_user_app/features/vault/data/models/vault_document_model.dart';
 import 'package:hushh_user_app/features/vault/data/models/document_metadata_model.dart';
 
@@ -28,7 +29,8 @@ class SupabaseVaultDataSourceImpl implements SupabaseVaultDataSource {
   final SupabaseClient _supabase;
 
   SupabaseVaultDataSourceImpl({SupabaseClient? supabase})
-    : _supabase = supabase ?? Supabase.instance.client;
+    : _supabase =
+          supabase ?? (SupabaseInit.serviceClient ?? Supabase.instance.client);
 
   @override
   Future<VaultDocumentModel> uploadDocumentMetadata({

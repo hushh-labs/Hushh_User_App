@@ -4,6 +4,9 @@ import 'package:hushh_user_app/features/vault/data/data_sources/supabase_vault_d
 import 'package:hushh_user_app/features/vault/data/repository_impl/vault_repository_impl.dart';
 import 'package:hushh_user_app/features/vault/data/services/supabase_document_context_prewarm_service.dart';
 import 'package:hushh_user_app/features/vault/data/services/document_processing_service.dart';
+import 'package:hushh_user_app/features/vault/data/services/vault_startup_prewarm_service.dart';
+import 'package:hushh_user_app/features/vault/data/services/document_url_service.dart';
+import 'package:hushh_user_app/features/vault/data/services/local_file_cache_service.dart';
 import 'package:hushh_user_app/features/vault/domain/repositories/vault_repository.dart';
 import 'package:hushh_user_app/features/vault/domain/usecases/delete_document_usecase.dart';
 import 'package:hushh_user_app/features/vault/domain/usecases/get_documents_usecase.dart';
@@ -24,8 +27,21 @@ class VaultModule {
     sl.registerLazySingleton<DocumentProcessingService>(
       () => DocumentProcessingServiceImpl(),
     );
+    sl.registerLazySingleton<DocumentUrlService>(() => DocumentUrlService());
+    sl.registerLazySingleton<LocalFileCacheService>(
+      () => LocalFileCacheService(),
+    );
     sl.registerLazySingleton<SupabaseDocumentContextPrewarmService>(
-      () => SupabaseDocumentContextPrewarmServiceImpl(),
+      () => SupabaseDocumentContextPrewarmServiceImpl(
+        urlService: sl(),
+        cacheService: sl(),
+      ),
+    );
+    sl.registerLazySingleton<VaultStartupPrewarmService>(
+      () => VaultStartupPrewarmService(
+        documentPrewarmService: sl(),
+        vaultRepository: sl(),
+      ),
     );
 
     // Repositories
@@ -33,6 +49,7 @@ class VaultModule {
       () => VaultRepositoryImpl(
         supabaseStorageDataSource: sl(),
         supabaseVaultDataSource: sl(),
+        documentPrewarmService: sl(),
       ),
     );
 

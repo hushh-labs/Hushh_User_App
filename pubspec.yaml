@@ -142,6 +142,9 @@ dependencies:
   
   # Supabase dependencies
   supabase_flutter: any
+  
+  # Additional dependencies for vault functionality
+  path: any
  
 
 dev_dependencies:

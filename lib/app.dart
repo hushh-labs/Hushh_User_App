@@ -27,6 +27,8 @@ import 'shared/services/gmail_connector_service.dart';
 import 'features/pda/data/data_sources/pda_vertex_ai_data_source_impl.dart';
 import 'features/pda/data/services/linkedin_context_prewarm_service.dart';
 import 'features/pda/data/services/gmail_context_prewarm_service.dart';
+import 'features/vault/data/services/vault_startup_prewarm_service.dart';
+import 'features/vault/data/services/local_file_cache_service.dart';
 
 final GetIt getIt = GetIt.instance;
 
@@ -62,6 +64,15 @@ Future<void> mainApp() async {
     await NotificationService().initialize(notificationRepo);
   } catch (_) {}
 
+  // Initialize local file cache service
+  try {
+    final cacheService = getIt<LocalFileCacheService>();
+    await cacheService.initialize();
+    debugPrint('💾 [APP] Local file cache initialized successfully');
+  } catch (e) {
+    debugPrint('❌ [APP] Error initializing local file cache: $e');
+  }
+
   runApp(const MyApp());
 }
 
@@ -92,11 +103,15 @@ class _AppContentState extends State<_AppContent> {
       LinkedInContextPrewarmService();
   final GmailContextPrewarmService _gmailPrewarmService =
       GmailContextPrewarmService();
+  late final VaultStartupPrewarmService _vaultPrewarmService;
   PdaVertexAiDataSourceImpl? _pdaDataSource;
 
   @override
   void initState() {
     super.initState();
+    // Initialize vault prewarm service
+    _vaultPrewarmService = getIt<VaultStartupPrewarmService>();
+
     // Check authentication state on app start
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<AuthBloc>().add(CheckAuthStateEvent());
@@ -146,7 +161,7 @@ class _AppContentState extends State<_AppContent> {
     }
   }
 
-  /// Prewarm PDA with user context, email data, and LinkedIn context
+  /// Prewarm PDA with user context, email data, LinkedIn context, and vault documents
   Future<void> _prewarmPDA(String userId) async {
     try {
       debugPrint('🧠 [APP] Starting PDA prewarming for user: $userId');
@@ -155,9 +170,10 @@ class _AppContentState extends State<_AppContent> {
       _pdaDataSource = getIt<PdaVertexAiDataSourceImpl>();
       await _pdaDataSource?.prewarmUserContext(userId);
 
-      // Also pre-warm Gmail and LinkedIn context in parallel for faster loading
+      // Also pre-warm Gmail, LinkedIn, and Vault context in parallel for faster loading
       _gmailPrewarmService.prewarmGmailContext();
       _linkedInPrewarmService.prewarmLinkedInContext();
+      _vaultPrewarmService.prewarmVaultOnStartup();
 
       debugPrint('🧠 [APP] PDA prewarming completed');
     } catch (e) {
