@@ -3,12 +3,23 @@ import 'package:hushh_user_app/features/vault/domain/entities/vault_document.dar
 import 'package:intl/intl.dart';
 import 'dart:math' as math;
 
-// Vault theme constants
+// ChatGPT-style colors matching PDA design
 class VaultTheme {
+  static const Color darkBackground = Color(0xFF000000);
+  static const Color lightBackground = Color(0xFFFFFFFF);
+  static const Color sidebarBackground = Color(0xFFFFFFFF); // White sidebar
+  static const Color userBubbleColor = Color(0xFF000000); // Black for user
+  static const Color assistantBubbleColor = Color(
+    0xFFF8F8F8,
+  ); // Very light gray
+  static const Color borderColor = Color(0xFFE0E0E0);
+  static const Color textColor = Color(0xFF000000); // Pure black text
+  static const Color hintColor = Color(0xFF666666); // Dark gray for hints
+  static const Color sidebarTextColor = Color(
+    0xFF000000,
+  ); // Black text for sidebar
   static const Color primaryPurple = Color(0xFFA342FF);
   static const Color primaryPink = Color(0xFFE54D60);
-  static const Color lightGreyBackground = Color(0xFFF9F9F9);
-  static const Color borderColor = Color(0xFFE0E0E0);
   static const Color successGreen = Color(0xFF4CAF50);
 
   static const LinearGradient primaryGradient = LinearGradient(
@@ -29,20 +40,32 @@ class DocumentPreviewWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Dialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      backgroundColor: Colors.transparent,
+      insetPadding: const EdgeInsets.all(16),
       child: Container(
         constraints: BoxConstraints(
-          maxHeight: MediaQuery.of(context).size.height * 0.8,
-          maxWidth: MediaQuery.of(context).size.width * 0.9,
+          maxHeight: MediaQuery.of(context).size.height * 0.85,
+          maxWidth: MediaQuery.of(context).size.width * 0.95,
+        ),
+        decoration: BoxDecoration(
+          color: VaultTheme.lightBackground,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.1),
+              blurRadius: 20,
+              offset: const Offset(0, 10),
+            ),
+          ],
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Header
+            // Header with black background
             Container(
               padding: const EdgeInsets.all(20),
               decoration: const BoxDecoration(
-                color: VaultTheme.primaryPurple,
+                color: VaultTheme.userBubbleColor,
                 borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
               ),
               child: Row(
@@ -51,8 +74,9 @@ class DocumentPreviewWidget extends StatelessWidget {
                     width: 48,
                     height: 48,
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.2),
+                      color: VaultTheme.assistantBubbleColor,
                       borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: VaultTheme.borderColor),
                     ),
                     child: _getFileIcon(document.fileType),
                   ),
@@ -86,7 +110,12 @@ class DocumentPreviewWidget extends StatelessWidget {
                   ),
                   IconButton(
                     onPressed: () => Navigator.of(context).pop(),
-                    icon: const Icon(Icons.close, color: Colors.white),
+                    icon: const Icon(
+                      Icons.close,
+                      color: Colors.white,
+                      size: 24,
+                    ),
+                    padding: const EdgeInsets.all(8),
                   ),
                 ],
               ),
@@ -98,11 +127,12 @@ class DocumentPreviewWidget extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Document info
+                    // Document info section
                     Container(
+                      width: double.infinity,
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
-                        color: VaultTheme.lightGreyBackground,
+                        color: VaultTheme.assistantBubbleColor,
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(
                           color: VaultTheme.borderColor,
@@ -117,7 +147,7 @@ class DocumentPreviewWidget extends StatelessWidget {
                             style: TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.w600,
-                              color: Colors.black87,
+                              color: VaultTheme.textColor,
                             ),
                           ),
                           const SizedBox(height: 12),
@@ -144,13 +174,13 @@ class DocumentPreviewWidget extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 20),
-                    // Content preview
+                    // Content preview section
                     const Text(
                       'Content Preview',
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w600,
-                        color: Colors.black87,
+                        color: VaultTheme.textColor,
                       ),
                     ),
                     const SizedBox(height: 12),
@@ -159,7 +189,7 @@ class DocumentPreviewWidget extends StatelessWidget {
                         width: double.infinity,
                         padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
-                          color: Colors.white,
+                          color: VaultTheme.assistantBubbleColor,
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(
                             color: VaultTheme.borderColor,
@@ -173,10 +203,9 @@ class DocumentPreviewWidget extends StatelessWidget {
                                 : 'No preview available or text not extracted yet.\n\nThis document has been uploaded to your vault and will be accessible to your AI assistant for context-aware responses.',
                             style: const TextStyle(
                               fontSize: 14,
-                              color: Colors.black87,
+                              color: VaultTheme.textColor,
                               height: 1.5,
                             ),
-                            textAlign: TextAlign.justify,
                           ),
                         ),
                       ),
@@ -185,37 +214,57 @@ class DocumentPreviewWidget extends StatelessWidget {
                 ),
               ),
             ),
-            // Footer
+            // Footer with buttons
             Container(
               padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: VaultTheme.lightGreyBackground,
-                borderRadius: const BorderRadius.vertical(
-                  bottom: Radius.circular(20),
-                ),
-              ),
               child: Row(
                 children: [
                   Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: () {
-                        // TODO: Implement download functionality
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text(
-                              'Download functionality coming soon!',
+                    child: Container(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: VaultTheme.borderColor,
+                          width: 1,
+                        ),
+                      ),
+                      child: Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(12),
+                          onTap: () {
+                            // TODO: Implement download functionality
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text(
+                                  'Download functionality coming soon!',
+                                ),
+                                backgroundColor: VaultTheme.userBubbleColor,
+                              ),
+                            );
+                          },
+                          child: const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 12),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  Icons.download,
+                                  color: VaultTheme.textColor,
+                                  size: 18,
+                                ),
+                                SizedBox(width: 8),
+                                Text(
+                                  'Download',
+                                  style: TextStyle(
+                                    color: VaultTheme.textColor,
+                                    fontWeight: FontWeight.w500,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                              ],
                             ),
-                            backgroundColor: VaultTheme.primaryPurple,
                           ),
-                        );
-                      },
-                      icon: const Icon(Icons.download, size: 18),
-                      label: const Text('Download'),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: VaultTheme.primaryPurple,
-                        side: const BorderSide(color: VaultTheme.primaryPurple),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
                         ),
                       ),
                     ),
@@ -224,13 +273,13 @@ class DocumentPreviewWidget extends StatelessWidget {
                   Expanded(
                     child: Container(
                       decoration: BoxDecoration(
-                        color: VaultTheme.primaryPurple,
-                        borderRadius: BorderRadius.circular(8),
+                        color: VaultTheme.userBubbleColor,
+                        borderRadius: BorderRadius.circular(12),
                       ),
                       child: Material(
                         color: Colors.transparent,
                         child: InkWell(
-                          borderRadius: BorderRadius.circular(8),
+                          borderRadius: BorderRadius.circular(12),
                           onTap: () => Navigator.of(context).pop(),
                           child: const Padding(
                             padding: EdgeInsets.symmetric(vertical: 12),
@@ -248,6 +297,7 @@ class DocumentPreviewWidget extends StatelessWidget {
                                   style: TextStyle(
                                     color: Colors.white,
                                     fontWeight: FontWeight.w600,
+                                    fontSize: 14,
                                   ),
                                 ),
                               ],
@@ -310,7 +360,7 @@ class DocumentPreviewWidget extends StatelessWidget {
               label,
               style: const TextStyle(
                 fontSize: 14,
-                color: Colors.grey,
+                color: VaultTheme.hintColor,
                 fontWeight: FontWeight.w500,
               ),
             ),
@@ -320,7 +370,7 @@ class DocumentPreviewWidget extends StatelessWidget {
               value,
               style: const TextStyle(
                 fontSize: 14,
-                color: Colors.black87,
+                color: VaultTheme.textColor,
                 fontWeight: FontWeight.w500,
               ),
             ),

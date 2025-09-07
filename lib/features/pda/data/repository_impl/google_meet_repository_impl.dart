@@ -56,6 +56,24 @@ class GoogleMeetRepositoryImpl implements GoogleMeetRepository {
 
       if (result != null) {
         debugPrint('✅ [GOOGLE MEET REPOSITORY] OAuth completed successfully');
+
+        // Automatically trigger data sync after successful OAuth
+        try {
+          debugPrint(
+            '🔄 [GOOGLE MEET REPOSITORY] Starting automatic data sync...',
+          );
+          await syncGoogleMeetData(userId);
+          debugPrint('✅ [GOOGLE MEET REPOSITORY] Automatic sync completed');
+        } catch (syncError) {
+          // Don't fail the OAuth if sync fails - just log the error
+          debugPrint(
+            '⚠️ [GOOGLE MEET REPOSITORY] Automatic sync failed: $syncError',
+          );
+          debugPrint(
+            'ℹ️ [GOOGLE MEET REPOSITORY] OAuth still successful, sync can be retried later',
+          );
+        }
+
         return result.toEntity();
       }
 
@@ -189,19 +207,28 @@ class GoogleMeetRepositoryImpl implements GoogleMeetRepository {
 
   @override
   Future<void> syncGoogleMeetData(String userId) async {
-    // This would typically call the Google Meet API to fetch fresh data
-    // For now, we'll implement a placeholder that could be extended
-    // with actual API calls when Google Meet API integration is added
+    try {
+      debugPrint(
+        '🔄 [GOOGLE MEET REPOSITORY] Starting data sync for user: $userId',
+      );
 
-    // TODO: Implement Google Meet API calls here
-    // 1. Fetch recent conferences from Google Meet API
-    // 2. Fetch recordings and transcripts
-    // 3. Store in Supabase via data source
+      // Call the Supabase data source to trigger sync via edge function
+      final result = await _supabaseDataSource.syncGoogleMeetData(userId);
 
-    throw UnimplementedError(
-      'Google Meet API integration not yet implemented. '
-      'This method should fetch fresh data from Google Meet API and store in Supabase.',
-    );
+      if (result['success'] == true) {
+        debugPrint(
+          '✅ [GOOGLE MEET REPOSITORY] Data sync completed successfully',
+        );
+        debugPrint(
+          '📊 [GOOGLE MEET REPOSITORY] Sync result: ${result['syncedData']}',
+        );
+      } else {
+        throw Exception('Sync failed: ${result['message']}');
+      }
+    } catch (e) {
+      debugPrint('❌ [GOOGLE MEET REPOSITORY] Error syncing data: $e');
+      throw Exception('Failed to sync Google Meet data: $e');
+    }
   }
 
   @override

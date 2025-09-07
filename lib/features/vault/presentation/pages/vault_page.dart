@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:hushh_user_app/features/vault/presentation/bloc/vault_bloc.dart';
@@ -7,13 +8,26 @@ import 'package:hushh_user_app/features/vault/presentation/bloc/vault_event.dart
 import 'package:hushh_user_app/features/vault/presentation/widgets/document_list_item.dart';
 import 'package:hushh_user_app/features/vault/presentation/pages/document_upload_modal.dart';
 import 'package:hushh_user_app/features/vault/presentation/widgets/document_preview_widget.dart';
+import 'package:go_router/go_router.dart';
+import 'package:hushh_user_app/core/routing/route_paths.dart';
 
-// Vault theme constants matching app design
+// ChatGPT-style colors matching PDA design
 class VaultTheme {
+  static const Color darkBackground = Color(0xFF000000);
+  static const Color lightBackground = Color(0xFFFFFFFF);
+  static const Color sidebarBackground = Color(0xFFFFFFFF); // White sidebar
+  static const Color userBubbleColor = Color(0xFF000000); // Black for user
+  static const Color assistantBubbleColor = Color(
+    0xFFF8F8F8,
+  ); // Very light gray
+  static const Color borderColor = Color(0xFFE0E0E0);
+  static const Color textColor = Color(0xFF000000); // Pure black text
+  static const Color hintColor = Color(0xFF666666); // Dark gray for hints
+  static const Color sidebarTextColor = Color(
+    0xFF000000,
+  ); // Black text for sidebar
   static const Color primaryPurple = Color(0xFFA342FF);
   static const Color primaryPink = Color(0xFFE54D60);
-  static const Color lightGreyBackground = Color(0xFFF9F9F9);
-  static const Color borderColor = Color(0xFFE0E0E0);
   static const Color successGreen = Color(0xFF4CAF50);
 
   static const LinearGradient primaryGradient = LinearGradient(
@@ -73,73 +87,311 @@ class _VaultPageState extends State<VaultPage> {
     );
   }
 
+  void _showDeleteConfirmation(BuildContext context, document) {
+    // Capture the VaultBloc reference before showing the dialog
+    final vaultBloc = context.read<VaultBloc>();
+
+    showCupertinoDialog(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return CupertinoAlertDialog(
+          title: const Text('Delete Document'),
+          content: Text(
+            'Are you sure you want to delete "${document.originalName}"? This action cannot be undone.',
+          ),
+          actions: [
+            CupertinoDialogAction(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Cancel'),
+            ),
+            CupertinoDialogAction(
+              onPressed: () {
+                Navigator.of(dialogContext).pop();
+                // Use the captured VaultBloc reference instead of trying to read from dialog context
+                vaultBloc.add(DeleteVaultDocument(documentId: document.id));
+              },
+              isDestructiveAction: true,
+              child: const Text('Delete'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        title: const Text(
-          'Vault',
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            fontSize: 20,
-            color: Colors.black87,
-          ),
-        ),
-        centerTitle: false,
-        backgroundColor: Colors.white,
-        elevation: 0,
-        surfaceTintColor: Colors.transparent,
-        leading: IconButton(
-          icon: const Icon(
-            Icons.arrow_back_ios,
-            color: Colors.black87,
-            size: 20,
-          ),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.more_horiz, color: Colors.black87, size: 24),
-            onPressed: () {
-              // TODO: Show menu options
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Menu options coming soon!'),
-                  backgroundColor: Colors.black87,
-                ),
-              );
-            },
+      backgroundColor: VaultTheme.lightBackground,
+      drawer: _buildSideDrawer(),
+      body: Column(
+        children: [
+          _buildChatGptStyleAppBar(),
+          Expanded(
+            child: BlocBuilder<VaultBloc, VaultState>(
+              builder: (context, state) {
+                if (state is VaultLoading) {
+                  return _buildLoadingState();
+                } else if (state is VaultLoaded) {
+                  if (state.documents.isEmpty) {
+                    return _buildEmptyState();
+                  }
+                  return _buildDocumentsList(state.documents);
+                } else if (state is VaultError) {
+                  return _buildErrorState(state.message);
+                }
+                return _buildWelcomeState();
+              },
+            ),
           ),
         ],
       ),
-      body: BlocBuilder<VaultBloc, VaultState>(
-        builder: (context, state) {
-          if (state is VaultLoading) {
-            return _buildLoadingState();
-          } else if (state is VaultLoaded) {
-            if (state.documents.isEmpty) {
-              return _buildEmptyState();
-            }
-            return _buildDocumentsList(state.documents);
-          } else if (state is VaultError) {
-            return _buildErrorState(state.message);
-          }
-          return _buildWelcomeState();
-        },
+    );
+  }
+
+  Widget _buildSideDrawer() {
+    return Drawer(
+      backgroundColor: VaultTheme.sidebarBackground,
+      child: SafeArea(
+        child: Column(
+          children: [
+            // Header
+            Container(
+              padding: const EdgeInsets.all(20),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: VaultTheme.userBubbleColor,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(
+                      Icons.folder_open_rounded,
+                      color: Colors.white,
+                      size: 24,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  const Text(
+                    'Vault',
+                    style: TextStyle(
+                      color: VaultTheme.sidebarTextColor,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(color: VaultTheme.borderColor, height: 1),
+
+            // Actions Section
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.all(16),
+                children: [
+                  const Text(
+                    'Actions',
+                    style: TextStyle(
+                      color: VaultTheme.hintColor,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Upload Document
+                  _buildActionButton(
+                    icon: Icons.upload_file,
+                    title: 'Upload Document',
+                    subtitle: 'Add new files',
+                    onTap: _showUploadModal,
+                  ),
+                  const SizedBox(height: 12),
+
+                  // Back to PDA
+                  _buildActionButton(
+                    icon: Icons.psychology_alt_outlined,
+                    title: 'Back to PDA',
+                    subtitle: 'Return to assistant',
+                    onTap: () => context.pop(),
+                  ),
+                ],
+              ),
+            ),
+
+            // Footer
+            Container(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                children: [
+                  const Divider(color: VaultTheme.borderColor, height: 1),
+                  const SizedBox(height: 16),
+                  BlocBuilder<VaultBloc, VaultState>(
+                    builder: (context, state) {
+                      if (state is VaultLoaded && state.documents.isNotEmpty) {
+                        return InkWell(
+                          onTap: () => _showClearVaultConfirmation(),
+                          borderRadius: BorderRadius.circular(8),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              vertical: 12,
+                              horizontal: 16,
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.delete_outline,
+                                  color: Colors.red[400],
+                                  size: 20,
+                                ),
+                                const SizedBox(width: 12),
+                                Text(
+                                  'Clear Vault',
+                                  style: TextStyle(
+                                    color: Colors.red[400],
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      }
+                      return const SizedBox.shrink();
+                    },
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
-      floatingActionButton: BlocBuilder<VaultBloc, VaultState>(
-        builder: (context, state) {
-          // Only show FAB when documents are loaded and not empty
-          if (state is VaultLoaded && state.documents.isNotEmpty) {
-            return FloatingActionButton(
-              onPressed: _showUploadModal,
-              backgroundColor: VaultTheme.primaryPurple,
-              child: const Icon(Icons.add, color: Colors.white),
-            );
-          }
-          return const SizedBox.shrink();
-        },
+    );
+  }
+
+  Widget _buildActionButton({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: VaultTheme.assistantBubbleColor,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: VaultTheme.borderColor, width: 1),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: VaultTheme.userBubbleColor,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(icon, color: Colors.white, size: 20),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      color: VaultTheme.sidebarTextColor,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: const TextStyle(
+                      color: VaultTheme.hintColor,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w400,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(
+              Icons.arrow_forward_ios,
+              color: VaultTheme.hintColor,
+              size: 16,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildChatGptStyleAppBar() {
+    return SafeArea(
+      bottom: false,
+      child: Container(
+        height: 60,
+        decoration: const BoxDecoration(
+          color: VaultTheme.lightBackground,
+          border: Border(
+            bottom: BorderSide(color: VaultTheme.borderColor, width: 1),
+          ),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Row(
+            children: [
+              // Hamburger menu to open drawer
+              Builder(
+                builder: (context) => IconButton(
+                  onPressed: () {
+                    Scaffold.of(context).openDrawer();
+                  },
+                  icon: const Icon(
+                    Icons.menu,
+                    color: VaultTheme.textColor,
+                    size: 24,
+                  ),
+                  padding: const EdgeInsets.all(8),
+                ),
+              ),
+              const SizedBox(width: 12),
+              const Text(
+                'Vault',
+                style: TextStyle(
+                  color: VaultTheme.textColor,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const Spacer(),
+              // Upload button
+              GestureDetector(
+                onTap: _showUploadModal,
+                child: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(
+                    Icons.upload_file,
+                    color: VaultTheme.textColor,
+                    size: 20,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -150,12 +402,12 @@ class _VaultPageState extends State<VaultPage> {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           CircularProgressIndicator(
-            valueColor: AlwaysStoppedAnimation<Color>(Colors.black54),
+            valueColor: AlwaysStoppedAnimation<Color>(VaultTheme.textColor),
           ),
           SizedBox(height: 16),
           Text(
             'Loading your documents...',
-            style: TextStyle(fontSize: 16, color: Colors.grey),
+            style: TextStyle(fontSize: 16, color: VaultTheme.hintColor),
           ),
         ],
       ),
@@ -164,77 +416,42 @@ class _VaultPageState extends State<VaultPage> {
 
   Widget _buildEmptyState() {
     return Center(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 40.0, vertical: 32.0),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // Illustration with subtle animation
-            TweenAnimationBuilder<double>(
-              duration: const Duration(milliseconds: 800),
-              tween: Tween(begin: 0.0, end: 1.0),
-              builder: (context, value, child) {
-                return Transform.scale(
-                  scale: 0.95 + (0.05 * value),
-                  child: Container(
-                    width: 200,
-                    height: 160,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(20),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.08),
-                          blurRadius: 20,
-                          offset: const Offset(0, 8),
-                        ),
-                      ],
-                    ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(20),
-                      child: Image.asset(
-                        'assets/document_not_found.png',
-                        fit: BoxFit.contain,
-                        errorBuilder: (context, error, stackTrace) {
-                          return Container(
-                            decoration: BoxDecoration(
-                              color: VaultTheme.primaryPurple,
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                            child: const Icon(
-                              Icons.folder_open,
-                              size: 60,
-                              color: Colors.white,
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                  ),
-                );
-              },
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: VaultTheme.userBubbleColor.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: const Icon(
+                Icons.folder_open_rounded,
+                size: 48,
+                color: VaultTheme.userBubbleColor,
+              ),
             ),
-            const SizedBox(height: 32),
-            // Headline
+            const SizedBox(height: 24),
             const Text(
               'Ready to build your knowledge base?',
-              textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 24,
-                fontWeight: FontWeight.bold,
-                color: Color(0xFF1A1A1A),
-                height: 1.2,
+                fontWeight: FontWeight.w600,
+                color: VaultTheme.textColor,
               ),
-            ),
-            const SizedBox(height: 16),
-            // Subtitle
-            const Text(
-              'Upload any file type to create your personal AI assistant. Your files are encrypted and only accessible to you.',
               textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Upload any file type to create your personal AI assistant. Your files are encrypted and only accessible to you.',
               style: TextStyle(
                 fontSize: 16,
-                color: Color(0xFF666666),
+                color: VaultTheme.hintColor,
                 height: 1.5,
               ),
+              textAlign: TextAlign.center,
             ),
             const SizedBox(height: 24),
             // File type indicators
@@ -256,14 +473,14 @@ class _VaultPageState extends State<VaultPage> {
             // File size limit
             const Text(
               'Up to 50MB per file',
-              style: TextStyle(fontSize: 12, color: Color(0xFF999999)),
+              style: TextStyle(fontSize: 12, color: VaultTheme.hintColor),
             ),
             const SizedBox(height: 32),
             // Primary CTA Button
             Container(
               width: double.infinity,
               decoration: BoxDecoration(
-                gradient: VaultTheme.primaryGradient,
+                color: VaultTheme.userBubbleColor,
                 borderRadius: BorderRadius.circular(12),
                 boxShadow: [
                   BoxShadow(
@@ -278,24 +495,17 @@ class _VaultPageState extends State<VaultPage> {
                 child: InkWell(
                   borderRadius: BorderRadius.circular(12),
                   onTap: _showUploadModal,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 24,
-                      vertical: 16,
-                    ),
+                  child: const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 24, vertical: 16),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Icon(
-                          Icons.upload_file,
-                          color: Colors.white,
-                          size: 20,
-                        ),
-                        const SizedBox(width: 12),
+                        Icon(Icons.upload_file, color: Colors.white, size: 20),
+                        SizedBox(width: 12),
                         Flexible(
                           child: Text(
                             'Choose Your First Document',
-                            style: const TextStyle(
+                            style: TextStyle(
                               color: Colors.white,
                               fontSize: 16,
                               fontWeight: FontWeight.w600,
@@ -318,14 +528,14 @@ class _VaultPageState extends State<VaultPage> {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
                     content: Text('Help content coming soon!'),
-                    backgroundColor: VaultTheme.primaryPurple,
+                    backgroundColor: VaultTheme.userBubbleColor,
                   ),
                 );
               },
               child: const Text(
                 'How does this work?',
                 style: TextStyle(
-                  color: Colors.black87,
+                  color: VaultTheme.textColor,
                   fontSize: 14,
                   fontWeight: FontWeight.w500,
                   decoration: TextDecoration.underline,
@@ -345,18 +555,18 @@ class _VaultPageState extends State<VaultPage> {
           width: 32,
           height: 32,
           decoration: BoxDecoration(
-            color: Colors.grey.withOpacity(0.1),
+            color: VaultTheme.assistantBubbleColor,
             borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: Colors.grey.withOpacity(0.2), width: 1),
+            border: Border.all(color: VaultTheme.borderColor, width: 1),
           ),
-          child: Icon(icon, size: 16, color: Colors.black54),
+          child: Icon(icon, size: 16, color: VaultTheme.hintColor),
         ),
         const SizedBox(height: 4),
         Text(
           label,
           style: const TextStyle(
             fontSize: 10,
-            color: Color(0xFF999999),
+            color: VaultTheme.hintColor,
             fontWeight: FontWeight.w500,
           ),
         ),
@@ -372,16 +582,9 @@ class _VaultPageState extends State<VaultPage> {
           margin: const EdgeInsets.all(16),
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: VaultTheme.assistantBubbleColor,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.grey.withOpacity(0.2), width: 1),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.05),
-                blurRadius: 10,
-                offset: const Offset(0, 5),
-              ),
-            ],
+            border: Border.all(color: VaultTheme.borderColor, width: 1),
           ),
           child: Row(
             children: [
@@ -389,7 +592,7 @@ class _VaultPageState extends State<VaultPage> {
                 width: 40,
                 height: 40,
                 decoration: BoxDecoration(
-                  gradient: VaultTheme.primaryGradient,
+                  color: VaultTheme.userBubbleColor,
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: const Icon(Icons.folder, color: Colors.white, size: 20),
@@ -402,14 +605,17 @@ class _VaultPageState extends State<VaultPage> {
                     const Text(
                       'Your Documents',
                       style: TextStyle(
-                        color: Colors.black87,
+                        color: VaultTheme.textColor,
                         fontSize: 20,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
                     Text(
                       '${documents.length} document${documents.length == 1 ? '' : 's'} stored',
-                      style: const TextStyle(color: Colors.grey, fontSize: 14),
+                      style: const TextStyle(
+                        color: VaultTheme.hintColor,
+                        fontSize: 14,
+                      ),
                     ),
                   ],
                 ),
@@ -417,7 +623,7 @@ class _VaultPageState extends State<VaultPage> {
               // Upload button in header
               Container(
                 decoration: BoxDecoration(
-                  gradient: VaultTheme.primaryGradient,
+                  color: VaultTheme.userBubbleColor,
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Material(
@@ -446,18 +652,26 @@ class _VaultPageState extends State<VaultPage> {
             itemCount: documents.length,
             itemBuilder: (context, index) {
               final document = documents[index];
-              return DocumentListItem(
-                document: document,
-                onDelete: () {
-                  _showDeleteConfirmation(context, document);
-                },
-                onTap: () {
-                  showDialog(
-                    context: context,
-                    builder: (context) =>
-                        DocumentPreviewWidget(document: document),
-                  );
-                },
+              return Container(
+                margin: const EdgeInsets.only(bottom: 12),
+                decoration: BoxDecoration(
+                  color: VaultTheme.assistantBubbleColor,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: VaultTheme.borderColor, width: 1),
+                ),
+                child: DocumentListItem(
+                  document: document,
+                  onDelete: () {
+                    _showDeleteConfirmation(context, document);
+                  },
+                  onTap: () {
+                    showDialog(
+                      context: context,
+                      builder: (context) =>
+                          DocumentPreviewWidget(document: document),
+                    );
+                  },
+                ),
               );
             },
           ),
@@ -492,14 +706,14 @@ class _VaultPageState extends State<VaultPage> {
               style: TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.bold,
-                color: Colors.black87,
+                color: VaultTheme.textColor,
               ),
             ),
             const SizedBox(height: 12),
             Text(
               message,
               textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 16, color: Colors.grey),
+              style: const TextStyle(fontSize: 16, color: VaultTheme.hintColor),
             ),
             const SizedBox(height: 24),
             ElevatedButton.icon(
@@ -507,7 +721,7 @@ class _VaultPageState extends State<VaultPage> {
               icon: const Icon(Icons.refresh),
               label: const Text('Try Again'),
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.black87,
+                backgroundColor: VaultTheme.userBubbleColor,
                 foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
@@ -527,53 +741,41 @@ class _VaultPageState extends State<VaultPage> {
         style: TextStyle(
           fontSize: 24,
           fontWeight: FontWeight.bold,
-          color: Colors.black87,
+          color: VaultTheme.textColor,
         ),
       ),
     );
   }
 
-  void _showDeleteConfirmation(BuildContext context, document) {
-    // Capture the VaultBloc reference before showing the dialog
-    final vaultBloc = context.read<VaultBloc>();
-
-    showDialog(
+  void _showClearVaultConfirmation() {
+    showCupertinoDialog(
       context: context,
-      builder: (BuildContext dialogContext) {
-        return AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
+      builder: (context) => CupertinoAlertDialog(
+        title: const Text('Clear Vault'),
+        content: const Text(
+          'Are you sure you want to delete all documents? This action cannot be undone.',
+        ),
+        actions: [
+          CupertinoDialogAction(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
           ),
-          title: const Text(
-            'Delete Document',
-            style: TextStyle(fontWeight: FontWeight.bold),
-          ),
-          content: Text(
-            'Are you sure you want to delete "${document.originalName}"? This action cannot be undone.',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(),
-              child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                Navigator.of(dialogContext).pop();
-                // Use the captured VaultBloc reference instead of trying to read from dialog context
-                vaultBloc.add(DeleteVaultDocument(documentId: document.id));
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.red,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
+          CupertinoDialogAction(
+            onPressed: () {
+              Navigator.pop(context);
+              // TODO: Implement clear all documents functionality
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Clear vault functionality coming soon!'),
+                  backgroundColor: VaultTheme.userBubbleColor,
                 ),
-              ),
-              child: const Text('Delete'),
-            ),
-          ],
-        );
-      },
+              );
+            },
+            isDestructiveAction: true,
+            child: const Text('Clear All'),
+          ),
+        ],
+      ),
     );
   }
 }
