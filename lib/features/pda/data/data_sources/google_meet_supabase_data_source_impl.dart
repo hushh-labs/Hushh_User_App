@@ -454,6 +454,40 @@ class GoogleMeetSupabaseDataSourceImpl implements GoogleMeetSupabaseDataSource {
   }
 
   @override
+  Future<Map<String, dynamic>> syncGoogleMeetData(String userId) async {
+    try {
+      debugPrint('🔄 [GOOGLE MEET SUPABASE] Syncing data for user: $userId');
+
+      // Call the Supabase Edge Function to sync data
+      final response = await _supabase.functions.invoke(
+        'google-meet-sync',
+        body: {'userId': userId, 'action': 'sync'},
+      );
+
+      if (response.data != null && response.data['success'] == true) {
+        final syncedData = response.data['syncedData'] ?? {};
+
+        debugPrint('✅ [GOOGLE MEET SUPABASE] Data sync completed successfully');
+        debugPrint(
+          '📊 [GOOGLE MEET SUPABASE] Synced: ${syncedData.toString()}',
+        );
+
+        return {
+          'success': true,
+          'message': response.data['message'] ?? 'Data synced successfully',
+          'syncedData': syncedData,
+          'syncedAt': DateTime.now().toIso8601String(),
+        };
+      }
+
+      throw Exception('Failed to sync data: ${response.data}');
+    } catch (e) {
+      debugPrint('❌ [GOOGLE MEET SUPABASE] Error syncing data: $e');
+      throw Exception('Failed to sync Google Meet data: $e');
+    }
+  }
+
+  @override
   Future<Map<String, dynamic>> getBasicAnalytics(String userId) async {
     try {
       debugPrint(

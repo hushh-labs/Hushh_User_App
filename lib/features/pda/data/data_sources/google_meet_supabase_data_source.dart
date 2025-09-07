@@ -67,6 +67,9 @@ abstract class GoogleMeetSupabaseDataSource {
     List<GoogleMeetTranscriptModel> transcripts,
   );
 
+  /// Data synchronization
+  Future<Map<String, dynamic>> syncGoogleMeetData(String userId);
+
   /// Analytics
   Future<Map<String, dynamic>> getBasicAnalytics(String userId);
 }

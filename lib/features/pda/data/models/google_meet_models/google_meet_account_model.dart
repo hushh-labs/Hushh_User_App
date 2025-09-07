@@ -79,15 +79,26 @@ class GoogleMeetAccountModel {
       email: email,
       displayName: displayName,
       profilePictureUrl: profilePictureUrl,
-      connectedAt: DateTime.parse(connectedAt),
-      lastSyncedAt: lastSyncedAt != null ? DateTime.parse(lastSyncedAt!) : null,
+      connectedAt: _parseDateTime(connectedAt) ?? DateTime.now(),
+      lastSyncedAt: lastSyncedAt != null ? _parseDateTime(lastSyncedAt!) : null,
       isActive: isActive,
       accessToken: null, // Don't expose encrypted tokens in entity
       refreshToken: null,
       tokenExpiresAt: tokenExpiresAt != null
-          ? DateTime.parse(tokenExpiresAt!)
+          ? _parseDateTime(tokenExpiresAt!)
           : null,
     );
+  }
+
+  /// Helper method to safely parse DateTime strings
+  DateTime? _parseDateTime(String? dateString) {
+    if (dateString == null || dateString.isEmpty) return null;
+    try {
+      return DateTime.parse(dateString);
+    } catch (e) {
+      // If parsing fails, return null instead of throwing
+      return null;
+    }
   }
 
   factory GoogleMeetAccountModel.fromEntity(GoogleMeetAccount entity) {

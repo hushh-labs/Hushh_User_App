@@ -91,7 +91,11 @@ function initiateOAuthFlow(userId: string) {
   const scopes = [
     'https://www.googleapis.com/auth/meetings.space.readonly',
     'https://www.googleapis.com/auth/meetings.space.created',
-    'https://www.googleapis.com/auth/calendar.readonly'
+    'https://www.googleapis.com/auth/calendar.readonly',
+    'https://www.googleapis.com/auth/gmail.readonly',
+    'https://www.googleapis.com/auth/gmail.modify',
+    'https://www.googleapis.com/auth/userinfo.email',
+    'https://www.googleapis.com/auth/userinfo.profile'
   ].join(' ')
 
   const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
@@ -251,19 +255,58 @@ async function exchangeCodeForTokens(code: string) {
 }
 
 async function storeGoogleMeetAccount(supabaseClient: any, userId: string, tokenData: any) {
-  // Get user info from Google
-  const userInfoResponse = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
-    headers: {
-      'Authorization': `Bearer ${tokenData.access_token}`,
-    },
-  })
+  console.log('🔍 [USER INFO] Starting user info fetch...')
+  console.log('🔍 [USER INFO] Access token:', tokenData.access_token ? `${tokenData.access_token.substring(0, 20)}...` : 'MISSING')
+  
+  let userInfo: any;
+  
+  // Try primary endpoint first
+  try {
+    const userInfoResponse = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+      headers: {
+        'Authorization': `Bearer ${tokenData.access_token}`,
+        'Accept': 'application/json',
+      },
+    })
 
-  if (!userInfoResponse.ok) {
-    const errorText = await userInfoResponse.text()
-    throw new Error(`Failed to get user info: ${userInfoResponse.status} - ${errorText}`)
+    console.log('🔍 [USER INFO] Primary endpoint response status:', userInfoResponse.status)
+    console.log('🔍 [USER INFO] Primary endpoint response headers:', Object.fromEntries(userInfoResponse.headers.entries()))
+
+    if (userInfoResponse.ok) {
+      userInfo = await userInfoResponse.json()
+      console.log('✅ [USER INFO] Success with primary endpoint:', JSON.stringify(userInfo, null, 2))
+    } else {
+      const errorText = await userInfoResponse.text()
+      console.error('❌ [USER INFO] Primary endpoint error:', errorText)
+      throw new Error(`Primary endpoint failed: ${userInfoResponse.status}`)
+    }
+  } catch (primaryError) {
+    console.log('🔄 [USER INFO] Primary endpoint failed, trying alternative endpoint...')
+    
+    // Try alternative endpoint
+    try {
+      const altUserInfoResponse = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+        headers: {
+          'Authorization': `Bearer ${tokenData.access_token}`,
+          'Accept': 'application/json',
+        },
+      })
+      
+      console.log('🔄 [USER INFO] Alternative response status:', altUserInfoResponse.status)
+      
+      if (altUserInfoResponse.ok) {
+        userInfo = await altUserInfoResponse.json()
+        console.log('✅ [USER INFO] Success with alternative endpoint:', JSON.stringify(userInfo, null, 2))
+      } else {
+        const altErrorText = await altUserInfoResponse.text()
+        console.error('❌ [USER INFO] Alternative endpoint also failed:', altErrorText)
+        throw new Error(`Both endpoints failed. Primary: ${primaryError.message}, Alternative: ${altUserInfoResponse.status} - ${altErrorText}`)
+      }
+    } catch (altError) {
+      console.error('❌ [USER INFO] Both endpoints failed completely')
+      throw new Error(`Failed to get user info from both endpoints. Primary: ${primaryError.message}, Alternative: ${altError.message}`)
+    }
   }
-
-  const userInfo = await userInfoResponse.json()
   
   console.log('📋 [EDGE FUNCTION] User info received:', JSON.stringify(userInfo, null, 2))
 
@@ -313,11 +356,18 @@ async function storeGoogleMeetAccount(supabaseClient: any, userId: string, token
   
   // Return account data without sensitive tokens for the response
   return {
+    id: `${userId}_${googleAccountId}`, // Generate a consistent ID
     user_id: userId,
     google_account_id: googleAccountId,
     email: userInfo.email,
-    name: userInfo.name || userInfo.given_name || 'Unknown',
-    is_connected: true,
+    display_name: userInfo.name || userInfo.given_name || 'Unknown',
+    profile_picture_url: userInfo.picture,
+    connected_at: accountData.connected_at,
+    last_synced_at: null,
+    is_active: true,
+    access_token_encrypted: null, // Don't expose in response
+    refresh_token_encrypted: null, // Don't expose in response
+    token_expires_at: null, // Don't expose in response
     created_at: accountData.created_at,
     updated_at: accountData.updated_at
   }
