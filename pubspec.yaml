@@ -120,6 +120,7 @@ dependencies:
   fadingpageview: any
   hive_flutter: any
   webview_flutter_plus: any
+  webview_flutter: any
   
   # UUID generation
   uuid: any

@@ -8,7 +8,7 @@ import 'package:hushh_user_app/features/auth/presentation/pages/main_app_page.da
 import 'package:hushh_user_app/features/auth/presentation/pages/create_first_card.dart';
 import 'package:hushh_user_app/features/auth/presentation/pages/card_created_success_page.dart';
 import 'package:hushh_user_app/features/auth/presentation/pages/video_recording_page.dart';
-import 'package:hushh_user_app/features/pda/presentation/pages/pda_simple_page.dart';
+import 'package:hushh_user_app/features/pda/presentation/pages/pda_chatgpt_style_page.dart';
 import 'package:hushh_user_app/features/vault/presentation/pages/vault_page.dart';
 import 'package:hushh_user_app/features/vault/presentation/bloc/vault_bloc.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -78,7 +78,7 @@ class AppRouter {
       GoRoute(
         path: RoutePaths.pda,
         name: RouteNames.pda,
-        builder: (context, state) => const PdaSimplePage(),
+        builder: (context, state) => const PdaChatGptStylePage(),
       ),
       // Vault page
       GoRoute(

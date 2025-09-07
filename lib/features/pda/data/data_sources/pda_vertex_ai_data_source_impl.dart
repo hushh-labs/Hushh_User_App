@@ -12,6 +12,7 @@ import 'package:hushh_user_app/features/pda/data/config/vertex_ai_config.dart';
 import 'package:hushh_user_app/shared/services/gmail_connector_service.dart';
 import '../services/linkedin_context_prewarm_service.dart';
 import '../services/gmail_context_prewarm_service.dart';
+import '../services/gemini_file_processor_service.dart';
 import 'package:hushh_user_app/features/vault/data/services/supabase_document_context_prewarm_service.dart';
 import 'package:hushh_user_app/features/vault/data/services/local_file_cache_service.dart';
 
@@ -26,6 +27,8 @@ class PdaVertexAiDataSourceImpl implements PdaDataSource {
   final SupabaseDocumentContextPrewarmService _documentPrewarmService =
       SupabaseDocumentContextPrewarmServiceImpl();
   final LocalFileCacheService _cacheService = LocalFileCacheService();
+  final GeminiFileProcessorService _geminiProcessor =
+      GeminiFileProcessorService();
 
   // Stream subscription for email events
   StreamSubscription<EmailEvent>? _emailEventSubscription;
@@ -748,7 +751,7 @@ Keywords: ${keywords.join(', ')}$updatedInfo$contentInstructions
     }
   }
 
-  /// Get document files for Claude multimodal input
+  /// Get document files for Claude multimodal input with Gemini preprocessing
   Future<List<Map<String, dynamic>>> _getDocumentFilesForClaude() async {
     try {
       final currentUserId = _getCurrentUserId();
@@ -764,11 +767,13 @@ Keywords: ${keywords.join(', ')}$updatedInfo$contentInstructions
       final recentDocuments =
           context['recentDocuments'] as List<dynamic>? ?? [];
       final List<Map<String, dynamic>> documentFiles = [];
+      final List<Map<String, dynamic>> filesToProcess = [];
 
       debugPrint(
         '📄 [CLAUDE FILES] Processing ${recentDocuments.length} documents for Claude',
       );
 
+      // First, collect all files that need processing
       for (int i = 0; i < recentDocuments.length; i++) {
         final doc = recentDocuments[i];
         final hasFileData = doc['hasFileData'] ?? false;
@@ -788,19 +793,15 @@ Keywords: ${keywords.join(', ')}$updatedInfo$contentInstructions
           );
 
           if (cachedFileData != null) {
-            // Add file to multimodal content
-            documentFiles.add({
-              'type':
-                  'image', // Claude uses 'image' type for all file types including PDFs
-              'source': {
-                'type': 'base64',
-                'media_type': mimeType,
-                'data': cachedFileData,
-              },
+            filesToProcess.add({
+              'base64Data': cachedFileData,
+              'mimeType': mimeType,
+              'fileName': originalName,
+              'originalDoc': doc,
             });
 
             debugPrint(
-              '📄 [CLAUDE FILES] ✅ Added cached file to multimodal input: $originalName ($mimeType)',
+              '📄 [CLAUDE FILES] ✅ Retrieved cached file data for: $originalName ($mimeType)',
             );
           } else {
             debugPrint(
@@ -814,8 +815,110 @@ Keywords: ${keywords.join(', ')}$updatedInfo$contentInstructions
         }
       }
 
+      if (filesToProcess.isEmpty) {
+        debugPrint('📄 [CLAUDE FILES] No files to process');
+        return [];
+      }
+
+      // Use Gemini to extract content from complex file types (PDFs, CSVs, etc.)
+      String geminiExtractedContent = '';
+      if (_geminiProcessor.isConfigured) {
+        debugPrint(
+          '🔍 [GEMINI PREPROCESSING] Processing ${filesToProcess.length} files with Gemini for content extraction',
+        );
+
+        for (final file in filesToProcess) {
+          final mimeType = file['mimeType'] as String;
+          final fileName = file['fileName'] as String;
+          final base64Data = file['base64Data'] as String;
+
+          // Check if this file type benefits from Gemini preprocessing
+          if (_shouldUseGeminiForFile(mimeType)) {
+            debugPrint(
+              '🔍 [GEMINI PREPROCESSING] Extracting content from $fileName ($mimeType)',
+            );
+
+            final extraction = await _geminiProcessor.extractFileContent(
+              base64Data: base64Data,
+              mimeType: mimeType,
+              fileName: fileName,
+            );
+
+            if (extraction != null && extraction['success'] == true) {
+              final extractedText = extraction['extractedText'] as String;
+              geminiExtractedContent +=
+                  '''
+
+📄 **${fileName}** (${mimeType})
+${extractedText}
+
+---
+
+''';
+              debugPrint(
+                '✅ [GEMINI PREPROCESSING] Successfully extracted ${extractedText.length} characters from $fileName',
+              );
+            } else {
+              debugPrint(
+                '❌ [GEMINI PREPROCESSING] Failed to extract content from $fileName',
+              );
+            }
+          }
+        }
+      } else {
+        debugPrint(
+          '⚠️ [GEMINI PREPROCESSING] Gemini not configured, skipping content extraction',
+        );
+      }
+
+      // Add extracted content as text if available
+      if (geminiExtractedContent.isNotEmpty) {
+        documentFiles.add({
+          'type': 'text',
+          'text':
+              '''
+📄 EXTRACTED DOCUMENT CONTENT (via Gemini):
+
+The following content has been extracted from your uploaded documents using advanced AI analysis:
+
+$geminiExtractedContent
+
+This extracted content provides detailed information from your documents that can be used to answer questions about their contents, analyze data, and provide insights.
+''',
+        });
+
+        debugPrint(
+          '📄 [CLAUDE FILES] ✅ Added Gemini-extracted content (${geminiExtractedContent.length} characters)',
+        );
+      }
+
+      // Add original files for Claude's direct analysis (especially for images)
+      for (final file in filesToProcess) {
+        final mimeType = file['mimeType'] as String;
+        final fileName = file['fileName'] as String;
+        final base64Data = file['base64Data'] as String;
+
+        // Always include images for Claude's visual analysis
+        // For other file types, include them alongside Gemini extraction for comprehensive analysis
+        if (mimeType.startsWith('image/') ||
+            _shouldIncludeOriginalFile(mimeType)) {
+          documentFiles.add({
+            'type': 'image', // Claude uses 'image' type for all file types
+            'source': {
+              'type': 'base64',
+              'media_type': mimeType,
+              'data': base64Data,
+            },
+          });
+
+          debugPrint(
+            '📄 [CLAUDE FILES] ✅ Added original file to multimodal input: $fileName ($mimeType)',
+          );
+        }
+      }
+
       debugPrint(
-        '📄 [CLAUDE FILES] Total files prepared for Claude: ${documentFiles.length}',
+        '📄 [CLAUDE FILES] Total content prepared for Claude: ${documentFiles.length} items (${geminiExtractedContent.isNotEmpty ? 'with Gemini extraction' : 'original files only'})',
       );
 
       return documentFiles;
@@ -823,6 +926,29 @@ Keywords: ${keywords.join(', ')}$updatedInfo$contentInstructions
       debugPrint('❌ [CLAUDE FILES] Error preparing document files: $e');
       return [];
     }
+  }
+
+  /// Check if file type should use Gemini for content extraction
+  bool _shouldUseGeminiForFile(String mimeType) {
+    // Use Gemini for complex file types that benefit from content extraction
+    return mimeType.contains('pdf') ||
+        mimeType.contains('csv') ||
+        mimeType.contains('excel') ||
+        mimeType.contains('spreadsheet') ||
+        mimeType.contains('word') ||
+        mimeType.contains('document') ||
+        mimeType.contains('text/plain');
+  }
+
+  /// Check if original file should be included alongside Gemini extraction
+  bool _shouldIncludeOriginalFile(String mimeType) {
+    // Only include image files for Claude's direct analysis
+    // All other file types should be processed by Gemini only
+    return mimeType.startsWith('image/') &&
+        (mimeType.contains('jpeg') ||
+            mimeType.contains('png') ||
+            mimeType.contains('gif') ||
+            mimeType.contains('webp'));
   }
 
   /// Dispose resources
