@@ -14,6 +14,7 @@ import 'features/auth/presentation/bloc/auth_bloc.dart';
 import 'features/pda/di/pda_module.dart';
 import 'features/pda/di/gmail_module.dart';
 import 'features/pda/di/linkedin_module.dart';
+import 'features/pda/di/google_meet_module.dart';
 import 'features/profile/di/profile_module.dart';
 import 'features/discover/di/discover_module.dart';
 import 'features/notifications/di/notification_module.dart';
@@ -28,6 +29,7 @@ import 'shared/services/gmail_connector_service.dart';
 import 'features/pda/data/data_sources/pda_vertex_ai_data_source_impl.dart';
 import 'features/pda/data/services/linkedin_context_prewarm_service.dart';
 import 'features/pda/data/services/gmail_context_prewarm_service.dart';
+import 'features/pda/data/services/google_meet_context_prewarm_service.dart';
 import 'features/vault/data/services/vault_startup_prewarm_service.dart';
 import 'features/vault/data/services/local_file_cache_service.dart';
 
@@ -51,6 +53,7 @@ Future<void> mainApp() async {
   PdaModule.register();
   GmailModule.register();
   LinkedInModule.register();
+  GoogleMeetModule.register();
   ProfileModule.init();
   DiscoverModule.init();
   NotificationModule.register();
@@ -104,6 +107,8 @@ class _AppContentState extends State<_AppContent> {
       LinkedInContextPrewarmService();
   final GmailContextPrewarmService _gmailPrewarmService =
       GmailContextPrewarmService();
+  final GoogleMeetContextPrewarmService _googleMeetPrewarmService =
+      GoogleMeetContextPrewarmService();
   late final VaultStartupPrewarmService _vaultPrewarmService;
   PdaVertexAiDataSourceImpl? _pdaDataSource;
 
@@ -191,9 +196,10 @@ class _AppContentState extends State<_AppContent> {
       _pdaDataSource = getIt<PdaVertexAiDataSourceImpl>();
       await _pdaDataSource?.prewarmUserContext(userId);
 
-      // Also pre-warm Gmail, LinkedIn, and Vault context in parallel for faster loading
+      // Also pre-warm Gmail, LinkedIn, Google Meet, and Vault context in parallel for faster loading
       _gmailPrewarmService.prewarmGmailContext();
       _linkedInPrewarmService.prewarmLinkedInContext();
+      _googleMeetPrewarmService.prewarmGoogleMeetContext();
       _vaultPrewarmService.prewarmVaultOnStartup();
 
       debugPrint('🧠 [APP] PDA prewarming completed');

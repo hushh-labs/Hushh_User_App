@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../shared/presentation/widgets/google_style_bottom_nav.dart';
 import '../../../../shared/utils/app_local_storage.dart';
-import '../../../pda/presentation/pages/pda_simple_page.dart';
+import '../../../pda/presentation/pages/pda_chatgpt_style_page.dart';
 import '../../../profile/presentation/pages/profile_page_wrapper.dart';
 import '../../../discover/presentation/pages/discover_page_wrapper.dart';
 import '../../../chat/presentation/pages/chat_page_wrapper.dart';
@@ -22,7 +22,7 @@ class _MainAppPageState extends State<MainAppPage> {
 
   final List<Widget> _pages = [
     const DiscoverPageWrapper(),
-    const PdaSimplePage(),
+    const PdaChatGptStylePage(),
     const ChatPageWrapper(),
     const ProfilePageWrapper(),
   ];

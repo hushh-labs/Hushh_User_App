@@ -14,6 +14,9 @@ import '../../data/services/supabase_gmail_service.dart';
 import '../../data/services/simple_linkedin_service.dart';
 import '../widgets/gmail_sync_dialog.dart';
 import '../../domain/repositories/gmail_repository.dart';
+import '../../domain/repositories/google_meet_repository.dart';
+import '../../data/data_sources/google_meet_supabase_data_source_impl.dart';
+import 'google_meet_oauth_webview.dart';
 
 import 'package:hushh_user_app/shared/utils/app_local_storage.dart';
 import 'package:go_router/go_router.dart';
@@ -42,6 +45,8 @@ class _PdaSimplePageState extends State<PdaSimplePage> {
   bool _isConnectingGmail = false; // Gmail connection loading state
   bool _isLinkedInConnected = false; // LinkedIn connection status
   bool _isConnectingLinkedIn = false; // LinkedIn connection loading state
+  bool _isGoogleMeetConnected = false; // Google Meet connection status
+  bool _isConnectingGoogleMeet = false; // Google Meet connection loading state
   String? _error;
 
   // Single source of truth for suggestions - Hushh app specific options
@@ -70,6 +75,7 @@ class _PdaSimplePageState extends State<PdaSimplePage> {
     _loadMessages();
     _checkGmailConnectionStatus();
     _checkLinkedInConnectionStatus();
+    _checkGoogleMeetConnectionStatus();
     _messageController.addListener(_updateSendButtonState);
   }
 
@@ -718,6 +724,263 @@ class _PdaSimplePageState extends State<PdaSimplePage> {
     }
   }
 
+  /// Check Google Meet connection status on page load
+  Future<void> _checkGoogleMeetConnectionStatus() async {
+    try {
+      final googleMeetRepo = _getIt<GoogleMeetRepository>();
+      final currentUser = FirebaseAuth.instance.currentUser;
+      if (currentUser == null) return;
+
+      final isConnected = await googleMeetRepo.isGoogleMeetConnected(
+        currentUser.uid,
+      );
+      setState(() {
+        _isGoogleMeetConnected = isConnected;
+      });
+
+      debugPrint('📅 [PDA] Google Meet connection status: $isConnected');
+    } catch (e) {
+      debugPrint('❌ [PDA] Error checking Google Meet connection: $e');
+    }
+  }
+
+  /// Handle Google Meet connection
+  Future<void> _onConnectGoogleMeetPressed() async {
+    if (_isGoogleMeetConnected) {
+      // If already connected, show Google Meet options
+      _showGoogleMeetOptionsDialog();
+      return;
+    }
+
+    setState(() {
+      _isConnectingGoogleMeet = true;
+      _error = null;
+    });
+
+    try {
+      final googleMeetDataSource = GoogleMeetSupabaseDataSourceImpl();
+      final currentUser = FirebaseAuth.instance.currentUser;
+      if (currentUser == null) {
+        setState(() {
+          _error = 'User not authenticated';
+          _isConnectingGoogleMeet = false;
+        });
+        return;
+      }
+
+      // Get OAuth URL from the data source
+      await googleMeetDataSource.initiateGoogleMeetOAuth(currentUser.uid);
+
+      // This should never be reached as the method throws OAuthUrlException
+      setState(() {
+        _isConnectingGoogleMeet = false;
+        _error = 'Failed to get OAuth URL. Please try again.';
+      });
+    } catch (e) {
+      // Check if this is an OAuth URL exception
+      if (e.toString().contains('OAuthUrlException:')) {
+        final authUrl = e.toString().replaceFirst('OAuthUrlException: ', '');
+
+        setState(() {
+          _isConnectingGoogleMeet = false;
+        });
+
+        // Navigate to WebView for OAuth
+        try {
+          debugPrint('🌐 [GOOGLE MEET] Opening WebView for OAuth: $authUrl');
+
+          final result = await Navigator.of(context).push<Map<String, dynamic>>(
+            MaterialPageRoute(
+              builder: (context) => GoogleMeetOAuthWebView(
+                oauthUrl: authUrl,
+                redirectUri:
+                    'https://biiqwforuvzgubrrkfgq.supabase.co/functions/v1/google-meet-sync/callback',
+              ),
+            ),
+          );
+
+          if (result != null) {
+            if (result['success'] == true) {
+              final authCode = result['authCode'] as String?;
+              if (authCode != null) {
+                // Now complete the OAuth flow with the auth code
+                await _completeGoogleMeetOAuth(authCode);
+              } else {
+                setState(() {
+                  _error = 'Failed to get authorization code from OAuth flow';
+                });
+              }
+            } else {
+              final error = result['error'] as String? ?? 'OAuth failed';
+              if (error != 'User cancelled') {
+                setState(() {
+                  _error = 'OAuth failed: $error';
+                });
+              }
+            }
+          }
+        } catch (webViewError) {
+          debugPrint('❌ [GOOGLE MEET] WebView error: $webViewError');
+          setState(() {
+            _error = 'Failed to open authentication page: $webViewError';
+          });
+        }
+      } else {
+        setState(() {
+          _isConnectingGoogleMeet = false;
+          _error = 'An error occurred while connecting Google Meet: $e';
+        });
+      }
+    }
+  }
+
+  /// Complete Google Meet OAuth flow with auth code
+  Future<void> _completeGoogleMeetOAuth(String authCode) async {
+    try {
+      setState(() {
+        _isConnectingGoogleMeet = true;
+      });
+
+      final googleMeetRepo = _getIt<GoogleMeetRepository>();
+      final currentUser = FirebaseAuth.instance.currentUser;
+      if (currentUser == null) return;
+
+      // Connect Google Meet account with the auth code
+      final result = await googleMeetRepo.connectGoogleMeetAccount(
+        userId: currentUser.uid,
+        authCode: authCode,
+      );
+
+      if (result != null) {
+        setState(() {
+          _isGoogleMeetConnected = true;
+          _isConnectingGoogleMeet = false;
+        });
+
+        // Show success message
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('✅ Google Meet connected successfully!'),
+              backgroundColor: Colors.green,
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+      } else {
+        setState(() {
+          _isConnectingGoogleMeet = false;
+          _error =
+              'Failed to complete Google Meet connection. Please try again.';
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _isConnectingGoogleMeet = false;
+        _error = 'Error completing OAuth: $e';
+      });
+    }
+  }
+
+  /// Show Google Meet options when already connected
+  void _showGoogleMeetOptionsDialog() {
+    showCupertinoDialog(
+      context: context,
+      builder: (context) => CupertinoAlertDialog(
+        title: const Text('Google Meet Connected'),
+        content: const Text(
+          'Your Google Meet is already connected. What would you like to do?',
+        ),
+        actions: [
+          CupertinoDialogAction(
+            onPressed: () {
+              Navigator.pop(context);
+              _triggerGoogleMeetSync();
+            },
+            child: const Text('Sync Data'),
+          ),
+          CupertinoDialogAction(
+            onPressed: () {
+              Navigator.pop(context);
+              _disconnectGoogleMeet();
+            },
+            isDestructiveAction: true,
+            child: const Text('Disconnect'),
+          ),
+          CupertinoDialogAction(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Trigger Google Meet data sync
+  Future<void> _triggerGoogleMeetSync() async {
+    try {
+      final googleMeetRepo = _getIt<GoogleMeetRepository>();
+      final currentUser = FirebaseAuth.instance.currentUser;
+      if (currentUser == null) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('🔄 Syncing Google Meet data...'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+
+      await googleMeetRepo.syncGoogleMeetData(currentUser.uid);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('✅ Google Meet data synced successfully!'),
+          backgroundColor: Colors.green,
+          duration: Duration(seconds: 2),
+        ),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('❌ Error syncing Google Meet data: $e'),
+          backgroundColor: Colors.red,
+          duration: Duration(seconds: 3),
+        ),
+      );
+    }
+  }
+
+  /// Disconnect Google Meet account
+  Future<void> _disconnectGoogleMeet() async {
+    try {
+      final googleMeetRepo = _getIt<GoogleMeetRepository>();
+      final currentUser = FirebaseAuth.instance.currentUser;
+      if (currentUser == null) return;
+
+      await googleMeetRepo.disconnectGoogleMeet(currentUser.uid);
+
+      setState(() {
+        _isGoogleMeetConnected = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Google Meet disconnected successfully'),
+          backgroundColor: Colors.blue,
+          duration: Duration(seconds: 2),
+        ),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error disconnecting Google Meet: $e'),
+          backgroundColor: Colors.red,
+          duration: Duration(seconds: 3),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -1104,6 +1367,9 @@ class _PdaSimplePageState extends State<PdaSimplePage> {
         // LinkedIn Button
         _buildConnectLinkedInButton(),
         const SizedBox(height: 8),
+        // Google Meet Button
+        _buildConnectGoogleMeetButton(),
+        const SizedBox(height: 8),
         // Vault Button
         _buildVaultButton(),
       ],
@@ -1222,6 +1488,67 @@ class _PdaSimplePageState extends State<PdaSimplePage> {
               ),
         label: Text(
           _isConnectingLinkedIn ? 'Connecting...' : 'Connect LinkedIn',
+          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildConnectGoogleMeetButton() {
+    if (_isGoogleMeetConnected) {
+      return SizedBox(
+        width: double.infinity,
+        child: ElevatedButton.icon(
+          onPressed: _onConnectGoogleMeetPressed,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Color(0xFF4285F4), // Google blue
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+          icon: const Icon(Icons.check_circle_outline_rounded, size: 20),
+          label: const Text(
+            'Google Meet Connected',
+            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+          ),
+        ),
+      );
+    }
+
+    return SizedBox(
+      width: double.infinity,
+      child: OutlinedButton.icon(
+        onPressed: _isConnectingGoogleMeet ? null : _onConnectGoogleMeetPressed,
+        style: OutlinedButton.styleFrom(
+          foregroundColor: Color(0xFF4285F4), // Google blue
+          side: BorderSide(
+            color: Color(0xFF4285F4).withValues(alpha: 0.5),
+            width: 1,
+          ),
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          backgroundColor: Colors.white,
+        ),
+        icon: _isConnectingGoogleMeet
+            ? SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF4285F4)),
+                ),
+              )
+            : Icon(
+                Icons.video_call_outlined,
+                color: Color(0xFF4285F4),
+                size: 20,
+              ),
+        label: Text(
+          _isConnectingGoogleMeet ? 'Connecting...' : 'Connect Google Meet',
           style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
         ),
       ),
