@@ -15,6 +15,7 @@ import 'features/pda/di/pda_module.dart';
 import 'features/pda/di/gmail_module.dart';
 import 'features/pda/di/linkedin_module.dart';
 import 'features/pda/di/google_meet_module.dart';
+import 'features/pda/di/google_calendar_module.dart';
 import 'features/profile/di/profile_module.dart';
 import 'features/discover/di/discover_module.dart';
 import 'features/notifications/di/notification_module.dart';
@@ -30,6 +31,7 @@ import 'features/pda/data/data_sources/pda_vertex_ai_data_source_impl.dart';
 import 'features/pda/data/services/linkedin_context_prewarm_service.dart';
 import 'features/pda/data/services/gmail_context_prewarm_service.dart';
 import 'features/pda/data/services/google_meet_context_prewarm_service.dart';
+import 'features/pda/data/services/google_calendar_context_prewarm_service.dart';
 import 'features/vault/data/services/vault_startup_prewarm_service.dart';
 import 'features/vault/data/services/local_file_cache_service.dart';
 
@@ -49,11 +51,16 @@ Future<void> mainApp() async {
 
   // Initialize dependency injection
   CoreModule.register();
+
+  // Wait for SharedPreferences to be ready before registering other modules
+  await getIt.allReady();
+
   AuthModule.register();
   PdaModule.register();
   GmailModule.register();
   LinkedInModule.register();
   GoogleMeetModule.register();
+  GoogleCalendarModule.register();
   ProfileModule.init();
   DiscoverModule.init();
   NotificationModule.register();
@@ -109,6 +116,7 @@ class _AppContentState extends State<_AppContent> {
       GmailContextPrewarmService();
   final GoogleMeetContextPrewarmService _googleMeetPrewarmService =
       GoogleMeetContextPrewarmService();
+  late final GoogleCalendarContextPrewarmService _googleCalendarPrewarmService;
   late final VaultStartupPrewarmService _vaultPrewarmService;
   PdaVertexAiDataSourceImpl? _pdaDataSource;
 
@@ -117,6 +125,9 @@ class _AppContentState extends State<_AppContent> {
     super.initState();
     // Initialize vault prewarm service
     _vaultPrewarmService = getIt<VaultStartupPrewarmService>();
+    // Initialize Google Calendar prewarm service
+    _googleCalendarPrewarmService =
+        getIt<GoogleCalendarContextPrewarmService>();
 
     // Check authentication state on app start
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -196,10 +207,11 @@ class _AppContentState extends State<_AppContent> {
       _pdaDataSource = getIt<PdaVertexAiDataSourceImpl>();
       await _pdaDataSource?.prewarmUserContext(userId);
 
-      // Also pre-warm Gmail, LinkedIn, Google Meet, and Vault context in parallel for faster loading
+      // Also pre-warm Gmail, LinkedIn, Google Meet, Google Calendar, and Vault context in parallel for faster loading
       _gmailPrewarmService.prewarmGmailContext();
       _linkedInPrewarmService.prewarmLinkedInContext();
       _googleMeetPrewarmService.prewarmGoogleMeetContext();
+      _googleCalendarPrewarmService.prewarmOnStartup(userId);
       _vaultPrewarmService.prewarmVaultOnStartup();
 
       debugPrint('🧠 [APP] PDA prewarming completed');
