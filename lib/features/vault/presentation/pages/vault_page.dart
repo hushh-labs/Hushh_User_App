@@ -216,7 +216,7 @@ class _VaultPageState extends State<VaultPage> {
                     icon: Icons.psychology_alt_outlined,
                     title: 'Back to PDA',
                     subtitle: 'Return to assistant',
-                    onTap: () => context.pop(),
+                    onTap: () => context.go(RoutePaths.discover),
                   ),
                 ],
               ),
