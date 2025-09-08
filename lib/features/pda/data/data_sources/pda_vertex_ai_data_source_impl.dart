@@ -10,8 +10,10 @@ import 'package:hushh_user_app/features/pda/data/data_sources/pda_data_source.da
 import 'package:hushh_user_app/features/pda/data/models/pda_message_model.dart';
 import 'package:hushh_user_app/features/pda/data/config/vertex_ai_config.dart';
 import 'package:hushh_user_app/shared/services/gmail_connector_service.dart';
+import 'package:get_it/get_it.dart';
 import '../services/linkedin_context_prewarm_service.dart';
 import '../services/gmail_context_prewarm_service.dart';
+import '../services/google_calendar_context_prewarm_service.dart';
 import '../services/gemini_file_processor_service.dart';
 import 'package:hushh_user_app/features/vault/data/services/supabase_document_context_prewarm_service.dart';
 import 'package:hushh_user_app/features/vault/data/services/local_file_cache_service.dart';
@@ -24,8 +26,27 @@ class PdaVertexAiDataSourceImpl implements PdaDataSource {
       LinkedInContextPrewarmService();
   final GmailContextPrewarmService _gmailPrewarmService =
       GmailContextPrewarmService();
+  late final GoogleCalendarContextPrewarmService _googleCalendarPrewarmService;
   final SupabaseDocumentContextPrewarmService _documentPrewarmService =
       SupabaseDocumentContextPrewarmServiceImpl();
+
+  // Constructor to initialize GetIt dependencies
+  PdaVertexAiDataSourceImpl() {
+    _initializeServices();
+  }
+
+  void _initializeServices() {
+    try {
+      _googleCalendarPrewarmService =
+          GetIt.instance<GoogleCalendarContextPrewarmService>();
+      debugPrint('✅ [PDA VERTEX AI] Google Calendar service initialized');
+    } catch (e) {
+      debugPrint(
+        '⚠️ [PDA VERTEX AI] Failed to initialize Google Calendar service: $e',
+      );
+    }
+  }
+
   final LocalFileCacheService _cacheService = LocalFileCacheService();
   final GeminiFileProcessorService _geminiProcessor =
       GeminiFileProcessorService();
@@ -175,6 +196,10 @@ class PdaVertexAiDataSourceImpl implements PdaDataSource {
 
       // Get LinkedIn context for enhanced responses (if LinkedIn is connected)
       final linkedInContext = await _getLinkedInContextForPda();
+
+      // Get Google Calendar context for enhanced responses (if Calendar is connected)
+      final calendarContext = await _getGoogleCalendarContextForPda();
+
       final documentContext = await _getDocumentContextForPda();
 
       // Get authenticated client
@@ -197,6 +222,11 @@ class PdaVertexAiDataSourceImpl implements PdaDataSource {
           ? '\n\nLinkedIn Professional Context:\n$linkedInContext'
           : '';
 
+      // Prepare Google Calendar context
+      final calendarContextText = calendarContext.isNotEmpty
+          ? '\n\nGoogle Calendar Context:\n$calendarContext'
+          : '';
+
       // Prepare Document context
       final documentContextText = documentContext.isNotEmpty
           ? '\n\nUser Document Context:\n$documentContext'
@@ -205,16 +235,13 @@ class PdaVertexAiDataSourceImpl implements PdaDataSource {
       // Get document files for multimodal input
       final documentFiles = await _getDocumentFilesForClaude();
 
-      // Prepare content with text and files
-      final List<Map<String, dynamic>> contentParts = [
-        {
-          'type': 'text',
-          'text':
-              '''
+      // Build the main prompt text
+      final mainPromptText =
+          '''
 You are Hush, a personal digital assistant for the Hushh app - a platform that connects users with agents who sell products and services. You help users navigate the app, understand features, and get the most out of their Hushh experience.
 
 User Context:
-${_formatUserContext(userContext)}$gmailContextText$linkedInContextText$documentContextText
+${_formatUserContext(userContext)}$gmailContextText$linkedInContextText$calendarContextText$documentContextText
 
 Conversation History:
 $conversationHistory
@@ -230,19 +257,66 @@ Please provide helpful responses related to:
 - General questions about the Hushh platform
 - Gmail-related insights and email management (if Gmail data is available)
 - LinkedIn professional insights and networking advice (if LinkedIn data is available)
+- Google Calendar scheduling and meeting management (if Calendar data is available)
 - Document-related insights and information retrieval (if user documents are available)
 
 When Gmail context is available, you can reference relevant emails to provide more personalized assistance. For example, if the user mentions a product or order, you can check if there are related emails and provide insights. You can also help with email management, unread emails, and important messages.
 
 When LinkedIn context is available, you can provide professional insights, networking advice, and career-related assistance based on the user's LinkedIn profile, connections, and activity.
 
+When Google Calendar context is available, you can help with scheduling, meeting management, and calendar-related queries. For example, you can answer questions like "Do I have a meeting tomorrow?", "What's my next meeting?", "When is my meeting with [person]?", provide meeting details including Google Meet links, help identify scheduling conflicts, and remind about upcoming meetings. You can also correlate calendar events with Google Meet data to provide comprehensive meeting context.
+
 When Document context is available, you can reference relevant documents to provide more personalized assistance. For example, if the user asks about a topic, you can check if there are related documents and provide insights or summaries from them.
 
 Keep responses relevant to the Hushh app ecosystem and user experience. If the user asks about unrelated topics, politely redirect them to Hushh-related assistance.
 
 Be conversational, helpful, and concise in your responses.
-''',
-        },
+''';
+
+      // Log comprehensive input details
+      debugPrint(
+        '🔍 [VERTEX AI INPUT] ===== COMPREHENSIVE INPUT LOGGING =====',
+      );
+      debugPrint('🔍 [VERTEX AI INPUT] User Message: $message');
+      debugPrint(
+        '🔍 [VERTEX AI INPUT] User Context Length: ${_formatUserContext(userContext).length} characters',
+      );
+      debugPrint(
+        '🔍 [VERTEX AI INPUT] Gmail Context Length: ${gmailContext.length} characters',
+      );
+      debugPrint(
+        '🔍 [VERTEX AI INPUT] LinkedIn Context Length: ${linkedInContext.length} characters',
+      );
+      debugPrint(
+        '🔍 [VERTEX AI INPUT] Calendar Context Length: ${calendarContext.length} characters',
+      );
+      debugPrint(
+        '🔍 [VERTEX AI INPUT] Document Context Length: ${documentContext.length} characters',
+      );
+      debugPrint(
+        '🔍 [VERTEX AI INPUT] Conversation History Length: ${conversationHistory.length} characters',
+      );
+      debugPrint(
+        '🔍 [VERTEX AI INPUT] Document Files Count: ${documentFiles.length}',
+      );
+      debugPrint(
+        '🔍 [VERTEX AI INPUT] Main Prompt Length: ${mainPromptText.length} characters',
+      );
+
+      // Log the actual calendar context being sent
+      if (calendarContext.isNotEmpty) {
+        debugPrint(
+          '🔍 [VERTEX AI CALENDAR] ===== CALENDAR CONTEXT BEING SENT =====',
+        );
+        debugPrint('🔍 [VERTEX AI CALENDAR] $calendarContext');
+        debugPrint('🔍 [VERTEX AI CALENDAR] ===== END CALENDAR CONTEXT =====');
+      } else {
+        debugPrint('🔍 [VERTEX AI CALENDAR] ⚠️ NO CALENDAR CONTEXT AVAILABLE');
+      }
+
+      // Prepare content with text and files
+      final List<Map<String, dynamic>> contentParts = [
+        {'type': 'text', 'text': mainPromptText},
       ];
 
       // Add document files to content
@@ -259,6 +333,27 @@ Be conversational, helpful, and concise in your responses.
         'top_p': VertexAiConfig.topP,
         'top_k': VertexAiConfig.topK,
       };
+
+      // Log the complete request body structure (without sensitive data)
+      debugPrint('🔍 [VERTEX AI REQUEST] ===== REQUEST STRUCTURE =====');
+      debugPrint(
+        '🔍 [VERTEX AI REQUEST] Anthropic Version: ${requestBody['anthropic_version']}',
+      );
+      debugPrint(
+        '🔍 [VERTEX AI REQUEST] Max Tokens: ${requestBody['max_tokens']}',
+      );
+      debugPrint(
+        '🔍 [VERTEX AI REQUEST] Temperature: ${requestBody['temperature']}',
+      );
+      debugPrint('🔍 [VERTEX AI REQUEST] Top P: ${requestBody['top_p']}');
+      debugPrint('🔍 [VERTEX AI REQUEST] Top K: ${requestBody['top_k']}');
+      debugPrint(
+        '🔍 [VERTEX AI REQUEST] Content Parts Count: ${contentParts.length}',
+      );
+      debugPrint(
+        '🔍 [VERTEX AI REQUEST] Total Request Body Size: ${jsonEncode(requestBody).length} characters',
+      );
+      debugPrint('🔍 [VERTEX AI REQUEST] ===== END REQUEST STRUCTURE =====');
 
       final response = await client.post(
         Uri.parse(url),
@@ -309,10 +404,12 @@ Be conversational, helpful, and concise in your responses.
       // Pre-warm user context
       await getUserContext(currentUserId);
 
-      // Pre-warm Gmail and LinkedIn context in parallel for faster loading
+      // Pre-warm Gmail, LinkedIn, and Calendar context in parallel for faster loading
       final gmailPrewarmFuture = _gmailPrewarmService.prewarmGmailContext();
       final linkedInPrewarmFuture = _linkedInPrewarmService
           .prewarmLinkedInContext();
+      final calendarPrewarmFuture = _googleCalendarPrewarmService
+          .prewarmOnStartup(currentUserId);
       final documentPrewarmFuture = _documentPrewarmService.getPrewarmedContext(
         userId: currentUserId,
       );
@@ -321,6 +418,7 @@ Be conversational, helpful, and concise in your responses.
       await Future.wait([
         gmailPrewarmFuture,
         linkedInPrewarmFuture,
+        calendarPrewarmFuture,
         documentPrewarmFuture,
       ]);
 
@@ -489,6 +587,33 @@ Last Updated: $updatedAt
       return await _linkedInPrewarmService.getLinkedInContextForPda();
     } catch (e) {
       debugPrint('❌ [PDA LINKEDIN CONTEXT] Error getting LinkedIn context: $e');
+      return '';
+    }
+  }
+
+  /// Get Google Calendar context for PDA responses
+  Future<String> _getGoogleCalendarContextForPda() async {
+    try {
+      final currentUserId = _getCurrentUserId();
+      if (currentUserId == null) return '';
+
+      debugPrint(
+        '📦 [PDA CALENDAR CONTEXT] Getting fresh calendar context for PDA',
+      );
+
+      // Always get fresh data from prewarm service (bypass Firestore cache)
+      final calendarContext = await _googleCalendarPrewarmService
+          .getGoogleCalendarContextForPdaWithUserId(currentUserId);
+
+      debugPrint(
+        '📦 [PDA CALENDAR CONTEXT] Calendar context length: ${calendarContext.length} characters',
+      );
+
+      return calendarContext;
+    } catch (e) {
+      debugPrint(
+        '❌ [PDA CALENDAR CONTEXT] Error getting Google Calendar context: $e',
+      );
       return '';
     }
   }
@@ -949,6 +1074,26 @@ This extracted content provides detailed information from your documents that ca
             mimeType.contains('png') ||
             mimeType.contains('gif') ||
             mimeType.contains('webp'));
+  }
+
+  /// Quick sync calendar data for immediate refresh
+  Future<void> quickSyncCalendarData() async {
+    try {
+      final currentUserId = _getCurrentUserId();
+      if (currentUserId == null) {
+        debugPrint('⚠️ [QUICK SYNC] User not authenticated');
+        return;
+      }
+
+      debugPrint('⚡ [QUICK SYNC] Starting quick calendar sync...');
+
+      // Force refresh calendar data
+      await _googleCalendarPrewarmService.quickSyncForPDA(currentUserId);
+
+      debugPrint('✅ [QUICK SYNC] Quick calendar sync completed');
+    } catch (e) {
+      debugPrint('❌ [QUICK SYNC] Quick calendar sync error: $e');
+    }
   }
 
   /// Dispose resources

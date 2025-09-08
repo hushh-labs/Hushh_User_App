@@ -88,15 +88,16 @@ function initiateOAuthFlow(userId: string) {
     throw new Error('OAuth configuration missing')
   }
 
-  const scopes = [
-    'https://www.googleapis.com/auth/meetings.space.readonly',
-    'https://www.googleapis.com/auth/meetings.space.created',
-    'https://www.googleapis.com/auth/calendar.readonly',
-    'https://www.googleapis.com/auth/gmail.readonly',
-    'https://www.googleapis.com/auth/gmail.modify',
-    'https://www.googleapis.com/auth/userinfo.email',
-    'https://www.googleapis.com/auth/userinfo.profile'
-  ].join(' ')
+const scopes = [
+  'https://www.googleapis.com/auth/meetings.space.readonly',
+  'https://www.googleapis.com/auth/meetings.space.created',
+  'https://www.googleapis.com/auth/calendar.readonly',
+  'https://www.googleapis.com/auth/calendar.events.readonly',
+  'https://www.googleapis.com/auth/gmail.readonly',
+  'https://www.googleapis.com/auth/gmail.modify',
+  'https://www.googleapis.com/auth/userinfo.email',
+  'https://www.googleapis.com/auth/userinfo.profile'
+].join(' ')
 
   const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
     `client_id=${clientId}&` +
@@ -428,14 +429,23 @@ async function handleSyncRequest(userId: string, supabaseClient: any) {
   const meetData = await fetchGoogleMeetData(accessToken)
   await storeGoogleMeetData(supabaseClient, userId, meetData)
 
+  // Fetch and store Google Calendar data
+  const calendarData = await fetchGoogleCalendarData(accessToken)
+  await storeGoogleCalendarData(supabaseClient, userId, calendarData)
+
+  // Correlate calendar events with meet conferences
+  await correlateCalendarWithMeetings(supabaseClient, userId)
+
   return new Response(
     JSON.stringify({ 
       success: true, 
-      message: 'Google Meet data synced successfully',
+      message: 'Google Meet and Calendar data synced successfully',
       syncedData: {
         conferences: meetData.conferences.length,
         recordings: meetData.recordings.length,
-        transcripts: meetData.transcripts.length
+        transcripts: meetData.transcripts.length,
+        calendarEvents: calendarData.events.length,
+        attendees: calendarData.attendees.length
       }
     }),
     {
@@ -671,11 +681,279 @@ async function storeGoogleMeetData(supabaseClient: any, userId: string, meetData
   console.log('💾 Google Meet data storage completed')
 }
 
+async function fetchGoogleCalendarData(accessToken: string) {
+  const baseUrl = 'https://www.googleapis.com/calendar/v3'
+  const headers = {
+    'Authorization': `Bearer ${accessToken}`,
+    'Content-Type': 'application/json',
+  }
+
+  console.log('📅 Fetching calendar events from Google Calendar API...')
+
+  // Fetch events from the last 30 days and next 60 days for PDA context
+  const timeMin = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
+  const timeMax = new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString()
+
+  const eventsResponse = await fetch(
+    `${baseUrl}/calendars/primary/events?` +
+    `timeMin=${encodeURIComponent(timeMin)}&` +
+    `timeMax=${encodeURIComponent(timeMax)}&` +
+    `maxResults=250&` +
+    `singleEvents=true&` +
+    `orderBy=startTime`,
+    { headers }
+  )
+
+  if (!eventsResponse.ok) {
+    throw new Error(`Failed to fetch calendar events: ${eventsResponse.status}`)
+  }
+
+  const eventsData = await eventsResponse.json()
+  const events = eventsData.items || []
+
+  console.log(`📅 Found ${events.length} calendar events`)
+
+  // Filter events with Google Meet links and collect attendees
+  const meetingEvents: any[] = []
+  const allAttendees: any[] = []
+
+  for (const event of events) {
+    // Check if event has Google Meet link
+    const hasMeetLink = event.hangoutLink || 
+      (event.conferenceData?.entryPoints?.some((ep: any) => 
+        ep.entryPointType === 'video' && ep.uri?.includes('meet.google.com')
+      )) ||
+      (event.description && event.description.includes('meet.google.com'))
+
+    if (hasMeetLink) {
+      meetingEvents.push(event)
+
+      // Collect attendees for this event
+      if (event.attendees) {
+        for (const attendee of event.attendees) {
+          allAttendees.push({
+            ...attendee,
+            eventId: event.id
+          })
+        }
+      }
+    }
+  }
+
+  console.log(`📅 Found ${meetingEvents.length} events with Google Meet links`)
+  console.log(`👥 Found ${allAttendees.length} total attendees`)
+
+  return {
+    events: meetingEvents,
+    attendees: allAttendees
+  }
+}
+
+async function storeGoogleCalendarData(supabaseClient: any, userId: string, calendarData: any) {
+  console.log('💾 Storing Google Calendar data in Supabase...')
+
+  // Store calendar events
+  if (calendarData.events.length > 0) {
+    const eventsToStore = calendarData.events.map((event: any) => {
+      // Extract Google Meet link
+      let googleMeetLink = event.hangoutLink
+      
+      if (!googleMeetLink && event.conferenceData?.entryPoints) {
+        const meetEntry = event.conferenceData.entryPoints.find((ep: any) => 
+          ep.entryPointType === 'video' && ep.uri?.includes('meet.google.com')
+        )
+        googleMeetLink = meetEntry?.uri
+      }
+
+      if (!googleMeetLink && event.description) {
+        const meetRegex = /https:\/\/meet\.google\.com\/[a-z-]+/
+        const match = event.description.match(meetRegex)
+        googleMeetLink = match?.[0]
+      }
+
+      // Parse start and end times
+      let startTime, endTime, isAllDay = false
+      
+      if (event.start.date) {
+        // All-day event
+        startTime = event.start.date
+        endTime = event.end.date
+        isAllDay = true
+      } else {
+        // Timed event
+        startTime = event.start.dateTime
+        endTime = event.end.dateTime
+      }
+
+      return {
+        userId: userId, // Note: using camelCase to match our schema
+        google_event_id: event.id,
+        calendar_id: 'primary',
+        summary: event.summary || 'No Title',
+        description: event.description,
+        location: event.location,
+        start_time: startTime,
+        end_time: endTime,
+        is_all_day: isAllDay,
+        status: event.status || 'confirmed',
+        visibility: event.visibility,
+        recurrence_rule: event.recurrence?.join(','),
+        google_meet_link: googleMeetLink,
+        organizer_email: event.organizer?.email,
+        organizer_name: event.organizer?.displayName,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      }
+    })
+
+    const { error: eventsError } = await supabaseClient
+      .from('google_calendar_events')
+      .upsert(eventsToStore, { onConflict: 'userId,google_event_id' })
+
+    if (eventsError) {
+      console.error('❌ Error storing calendar events:', eventsError)
+      throw eventsError
+    }
+
+    console.log(`✅ Stored ${eventsToStore.length} calendar events`)
+  }
+
+  // Store attendees
+  if (calendarData.attendees.length > 0) {
+    const attendeesToStore = calendarData.attendees.map((attendee: any) => ({
+      userId: userId, // Note: using camelCase to match our schema
+      event_id: null, // Will be updated after we get the stored event IDs
+      email: attendee.email,
+      display_name: attendee.displayName,
+      response_status: attendee.responseStatus || 'needsAction',
+      is_organizer: attendee.organizer || false,
+      is_optional: attendee.optional || false,
+      created_at: new Date().toISOString(),
+      google_event_id: attendee.eventId // Temporary field for correlation
+    }))
+
+    // Get stored event IDs to correlate attendees
+    const { data: storedEvents } = await supabaseClient
+      .from('google_calendar_events')
+      .select('id, google_event_id')
+      .eq('userId', userId)
+
+    const eventIdMap = new Map()
+    storedEvents?.forEach((event: any) => {
+      eventIdMap.set(event.google_event_id, event.id)
+    })
+
+    // Update attendees with correct event_id
+    const finalAttendeesToStore = attendeesToStore
+      .filter((attendee: any) => eventIdMap.has(attendee.google_event_id))
+      .map((attendee: any) => ({
+        ...attendee,
+        event_id: eventIdMap.get(attendee.google_event_id),
+        google_event_id: undefined // Remove temporary field
+      }))
+
+    if (finalAttendeesToStore.length > 0) {
+      const { error: attendeesError } = await supabaseClient
+        .from('google_calendar_attendees')
+        .upsert(finalAttendeesToStore)
+
+      if (attendeesError) {
+        console.error('❌ Error storing calendar attendees:', attendeesError)
+        throw attendeesError
+      }
+
+      console.log(`✅ Stored ${finalAttendeesToStore.length} calendar attendees`)
+    }
+  }
+
+  console.log('💾 Google Calendar data storage completed')
+}
+
+async function correlateCalendarWithMeetings(supabaseClient: any, userId: string) {
+  console.log('🔗 Correlating calendar events with Google Meet conferences...')
+
+  // Get calendar events with Google Meet links
+  const { data: calendarEvents } = await supabaseClient
+    .from('google_calendar_events')
+    .select('id, google_meet_link, start_time, end_time, summary')
+    .eq('userId', userId)
+    .not('google_meet_link', 'is', null)
+
+  // Get Google Meet conferences
+  const { data: meetConferences } = await supabaseClient
+    .from('google_meet_conferences')
+    .select('id, conference_name, start_time, end_time')
+    .eq('user_id', userId)
+
+  if (!calendarEvents || !meetConferences) {
+    console.log('📊 No data to correlate')
+    return
+  }
+
+  const correlations: any[] = []
+
+  for (const calendarEvent of calendarEvents) {
+    for (const meetConference of meetConferences) {
+      let correlationConfidence = 0
+      let correlationMethod = ''
+
+      // Method 1: Time-based correlation (±15 minutes tolerance)
+      const calendarStart = new Date(calendarEvent.start_time)
+      const meetStart = new Date(meetConference.start_time)
+      const timeDiff = Math.abs(calendarStart.getTime() - meetStart.getTime())
+      const fifteenMinutes = 15 * 60 * 1000
+
+      if (timeDiff <= fifteenMinutes) {
+        correlationConfidence += 0.7
+        correlationMethod = 'time_match'
+
+        // Method 2: Title similarity (basic check)
+        if (calendarEvent.summary && meetConference.conference_name) {
+          const calendarTitle = calendarEvent.summary.toLowerCase()
+          const meetTitle = meetConference.conference_name.toLowerCase()
+          
+          if (calendarTitle.includes('meet') || meetTitle.includes(calendarTitle.substring(0, 10))) {
+            correlationConfidence += 0.2
+            correlationMethod = 'time_match,title_similarity'
+          }
+        }
+
+        // Only store correlations with reasonable confidence
+        if (correlationConfidence >= 0.6) {
+          correlations.push({
+            userId: userId,
+            calendar_event_id: calendarEvent.id,
+            meet_conference_id: meetConference.id,
+            correlation_confidence: Math.min(correlationConfidence, 1.0),
+            correlation_method: correlationMethod,
+            created_at: new Date().toISOString()
+          })
+        }
+      }
+    }
+  }
+
+  if (correlations.length > 0) {
+    const { error: correlationError } = await supabaseClient
+      .from('google_meet_calendar_links')
+      .upsert(correlations, { onConflict: 'calendar_event_id,meet_conference_id' })
+
+    if (correlationError) {
+      console.error('❌ Error storing correlations:', correlationError)
+      throw correlationError
+    }
+
+    console.log(`✅ Created ${correlations.length} calendar-meeting correlations`)
+  } else {
+    console.log('📊 No correlations found')
+  }
+}
+
 /* To deploy this function:
 1. Set Supabase secrets:
    - GOOGLE_MEET_CLIENT_ID
    - GOOGLE_MEET_CLIENT_SECRET  
    - GOOGLE_MEET_REDIRECT_URI
 2. Run: supabase functions deploy google-meet-sync
-3. Run the database migration
+3. Run the database migration for calendar tables
 */
