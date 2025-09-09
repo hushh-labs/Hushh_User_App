@@ -8,9 +8,9 @@ class ApiCostLogger {
   static const double _vertexAiInputCostPer1MTokens = 3.00;
   static const double _vertexAiOutputCostPer1MTokens = 15.00;
 
-  // Gemini 1.5 Pro API pricing (as of 2024)
-  // Input tokens: $1.25 per 1M tokens (for Gemini 1.5 Pro)
-  // Output tokens: $5.00 per 1M tokens (for Gemini 1.5 Pro)
+  // Gemini 1.5 Pro API pricing (as of 2024) - CORRECTED
+  // Input tokens: $1.25 per 1M tokens (for Gemini 1.5 Pro - used for file preprocessing)
+  // Output tokens: $5.00 per 1M tokens (for Gemini 1.5 Pro - used for file preprocessing)
   static const double _geminiInputCostPer1MTokens = 1.25;
   static const double _geminiOutputCostPer1MTokens = 5.00;
 

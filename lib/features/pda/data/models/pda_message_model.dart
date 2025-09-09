@@ -9,6 +9,7 @@ class PdaMessageModel extends Equatable {
   final DateTime timestamp;
   final MessageType messageType;
   final String? metadata;
+  final double? cost;
 
   const PdaMessageModel({
     required this.id,
@@ -18,6 +19,7 @@ class PdaMessageModel extends Equatable {
     required this.timestamp,
     this.messageType = MessageType.text,
     this.metadata,
+    this.cost,
   });
 
   factory PdaMessageModel.fromJson(Map<String, dynamic> json) {
@@ -31,6 +33,7 @@ class PdaMessageModel extends Equatable {
       ),
       messageType: _parseMessageType(json['message_type']),
       metadata: json['metadata'],
+      cost: json['cost']?.toDouble(),
     );
   }
 
@@ -43,6 +46,7 @@ class PdaMessageModel extends Equatable {
       timestamp: message.timestamp,
       messageType: message.messageType,
       metadata: message.metadata,
+      cost: message.cost,
     );
   }
 
@@ -55,6 +59,7 @@ class PdaMessageModel extends Equatable {
       'timestamp': timestamp.toIso8601String(),
       'message_type': messageType.name,
       'metadata': metadata,
+      'cost': cost,
     };
   }
 
@@ -67,6 +72,7 @@ class PdaMessageModel extends Equatable {
       timestamp: timestamp,
       messageType: messageType,
       metadata: metadata,
+      cost: cost,
     );
   }
 
@@ -92,5 +98,6 @@ class PdaMessageModel extends Equatable {
     timestamp,
     messageType,
     metadata,
+    cost,
   ];
 }

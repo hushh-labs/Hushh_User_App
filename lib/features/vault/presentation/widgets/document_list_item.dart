@@ -41,14 +41,6 @@ class DocumentListItem extends StatelessWidget {
         color: Colors.white,
         borderRadius: BorderRadius.circular(VaultTheme.defaultBorderRadius),
         border: Border.all(color: VaultTheme.borderColor, width: 1),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-            spreadRadius: 0,
-          ),
-        ],
       ),
       child: Material(
         color: Colors.transparent,

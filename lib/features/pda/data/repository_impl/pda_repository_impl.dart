@@ -1,7 +1,9 @@
+import 'dart:io';
 import 'package:dartz/dartz.dart';
 import 'package:hushh_user_app/features/pda/data/data_sources/pda_data_source.dart';
 import 'package:hushh_user_app/features/pda/data/models/pda_message_model.dart';
 import 'package:hushh_user_app/features/pda/domain/entities/pda_message.dart';
+import 'package:hushh_user_app/features/pda/domain/entities/pda_response.dart';
 import 'package:hushh_user_app/features/pda/domain/repository/pda_repository.dart';
 import 'package:hushh_user_app/core/errors/failures.dart';
 
@@ -54,15 +56,20 @@ class PdaRepositoryImpl implements PdaRepository {
   }
 
   @override
-  Future<Either<Failure, String>> sendToVertexAI(
+  Future<Either<Failure, PdaResponse>> sendToVertexAI(
     String message,
-    List<PdaMessage> context,
-  ) async {
+    List<PdaMessage> context, {
+    List<File>? imageFiles,
+  }) async {
     try {
       final contextModels = context
           .map((msg) => PdaMessageModel.fromDomain(msg))
           .toList();
-      final response = await dataSource.sendToVertexAI(message, contextModels);
+      final response = await dataSource.sendToVertexAI(
+        message,
+        contextModels,
+        imageFiles: imageFiles,
+      );
       return Right(response);
     } catch (e) {
       return Left(ServerFailure(e.toString()));

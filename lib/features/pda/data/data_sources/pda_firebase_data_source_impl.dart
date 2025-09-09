@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -7,6 +8,7 @@ import 'package:http/http.dart' as http;
 import 'package:hushh_user_app/shared/constants/firestore_constants.dart';
 import 'package:hushh_user_app/features/pda/data/data_sources/pda_data_source.dart';
 import 'package:hushh_user_app/features/pda/data/models/pda_message_model.dart';
+import 'package:hushh_user_app/features/pda/domain/entities/pda_response.dart';
 
 class PdaFirebaseDataSourceImpl implements PdaDataSource {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -120,10 +122,11 @@ class PdaFirebaseDataSourceImpl implements PdaDataSource {
   }
 
   @override
-  Future<String> sendToVertexAI(
+  Future<PdaResponse> sendToVertexAI(
     String message,
-    List<PdaMessageModel> context,
-  ) async {
+    List<PdaMessageModel> context, {
+    List<File>? imageFiles,
+  }) async {
     try {
       final currentUserId = _getCurrentUserId();
       if (currentUserId == null) {
@@ -146,15 +149,11 @@ class PdaFirebaseDataSourceImpl implements PdaDataSource {
       //     )
       //     .toList();
 
-      // Prepare the request body
-      final requestBody = {
-        'contents': [
-          {
-            'role': 'user',
-            'parts': [
-              {
-                'text':
-                    '''
+      // Prepare parts for the request
+      List<Map<String, dynamic>> parts = [
+        {
+          'text':
+              '''
 You are Hush, a personal digital assistant for the Hushh app - a platform that connects users with agents who sell products and services. You help users navigate the app, understand features, and get the most out of their Hushh experience.
 
 User Context:
@@ -175,9 +174,38 @@ Please provide helpful responses related to:
 
 Keep responses relevant to the Hushh app ecosystem and user experience. If the user asks about unrelated topics, politely redirect them to Hushh-related assistance.
 ''',
-              },
-            ],
-          },
+        },
+      ];
+
+      // Add image files if provided
+      if (imageFiles != null && imageFiles.isNotEmpty) {
+        debugPrint(
+          '🖼️ [PDA FIREBASE] Processing ${imageFiles.length} image(s)',
+        );
+        for (final imageFile in imageFiles) {
+          try {
+            final imageBytes = await imageFile.readAsBytes();
+            final base64Image = base64Encode(imageBytes);
+            final mimeType = _getMimeTypeFromFile(imageFile);
+
+            parts.add({
+              'inline_data': {'mime_type': mimeType, 'data': base64Image},
+            });
+            debugPrint(
+              '🖼️ [PDA FIREBASE] Added image: ${imageFile.path} ($mimeType)',
+            );
+          } catch (e) {
+            debugPrint(
+              '❌ [PDA FIREBASE] Error processing image ${imageFile.path}: $e',
+            );
+          }
+        }
+      }
+
+      // Prepare the request body
+      final requestBody = {
+        'contents': [
+          {'role': 'user', 'parts': parts},
         ],
         'generationConfig': {
           'temperature': 0.7,
@@ -200,7 +228,34 @@ Keep responses relevant to the Hushh app ecosystem and user experience. If the u
           final content = candidates.first['content'];
           final parts = content['parts'] as List;
           if (parts.isNotEmpty) {
-            return parts.first['text'] as String;
+            final responseText = parts.first['text'] as String;
+
+            // Calculate cost for Gemini API call
+            final inputTokens = _estimateTokensFromText(message);
+            final outputTokens = _estimateTokensFromText(responseText);
+
+            // Add tokens for images
+            int imageTokens = 0;
+            if (imageFiles != null && imageFiles.isNotEmpty) {
+              for (final file in imageFiles) {
+                final bytes = await file.readAsBytes();
+                final base64Data = base64Encode(bytes);
+                final mimeType = _getMimeTypeFromFile(file);
+                imageTokens += _estimateTokensFromBase64(base64Data, mimeType);
+              }
+            }
+
+            final totalInputTokens = inputTokens + imageTokens;
+            final cost = _calculateGeminiCost(
+              inputTokens: totalInputTokens,
+              outputTokens: outputTokens,
+            );
+
+            debugPrint(
+              '💰 [GEMINI COST] Input: ${totalInputTokens} tokens, Output: ${outputTokens} tokens, Cost: \$${cost.toStringAsFixed(6)}',
+            );
+
+            return PdaResponse(content: responseText, cost: cost);
           }
         }
         throw Exception('Invalid response format from Gemini API');
@@ -375,5 +430,52 @@ $emailInfo
           (msg) => '${msg.isFromUser ? 'User' : 'Assistant'}: ${msg.content}',
         )
         .join('\n');
+  }
+
+  String _getMimeTypeFromFile(File file) {
+    final extension = file.path.split('.').last.toLowerCase();
+    switch (extension) {
+      case 'jpg':
+      case 'jpeg':
+        return 'image/jpeg';
+      case 'png':
+        return 'image/png';
+      case 'gif':
+        return 'image/gif';
+      case 'webp':
+        return 'image/webp';
+      case 'bmp':
+        return 'image/bmp';
+      default:
+        return 'image/jpeg'; // Default fallback
+    }
+  }
+
+  // Cost calculation methods
+  int _estimateTokensFromText(String text) {
+    return (text.length / 4).ceil();
+  }
+
+  int _estimateTokensFromBase64(String base64Data, String mimeType) {
+    final sizeInBytes = (base64Data.length * 3 / 4).ceil();
+
+    if (mimeType.startsWith('image/')) {
+      return 85 + (sizeInBytes / 1024).ceil();
+    } else {
+      return (sizeInBytes / 4).ceil();
+    }
+  }
+
+  double _calculateGeminiCost({
+    required int inputTokens,
+    required int outputTokens,
+  }) {
+    // Gemini 2.0 Flash pricing (as of 2024) - CORRECTED
+    const double inputCostPer1MTokens = 0.10;
+    const double outputCostPer1MTokens = 0.40;
+
+    final inputCost = (inputTokens / 1000000) * inputCostPer1MTokens;
+    final outputCost = (outputTokens / 1000000) * outputCostPer1MTokens;
+    return inputCost + outputCost;
   }
 }

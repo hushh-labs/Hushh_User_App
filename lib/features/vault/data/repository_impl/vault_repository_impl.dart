@@ -146,4 +146,43 @@ class VaultRepositoryImpl implements VaultRepository {
     // TODO: Implement document content extraction logic
     throw UnimplementedError();
   }
+
+  @override
+  Future<void> clearAllDocuments(String userId) async {
+    try {
+      // Get all documents for the user first
+      final documents = await _supabaseVaultDataSource.getDocumentsMetadata(
+        userId: userId,
+      );
+
+      // Delete all files from storage
+      for (final document in documents) {
+        try {
+          await _supabaseStorageDataSource.deleteFile(
+            filePath: document.filename,
+          );
+        } catch (e) {
+          debugPrint(
+            '⚠️ [VAULT] Failed to delete file from storage: ${document.filename}, error: $e',
+          );
+          // Continue with other files even if one fails
+        }
+      }
+
+      // Delete all document metadata from database
+      await _supabaseVaultDataSource.clearAllDocumentsMetadata(userId);
+
+      // Clear PDA context
+      try {
+        debugPrint('🧠 [VAULT] Clearing all PDA context for user: $userId');
+        await _documentPrewarmService.clearAllDocumentContext(userId);
+        debugPrint('🧠 [VAULT] ✅ All PDA context cleared for user: $userId');
+      } catch (e) {
+        debugPrint('⚠️ [VAULT] Failed to clear PDA context: $e');
+        // Don't throw error here as the document clearing was successful
+      }
+    } catch (e) {
+      throw Exception('Failed to clear all documents: $e');
+    }
+  }
 }

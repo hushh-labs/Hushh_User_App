@@ -11,6 +11,7 @@ import 'package:hushh_user_app/features/vault/domain/repositories/vault_reposito
 import 'package:hushh_user_app/features/vault/domain/usecases/delete_document_usecase.dart';
 import 'package:hushh_user_app/features/vault/domain/usecases/get_documents_usecase.dart';
 import 'package:hushh_user_app/features/vault/domain/usecases/upload_document_usecase.dart';
+import 'package:hushh_user_app/features/vault/domain/usecases/clear_all_documents_usecase.dart';
 import 'package:hushh_user_app/features/vault/presentation/bloc/vault_bloc.dart';
 
 class VaultModule {
@@ -57,6 +58,7 @@ class VaultModule {
     sl.registerLazySingleton(() => UploadDocumentUseCase(sl()));
     sl.registerLazySingleton(() => DeleteDocumentUseCase(sl()));
     sl.registerLazySingleton(() => GetDocumentsUseCase(sl()));
+    sl.registerLazySingleton(() => ClearAllDocumentsUseCase(sl()));
 
     // Blocs
     sl.registerFactory(
@@ -64,6 +66,7 @@ class VaultModule {
         uploadDocumentUseCase: sl(),
         deleteDocumentUseCase: sl(),
         getDocumentsUseCase: sl(),
+        clearAllDocumentsUseCase: sl(),
       ),
     );
   }

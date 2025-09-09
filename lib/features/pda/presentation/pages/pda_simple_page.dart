@@ -136,7 +136,8 @@ class _PdaSimplePageState extends State<PdaSimplePage> {
         (messages) {
           if (mounted) {
             setState(() {
-              _messages = messages;
+              // Reverse the messages to show oldest first (chronological order)
+              _messages = messages.reversed.toList();
               _isLoadingMessages = false;
             });
             _scrollToBottom();

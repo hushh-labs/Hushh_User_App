@@ -1,5 +1,10 @@
+import 'dart:async';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 import 'package:get_it/get_it.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
@@ -7,7 +12,7 @@ import 'package:hushh_user_app/features/pda/domain/entities/pda_message.dart';
 import 'package:hushh_user_app/features/pda/domain/usecases/send_message_use_case.dart';
 import 'package:hushh_user_app/features/pda/domain/usecases/get_messages_use_case.dart';
 import 'package:hushh_user_app/features/pda/domain/usecases/clear_messages_use_case.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:hushh_user_app/shared/constants/firestore_constants.dart';
 import 'package:hushh_user_app/features/pda/presentation/components/pda_loading_animation.dart';
 
 import '../../data/services/supabase_gmail_service.dart';
@@ -48,11 +53,28 @@ class _PdaChatGptStylePageState extends State<PdaChatGptStylePage> {
   bool _isConnectingGmail = false;
   bool _isLinkedInConnected = false;
   bool _isConnectingLinkedIn = false;
+  String? _currentUserName;
   bool _isGoogleMeetConnected = false;
   bool _isConnectingGoogleMeet = false;
   bool _isGoogleDriveConnected = false;
   bool _isConnectingGoogleDrive = false;
   String? _error;
+
+  // Image picker
+  final ImagePicker _imagePicker = ImagePicker();
+  List<File> _selectedImages = [];
+
+  // Typing indicator variations
+  final List<String> _typingMessages = [
+    'Thinking...',
+    'Processing...',
+    'Analyzing...',
+    'Preparing response...',
+    'Working on it...',
+    'Almost ready...',
+  ];
+  int _currentTypingIndex = 0;
+  Timer? _typingTimer;
 
   // ChatGPT-style colors (Black and White Theme)
   static const Color darkBackground = Color(0xFF000000);
@@ -84,11 +106,17 @@ class _PdaChatGptStylePageState extends State<PdaChatGptStylePage> {
   void initState() {
     super.initState();
     _loadMessages();
+    _getCurrentUserName();
     _checkGmailConnectionStatus();
     _checkLinkedInConnectionStatus();
     _checkGoogleMeetConnectionStatus();
     _checkGoogleDriveConnectionStatus();
     _messageController.addListener(_updateSendButtonState);
+
+    // Refresh username after a short delay to ensure Firebase is ready
+    Future.delayed(const Duration(seconds: 1), () {
+      _getCurrentUserName();
+    });
   }
 
   void _updateSendButtonState() {
@@ -105,6 +133,171 @@ class _PdaChatGptStylePageState extends State<PdaChatGptStylePage> {
         );
       }
     });
+  }
+
+  Future<void> _getCurrentUserName() async {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    debugPrint('🔍 [PDA USERNAME] Current user: ${currentUser?.uid}');
+
+    if (currentUser != null) {
+      try {
+        debugPrint('🔍 [PDA USERNAME] Fetching from HushUsers collection...');
+        // Fetch user data from HushUsers collection
+        final userDoc = await FirebaseFirestore.instance
+            .collection(FirestoreCollections.users)
+            .doc(currentUser.uid)
+            .get();
+
+        debugPrint('🔍 [PDA USERNAME] Document exists: ${userDoc.exists}');
+        debugPrint('🔍 [PDA USERNAME] Document data: ${userDoc.data()}');
+
+        if (userDoc.exists && userDoc.data() != null) {
+          final userData = userDoc.data()!;
+
+          // Try different field names for the full name
+          final fullName =
+              userData['fullname'] as String? ??
+              userData['fullName'] as String? ??
+              userData['name'] as String? ??
+              userData['displayName'] as String? ??
+              userData['firstName'] as String?;
+
+          debugPrint('🔍 [PDA USERNAME] Full name from Firestore: $fullName');
+          debugPrint(
+            '🔍 [PDA USERNAME] Available fields: ${userData.keys.toList()}',
+          );
+
+          setState(() {
+            _currentUserName = fullName?.isNotEmpty == true
+                ? fullName
+                : currentUser.displayName ??
+                      currentUser.email?.split('@').first ??
+                      'User';
+          });
+
+          debugPrint(
+            '🔍 [PDA USERNAME] Final username set to: $_currentUserName',
+          );
+        } else {
+          debugPrint(
+            '🔍 [PDA USERNAME] Document does not exist, using fallback',
+          );
+          // Fallback to Firebase Auth data if HushUsers document doesn't exist
+          setState(() {
+            _currentUserName =
+                currentUser.displayName ??
+                currentUser.email?.split('@').first ??
+                'User';
+          });
+          debugPrint(
+            '🔍 [PDA USERNAME] Fallback username set to: $_currentUserName',
+          );
+        }
+      } catch (e) {
+        debugPrint('❌ [PDA USERNAME] Error fetching username: $e');
+        // Fallback to Firebase Auth data on error
+        setState(() {
+          _currentUserName =
+              currentUser.displayName ??
+              currentUser.email?.split('@').first ??
+              'User';
+        });
+        debugPrint(
+          '🔍 [PDA USERNAME] Error fallback username set to: $_currentUserName',
+        );
+      }
+    } else {
+      debugPrint('🔍 [PDA USERNAME] No current user found');
+    }
+  }
+
+  void _startTypingAnimation() {
+    _typingTimer?.cancel();
+    _currentTypingIndex = 0;
+    _typingTimer = Timer.periodic(const Duration(milliseconds: 1500), (timer) {
+      if (mounted) {
+        setState(() {
+          _currentTypingIndex =
+              (_currentTypingIndex + 1) % _typingMessages.length;
+        });
+      }
+    });
+  }
+
+  void _stopTypingAnimation() {
+    _typingTimer?.cancel();
+    _typingTimer = null;
+  }
+
+  Future<void> _pickImage() async {
+    try {
+      final List<XFile> images = await _imagePicker.pickMultiImage(
+        maxWidth: 1920,
+        maxHeight: 1920,
+        imageQuality: 85,
+      );
+
+      if (images.isNotEmpty) {
+        setState(() {
+          _selectedImages.addAll(images.map((image) => File(image.path)));
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error picking images: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  void _removeSelectedImage(int index) {
+    setState(() {
+      _selectedImages.removeAt(index);
+    });
+  }
+
+  void _clearAllImages() {
+    setState(() {
+      _selectedImages.clear();
+    });
+  }
+
+  Widget _buildImageGrid(String metadata) {
+    final imagePaths = metadata.split('|');
+
+    if (imagePaths.length == 1) {
+      // Single image - display as square
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(8),
+        child: Image.file(
+          File(imagePaths[0]),
+          width: 150,
+          height: 150,
+          fit: BoxFit.cover,
+        ),
+      );
+    } else {
+      // Multiple images - display in a grid
+      return Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: imagePaths.map((path) {
+          return ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: Image.file(
+              File(path),
+              width: 100,
+              height: 100,
+              fit: BoxFit.cover,
+            ),
+          );
+        }).toList(),
+      );
+    }
   }
 
   Future<void> _loadMessages() async {
@@ -141,7 +334,8 @@ class _PdaChatGptStylePageState extends State<PdaChatGptStylePage> {
         (messages) {
           if (mounted) {
             setState(() {
-              _messages = messages;
+              // Reverse the messages to show oldest first (chronological order)
+              _messages = messages.reversed.toList();
               _isLoadingMessages = false;
             });
             _scrollToBottom();
@@ -160,7 +354,7 @@ class _PdaChatGptStylePageState extends State<PdaChatGptStylePage> {
 
   Future<void> _sendMessage({String? predefinedMessage}) async {
     final message = predefinedMessage ?? _messageController.text.trim();
-    if (message.isEmpty) return;
+    if (message.isEmpty && _selectedImages.isEmpty) return;
 
     final currentUser = FirebaseAuth.instance.currentUser;
     if (currentUser == null) {
@@ -177,9 +371,17 @@ class _PdaChatGptStylePageState extends State<PdaChatGptStylePage> {
           hushhId:
               AppLocalStorage.hushhId ??
               'user-${DateTime.now().millisecondsSinceEpoch}',
-          content: message,
+          content: message.isEmpty
+              ? '[${_selectedImages.length} Image${_selectedImages.length > 1 ? 's' : ''}]'
+              : message,
           isFromUser: true,
           timestamp: DateTime.now(),
+          messageType: _selectedImages.isNotEmpty
+              ? MessageType.image
+              : MessageType.text,
+          metadata: _selectedImages.isNotEmpty
+              ? _selectedImages.map((f) => f.path).join('|')
+              : null,
         ),
       );
       _messageController.clear();
@@ -187,31 +389,49 @@ class _PdaChatGptStylePageState extends State<PdaChatGptStylePage> {
       _error = null;
     });
     _scrollToBottom();
+    _startTypingAnimation();
+
+    // Store images before clearing them
+    final imagesToSend = List<File>.from(_selectedImages);
 
     try {
+      debugPrint(
+        '🔍 [PDA UI] Sending message with ${imagesToSend.length} images',
+      );
+      if (imagesToSend.isNotEmpty) {
+        for (int i = 0; i < imagesToSend.length; i++) {
+          debugPrint('🔍 [PDA UI] Image ${i + 1}: ${imagesToSend[i].path}');
+        }
+      }
+
       final sendMessageUseCase = _getIt<PdaSendMessageUseCase>();
       final result = await sendMessageUseCase(
         hushhId: currentUser.uid,
         message: message,
         context: _messages,
+        imageFiles: imagesToSend.isNotEmpty ? imagesToSend : null,
       );
 
       result.fold(
         (failure) {
+          _stopTypingAnimation();
           setState(() {
             _error = 'Failed to send: ${failure.toString()}';
             _isSendingMessage = false;
           });
         },
         (aiMessage) {
+          _stopTypingAnimation();
           setState(() {
             _messages.add(aiMessage);
             _isSendingMessage = false;
+            _selectedImages.clear(); // Clear images after successful send
           });
           _scrollToBottom();
         },
       );
     } catch (e) {
+      _stopTypingAnimation();
       setState(() {
         _error = 'An unexpected error occurred: ${e.toString()}';
         _isSendingMessage = false;
@@ -1567,62 +1787,164 @@ class _PdaChatGptStylePageState extends State<PdaChatGptStylePage> {
   Widget _buildChatGptStyleMessageBubble(PdaMessage message) {
     final isUser = message.isFromUser;
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 24),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Avatar
-          Container(
-            width: 32,
-            height: 32,
-            decoration: BoxDecoration(
-              color: isUser ? userBubbleColor : assistantBubbleColor,
-              borderRadius: BorderRadius.circular(16),
-              border: isUser ? null : Border.all(color: borderColor),
-            ),
-            child: Icon(
-              isUser ? Icons.person : Icons.psychology_alt_outlined,
-              color: isUser ? Colors.white : textColor,
-              size: 18,
-            ),
-          ),
-          const SizedBox(width: 12),
-
-          // Message content
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  isUser ? 'You' : 'Hushh PDA',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: textColor,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: isUser ? Colors.transparent : assistantBubbleColor,
-                    borderRadius: BorderRadius.circular(12),
-                    border: isUser ? null : Border.all(color: borderColor),
-                  ),
-                  child: MarkdownBody(
-                    data: message.content,
-                    styleSheet: MarkdownStyleSheet(
-                      p: TextStyle(fontSize: 15, color: textColor, height: 1.5),
+    if (isUser) {
+      // User message - right side with 20% left margin
+      return Container(
+        margin: const EdgeInsets.only(bottom: 24),
+        child: Row(
+          children: [
+            // 20% left margin
+            Expanded(flex: 2, child: Container()),
+            // Message content (80% width)
+            Expanded(
+              flex: 8,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    _currentUserName ?? 'You',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: textColor,
                     ),
                   ),
-                ),
-              ],
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: userBubbleColor,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (message.messageType == MessageType.image &&
+                            message.metadata != null)
+                          Container(
+                            margin: const EdgeInsets.only(bottom: 8),
+                            child: _buildImageGrid(message.metadata!),
+                          ),
+                        if (message.content.isNotEmpty)
+                          Text(
+                            message.content,
+                            style: const TextStyle(
+                              fontSize: 15,
+                              color: Colors.white,
+                              height: 1.5,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
-        ],
-      ),
-    );
+            const SizedBox(width: 12),
+            // Avatar on the right
+            Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                color: userBubbleColor,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: const Icon(Icons.person, color: Colors.white, size: 18),
+            ),
+          ],
+        ),
+      );
+    } else {
+      // Assistant message - left side (original layout)
+      return Container(
+        margin: const EdgeInsets.only(bottom: 24),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Avatar
+            Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                color: assistantBubbleColor,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: borderColor),
+              ),
+              child: Icon(
+                Icons.psychology_alt_outlined,
+                color: textColor,
+                size: 18,
+              ),
+            ),
+            const SizedBox(width: 12),
+
+            // Message content
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Hushh PDA',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: textColor,
+                        ),
+                      ),
+                      if (message.cost != null)
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.green.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: Colors.green.withOpacity(0.3),
+                            ),
+                          ),
+                          child: Text(
+                            _formatCost(message.cost!),
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                              color: Colors.green.shade700,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: assistantBubbleColor,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: borderColor),
+                    ),
+                    child: MarkdownBody(
+                      data: message.content,
+                      styleSheet: MarkdownStyleSheet(
+                        p: TextStyle(
+                          fontSize: 15,
+                          color: textColor,
+                          height: 1.5,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
   }
 
   Widget _buildTypingIndicator() {
@@ -1679,7 +2001,7 @@ class _PdaChatGptStylePageState extends State<PdaChatGptStylePage> {
                       ),
                       const SizedBox(width: 12),
                       Text(
-                        'Thinking...',
+                        _typingMessages[_currentTypingIndex],
                         style: TextStyle(
                           fontSize: 15,
                           color: hintColor,
@@ -1742,7 +2064,9 @@ class _PdaChatGptStylePageState extends State<PdaChatGptStylePage> {
 
   Widget _buildChatGptStyleInputBar() {
     final isSendButtonEnabled =
-        _messageController.text.trim().isNotEmpty && !_isSendingMessage;
+        (_messageController.text.trim().isNotEmpty ||
+            _selectedImages.isNotEmpty) &&
+        !_isSendingMessage;
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -1752,63 +2076,174 @@ class _PdaChatGptStylePageState extends State<PdaChatGptStylePage> {
       ),
       child: SafeArea(
         top: false,
-        child: Row(
+        child: Column(
           children: [
-            Expanded(
-              child: Container(
-                decoration: BoxDecoration(
-                  color: assistantBubbleColor,
-                  borderRadius: BorderRadius.circular(24),
-                  border: Border.all(color: borderColor),
-                ),
-                child: TextField(
-                  controller: _messageController,
-                  decoration: InputDecoration(
-                    hintText: 'Message Hushh PDA...',
-                    hintStyle: TextStyle(color: hintColor, fontSize: 15),
-                    border: InputBorder.none,
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 20,
-                      vertical: 12,
-                    ),
-                  ),
-                  maxLines: 4,
-                  minLines: 1,
-                  textCapitalization: TextCapitalization.sentences,
-                  onSubmitted: (text) {
-                    if (isSendButtonEnabled) {
-                      _sendMessage();
-                    }
-                  },
-                ),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Container(
-              decoration: BoxDecoration(
-                color: isSendButtonEnabled ? userBubbleColor : hintColor,
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: IconButton(
-                icon: _isSendingMessage
-                    ? SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          valueColor: AlwaysStoppedAnimation<Color>(
-                            Colors.white,
+            // Show selected images if any
+            if (_selectedImages.isNotEmpty)
+              Container(
+                margin: const EdgeInsets.only(bottom: 12),
+                child: Column(
+                  children: [
+                    // Clear all button
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          '${_selectedImages.length} image${_selectedImages.length > 1 ? 's' : ''} selected',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: hintColor,
+                            fontWeight: FontWeight.w500,
                           ),
                         ),
-                      )
-                    : const Icon(
-                        Icons.arrow_upward,
-                        color: Colors.white,
-                        size: 20,
+                        GestureDetector(
+                          onTap: _clearAllImages,
+                          child: Text(
+                            'Clear all',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: userBubbleColor,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    // Images grid
+                    SizedBox(
+                      height: 100,
+                      child: ListView.builder(
+                        scrollDirection: Axis.horizontal,
+                        itemCount: _selectedImages.length,
+                        itemBuilder: (context, index) {
+                          return Container(
+                            margin: EdgeInsets.only(
+                              right: index < _selectedImages.length - 1 ? 8 : 0,
+                            ),
+                            child: Stack(
+                              children: [
+                                Container(
+                                  width: 100,
+                                  height: 100,
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(color: borderColor),
+                                  ),
+                                  child: ClipRRect(
+                                    borderRadius: BorderRadius.circular(12),
+                                    child: Image.file(
+                                      _selectedImages[index],
+                                      fit: BoxFit.cover,
+                                    ),
+                                  ),
+                                ),
+                                Positioned(
+                                  top: 4,
+                                  right: 4,
+                                  child: GestureDetector(
+                                    onTap: () => _removeSelectedImage(index),
+                                    child: Container(
+                                      padding: const EdgeInsets.all(4),
+                                      decoration: const BoxDecoration(
+                                        color: Colors.black54,
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: const Icon(
+                                        Icons.close,
+                                        color: Colors.white,
+                                        size: 14,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
                       ),
-                onPressed: isSendButtonEnabled ? _sendMessage : null,
-                padding: const EdgeInsets.all(8),
+                    ),
+                  ],
+                ),
               ),
+            // Input row
+            Row(
+              children: [
+                // Image picker button
+                Container(
+                  decoration: BoxDecoration(
+                    color: assistantBubbleColor,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: borderColor),
+                  ),
+                  child: IconButton(
+                    icon: Icon(
+                      Icons.image_outlined,
+                      color: textColor,
+                      size: 20,
+                    ),
+                    onPressed: _pickImage,
+                    padding: const EdgeInsets.all(8),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: assistantBubbleColor,
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(color: borderColor),
+                    ),
+                    child: TextField(
+                      controller: _messageController,
+                      decoration: InputDecoration(
+                        hintText: 'Message Hushh PDA...',
+                        hintStyle: TextStyle(color: hintColor, fontSize: 15),
+                        border: InputBorder.none,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 12,
+                        ),
+                      ),
+                      maxLines: 4,
+                      minLines: 1,
+                      textCapitalization: TextCapitalization.sentences,
+                      onSubmitted: (text) {
+                        if (isSendButtonEnabled) {
+                          _sendMessage();
+                        }
+                      },
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Container(
+                  decoration: BoxDecoration(
+                    color: isSendButtonEnabled ? userBubbleColor : hintColor,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: IconButton(
+                    icon: _isSendingMessage
+                        ? SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                Colors.white,
+                              ),
+                            ),
+                          )
+                        : const Icon(
+                            Icons.arrow_upward,
+                            color: Colors.white,
+                            size: 20,
+                          ),
+                    onPressed: isSendButtonEnabled ? _sendMessage : null,
+                    padding: const EdgeInsets.all(8),
+                  ),
+                ),
+              ],
             ),
           ],
         ),
@@ -1816,11 +2251,22 @@ class _PdaChatGptStylePageState extends State<PdaChatGptStylePage> {
     );
   }
 
+  String _formatCost(double cost) {
+    if (cost < 0.001) {
+      return '\$${(cost * 1000).toStringAsFixed(2)}m'; // Show in millicents
+    } else if (cost < 0.01) {
+      return '\$${(cost * 100).toStringAsFixed(2)}c'; // Show in cents
+    } else {
+      return '\$${cost.toStringAsFixed(4)}'; // Show in dollars
+    }
+  }
+
   @override
   void dispose() {
     _messageController.removeListener(_updateSendButtonState);
     _messageController.dispose();
     _scrollController.dispose();
+    _stopTypingAnimation();
     super.dispose();
   }
 }

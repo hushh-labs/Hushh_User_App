@@ -18,6 +18,7 @@ abstract class SupabaseDocumentContextPrewarmService {
     required String userId,
     required String documentId,
   });
+  Future<void> clearAllDocumentContext(String userId);
   Future<Map<String, dynamic>> getPrewarmedContext({required String userId});
 }
 
@@ -99,20 +100,32 @@ class SupabaseDocumentContextPrewarmServiceImpl
     try {
       // Get the document to be removed to find its original name for cache cleanup
       final allDocuments = await _getAllUserDocuments(userId);
-      final documentToRemove = allDocuments.firstWhere(
-        (doc) => doc.id == documentId,
-        orElse: () => throw Exception('Document not found'),
-      );
+      VaultDocument? documentToRemove;
+      try {
+        documentToRemove = allDocuments.firstWhere(
+          (doc) => doc.id == documentId,
+        );
+      } catch (e) {
+        documentToRemove = null;
+      }
 
-      // Remove from local cache
-      await _cacheService.initialize();
-      await _cacheService.removeCachedFileData(
-        userId: userId,
-        fileName: documentToRemove.originalName,
-      );
-      debugPrint(
-        '🗑️ [VAULT CACHE] Removed cached file data for ${documentToRemove.originalName}',
-      );
+      // If document not found, it might have been already deleted
+      if (documentToRemove == null) {
+        debugPrint(
+          '⚠️ [VAULT CACHE] Document $documentId not found, may have been already deleted',
+        );
+        // Still proceed to rebuild context with remaining documents
+      } else {
+        // Remove from local cache
+        await _cacheService.initialize();
+        await _cacheService.removeCachedFileData(
+          userId: userId,
+          fileName: documentToRemove.originalName,
+        );
+        debugPrint(
+          '🗑️ [VAULT CACHE] Removed cached file data for ${documentToRemove.originalName}',
+        );
+      }
 
       // Get remaining documents after deletion and rebuild context
       final remainingDocuments = await _getAllUserDocuments(userId);
@@ -586,6 +599,29 @@ class SupabaseDocumentContextPrewarmServiceImpl
         return 'audio/wav';
       default:
         return 'application/octet-stream';
+    }
+  }
+
+  @override
+  Future<void> clearAllDocumentContext(String userId) async {
+    try {
+      // Delete the vault context document from Firestore
+      await _firestore
+          .collection('HushUsers')
+          .doc(userId)
+          .collection('pda_context')
+          .doc('vault')
+          .delete();
+
+      // Clear all cached files for the user
+      await _cacheService.clearUserCache(userId);
+
+      debugPrint(
+        '🧹 [VAULT CACHE] Cleared all document context and cache for user: $userId',
+      );
+    } catch (e) {
+      debugPrint('❌ [VAULT CACHE] Error clearing all document context: $e');
+      throw Exception('Error clearing all document context: $e');
     }
   }
 }

@@ -49,3 +49,12 @@ class ExtractVaultDocumentContent extends VaultEvent {
   @override
   List<Object> get props => [documentId];
 }
+
+class ClearAllVaultDocuments extends VaultEvent {
+  final String userId;
+
+  const ClearAllVaultDocuments({required this.userId});
+
+  @override
+  List<Object> get props => [userId];
+}

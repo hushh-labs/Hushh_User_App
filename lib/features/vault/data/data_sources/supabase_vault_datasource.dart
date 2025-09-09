@@ -23,6 +23,7 @@ abstract class SupabaseVaultDataSource {
     required String userId,
     required VaultDocumentModel document,
   });
+  Future<void> clearAllDocumentsMetadata(String userId);
 }
 
 class SupabaseVaultDataSourceImpl implements SupabaseVaultDataSource {
@@ -157,6 +158,15 @@ class SupabaseVaultDataSourceImpl implements SupabaseVaultDataSource {
           })
           .eq('id', document.id)
           .eq('user_id', userId);
+    } catch (e) {
+      throw Exception('Supabase Error: $e');
+    }
+  }
+
+  @override
+  Future<void> clearAllDocumentsMetadata(String userId) async {
+    try {
+      await _supabase.from('vault_documents').delete().eq('user_id', userId);
     } catch (e) {
       throw Exception('Supabase Error: $e');
     }

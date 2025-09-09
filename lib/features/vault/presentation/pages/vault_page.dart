@@ -132,6 +132,8 @@ class _VaultPageState extends State<VaultPage> {
               builder: (context, state) {
                 if (state is VaultLoading) {
                   return _buildLoadingState();
+                } else if (state is VaultDocumentUploading) {
+                  return _buildUploadingState(state.progress);
                 } else if (state is VaultLoaded) {
                   if (state.documents.isEmpty) {
                     return _buildEmptyState();
@@ -414,6 +416,55 @@ class _VaultPageState extends State<VaultPage> {
     );
   }
 
+  Widget _buildUploadingState(double progress) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Stack(
+            alignment: Alignment.center,
+            children: [
+              SizedBox(
+                width: 80,
+                height: 80,
+                child: CircularProgressIndicator(
+                  value: progress,
+                  strokeWidth: 6,
+                  valueColor: const AlwaysStoppedAnimation<Color>(
+                    VaultTheme.userBubbleColor,
+                  ),
+                  backgroundColor: VaultTheme.userBubbleColor.withOpacity(0.1),
+                ),
+              ),
+              Text(
+                '${(progress * 100).toInt()}%',
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: VaultTheme.textColor,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 24),
+          const Text(
+            'Uploading document...',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w500,
+              color: VaultTheme.textColor,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Please wait while we process your file',
+            style: TextStyle(fontSize: 14, color: VaultTheme.hintColor),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildEmptyState() {
     return Center(
       child: SingleChildScrollView(
@@ -517,28 +568,6 @@ class _VaultPageState extends State<VaultPage> {
                       ],
                     ),
                   ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            // Secondary action
-            TextButton(
-              onPressed: () {
-                // TODO: Show help/onboarding
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Help content coming soon!'),
-                    backgroundColor: VaultTheme.userBubbleColor,
-                  ),
-                );
-              },
-              child: const Text(
-                'How does this work?',
-                style: TextStyle(
-                  color: VaultTheme.textColor,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                  decoration: TextDecoration.underline,
                 ),
               ),
             ),
@@ -652,26 +681,18 @@ class _VaultPageState extends State<VaultPage> {
             itemCount: documents.length,
             itemBuilder: (context, index) {
               final document = documents[index];
-              return Container(
-                margin: const EdgeInsets.only(bottom: 12),
-                decoration: BoxDecoration(
-                  color: VaultTheme.assistantBubbleColor,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: VaultTheme.borderColor, width: 1),
-                ),
-                child: DocumentListItem(
-                  document: document,
-                  onDelete: () {
-                    _showDeleteConfirmation(context, document);
-                  },
-                  onTap: () {
-                    showDialog(
-                      context: context,
-                      builder: (context) =>
-                          DocumentPreviewWidget(document: document),
-                    );
-                  },
-                ),
+              return DocumentListItem(
+                document: document,
+                onDelete: () {
+                  _showDeleteConfirmation(context, document);
+                },
+                onTap: () {
+                  showDialog(
+                    context: context,
+                    builder: (context) =>
+                        DocumentPreviewWidget(document: document),
+                  );
+                },
               );
             },
           ),
@@ -748,28 +769,29 @@ class _VaultPageState extends State<VaultPage> {
   }
 
   void _showClearVaultConfirmation() {
+    // Capture the VaultBloc reference before showing the dialog
+    final vaultBloc = context.read<VaultBloc>();
+
     showCupertinoDialog(
       context: context,
-      builder: (context) => CupertinoAlertDialog(
+      builder: (BuildContext dialogContext) => CupertinoAlertDialog(
         title: const Text('Clear Vault'),
         content: const Text(
           'Are you sure you want to delete all documents? This action cannot be undone.',
         ),
         actions: [
           CupertinoDialogAction(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.of(dialogContext).pop(),
             child: const Text('Cancel'),
           ),
           CupertinoDialogAction(
             onPressed: () {
-              Navigator.pop(context);
-              // TODO: Implement clear all documents functionality
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Clear vault functionality coming soon!'),
-                  backgroundColor: VaultTheme.userBubbleColor,
-                ),
-              );
+              Navigator.of(dialogContext).pop();
+              // Get actual user ID from Firebase Auth
+              final userId =
+                  FirebaseAuth.instance.currentUser?.uid ?? 'anonymous';
+              // Use the captured VaultBloc reference instead of trying to read from dialog context
+              vaultBloc.add(ClearAllVaultDocuments(userId: userId));
             },
             isDestructiveAction: true,
             child: const Text('Clear All'),
