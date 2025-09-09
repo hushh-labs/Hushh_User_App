@@ -17,6 +17,7 @@ import '../services/google_calendar_context_prewarm_service.dart';
 import '../services/gemini_file_processor_service.dart';
 import 'package:hushh_user_app/features/vault/data/services/supabase_document_context_prewarm_service.dart';
 import 'package:hushh_user_app/features/vault/data/services/local_file_cache_service.dart';
+import '../services/api_cost_logger.dart';
 
 class PdaVertexAiDataSourceImpl implements PdaDataSource {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -373,7 +374,16 @@ Be conversational, helpful, and concise in your responses.
             (responseData['content'] as List).isNotEmpty) {
           final content = responseData['content'][0];
           if (content['text'] != null) {
-            return content['text'] as String;
+            final responseText = content['text'] as String;
+
+            // Log cost information for this API call
+            ApiCostLogger.logVertexAiCost(
+              prompt: mainPromptText,
+              response: responseText,
+              documentFiles: documentFiles,
+            );
+
+            return responseText;
           }
         }
 
@@ -947,6 +957,7 @@ Keywords: ${keywords.join(', ')}$updatedInfo$contentInstructions
 
       // Use Gemini to extract content from complex file types (PDFs, CSVs, etc.)
       String geminiExtractedContent = '';
+      double totalGeminiCost = 0.0;
       if (_geminiProcessor.isConfigured) {
         debugPrint(
           '🔍 [GEMINI PREPROCESSING] Processing ${filesToProcess.length} files with Gemini for content extraction',
@@ -980,6 +991,21 @@ ${extractedText}
 ---
 
 ''';
+
+              // Calculate Gemini cost for this file (estimation based on file size and response)
+              final geminiCost = ApiCostLogger.calculateGeminiCost(
+                inputTokens:
+                    ApiCostLogger.estimateTokensFromBase64(
+                      base64Data,
+                      mimeType,
+                    ) +
+                    1000, // Estimate for prompt tokens
+                outputTokens: ApiCostLogger.estimateTokensFromText(
+                  extractedText,
+                ),
+              );
+              totalGeminiCost += geminiCost;
+
               debugPrint(
                 '✅ [GEMINI PREPROCESSING] Successfully extracted ${extractedText.length} characters from $fileName',
               );

@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'api_cost_logger.dart';
 
 /// Service to process files using Gemini API for content extraction
 class GeminiFileProcessorService {
@@ -72,6 +73,15 @@ class GeminiFileProcessorService {
             );
             debugPrint(
               '📄 [GEMINI] Extracted ${extractedText.length} characters',
+            );
+
+            // Log cost information for this API call
+            ApiCostLogger.logGeminiCost(
+              prompt: _getExtractionPrompt(fileName, mimeType),
+              response: extractedText,
+              base64Data: base64Data,
+              mimeType: mimeType,
+              fileName: fileName,
             );
 
             return {
