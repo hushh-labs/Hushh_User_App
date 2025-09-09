@@ -5,11 +5,13 @@ import 'package:go_router/go_router.dart';
 class GoogleMeetOAuthWebView extends StatefulWidget {
   final String oauthUrl;
   final String redirectUri;
+  final String providerName; // e.g., 'Google Meet' or 'Google Drive'
 
   const GoogleMeetOAuthWebView({
     super.key,
     required this.oauthUrl,
     required this.redirectUri,
+    this.providerName = 'Google Meet',
   });
 
   @override
@@ -114,7 +116,7 @@ class _GoogleMeetOAuthWebViewState extends State<GoogleMeetOAuthWebView> {
     // Show success message
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text('✅ Google Meet authentication successful!'),
+        content: Text('✅ Authentication successful!'),
         backgroundColor: Colors.green,
         duration: Duration(seconds: 2),
       ),
@@ -146,9 +148,9 @@ class _GoogleMeetOAuthWebViewState extends State<GoogleMeetOAuthWebView> {
         elevation: 0,
         backgroundColor: Colors.white,
         foregroundColor: Colors.black87,
-        title: const Text(
-          'Connect Google Meet',
-          style: TextStyle(
+        title: Text(
+          'Connect ${widget.providerName}',
+          style: const TextStyle(
             color: Colors.black87,
             fontWeight: FontWeight.w600,
             fontSize: 18,

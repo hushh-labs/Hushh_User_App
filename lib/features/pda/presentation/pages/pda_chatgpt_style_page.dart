@@ -17,6 +17,10 @@ import '../../domain/repositories/gmail_repository.dart';
 import '../../domain/repositories/google_meet_repository.dart';
 import '../../data/data_sources/google_meet_supabase_data_source_impl.dart';
 import 'google_meet_oauth_webview.dart';
+import 'google_meet_page.dart';
+import '../../domain/repositories/google_drive_repository.dart';
+import '../../data/data_sources/google_drive_supabase_data_source_impl.dart';
+import '../../data/services/google_drive_context_prewarm_service.dart';
 
 import 'package:hushh_user_app/shared/utils/app_local_storage.dart';
 import 'package:go_router/go_router.dart';
@@ -46,6 +50,8 @@ class _PdaChatGptStylePageState extends State<PdaChatGptStylePage> {
   bool _isConnectingLinkedIn = false;
   bool _isGoogleMeetConnected = false;
   bool _isConnectingGoogleMeet = false;
+  bool _isGoogleDriveConnected = false;
+  bool _isConnectingGoogleDrive = false;
   String? _error;
 
   // ChatGPT-style colors (Black and White Theme)
@@ -81,6 +87,7 @@ class _PdaChatGptStylePageState extends State<PdaChatGptStylePage> {
     _checkGmailConnectionStatus();
     _checkLinkedInConnectionStatus();
     _checkGoogleMeetConnectionStatus();
+    _checkGoogleDriveConnectionStatus();
     _messageController.addListener(_updateSendButtonState);
   }
 
@@ -301,6 +308,22 @@ class _PdaChatGptStylePageState extends State<PdaChatGptStylePage> {
       });
     } catch (e) {
       debugPrint('❌ [PDA] Error checking Google Meet connection: $e');
+    }
+  }
+
+  Future<void> _checkGoogleDriveConnectionStatus() async {
+    try {
+      final googleDriveRepo = _getIt<GoogleDriveRepository>();
+      final currentUser = FirebaseAuth.instance.currentUser;
+      if (currentUser == null) return;
+      final isConnected = await googleDriveRepo.isGoogleDriveConnected(
+        currentUser.uid,
+      );
+      setState(() {
+        _isGoogleDriveConnected = isConnected;
+      });
+    } catch (e) {
+      debugPrint('❌ [PDA] Error checking Google Drive connection: $e');
     }
   }
 
@@ -727,6 +750,7 @@ class _PdaChatGptStylePageState extends State<PdaChatGptStylePage> {
                 oauthUrl: authUrl,
                 redirectUri:
                     'https://biiqwforuvzgubrrkfgq.supabase.co/functions/v1/google-meet-sync/callback',
+                providerName: 'Google Meet',
               ),
             ),
           );
@@ -906,6 +930,242 @@ class _PdaChatGptStylePageState extends State<PdaChatGptStylePage> {
     }
   }
 
+  void _navigateToGoogleMeetPage() {
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (context) => const GoogleMeetPage()));
+  }
+
+  // Google Drive connection methods (real OAuth via Supabase function)
+  Future<void> _onConnectGoogleDrivePressed() async {
+    if (_isGoogleDriveConnected) {
+      _showGoogleDriveOptionsDialog();
+      return;
+    }
+
+    setState(() {
+      _isConnectingGoogleDrive = true;
+      _error = null;
+    });
+
+    try {
+      final driveDataSource = GoogleDriveSupabaseDataSourceImpl();
+      final currentUser = FirebaseAuth.instance.currentUser;
+      if (currentUser == null) {
+        setState(() {
+          _error = 'User not authenticated';
+          _isConnectingGoogleDrive = false;
+        });
+        return;
+      }
+
+      await driveDataSource.initiateGoogleDriveOAuth(currentUser.uid);
+
+      setState(() {
+        _isConnectingGoogleDrive = false;
+        _error = 'Failed to get OAuth URL. Please try again.';
+      });
+    } catch (e) {
+      if (e.toString().contains('OAuthUrlException:')) {
+        final authUrl = e.toString().replaceFirst('OAuthUrlException: ', '');
+
+        setState(() {
+          _isConnectingGoogleDrive = false;
+        });
+
+        try {
+          debugPrint('🌐 [GOOGLE DRIVE] Opening WebView for OAuth: $authUrl');
+
+          final result = await Navigator.of(context).push<Map<String, dynamic>>(
+            MaterialPageRoute(
+              builder: (context) => GoogleMeetOAuthWebView(
+                oauthUrl: authUrl,
+                redirectUri:
+                    'https://biiqwforuvzgubrrkfgq.supabase.co/functions/v1/google-drive-sync/callback',
+                providerName: 'Google Drive',
+              ),
+            ),
+          );
+
+          if (result != null) {
+            if (result['success'] == true) {
+              final authCode = result['authCode'] as String?;
+              if (authCode != null) {
+                await _completeGoogleDriveOAuth(authCode);
+              } else {
+                setState(() {
+                  _error = 'Failed to get authorization code from OAuth flow';
+                });
+              }
+            } else {
+              final error = result['error'] as String? ?? 'OAuth failed';
+              if (error != 'User cancelled') {
+                setState(() {
+                  _error = 'OAuth failed: $error';
+                });
+              }
+            }
+          }
+        } catch (webViewError) {
+          debugPrint('❌ [GOOGLE DRIVE] WebView error: $webViewError');
+          setState(() {
+            _error = 'Failed to open authentication page: $webViewError';
+          });
+        }
+      } else {
+        setState(() {
+          _isConnectingGoogleDrive = false;
+          _error = 'An error occurred while connecting Google Drive: $e';
+        });
+      }
+    }
+  }
+
+  void _showGoogleDriveOptionsDialog() {
+    showCupertinoDialog(
+      context: context,
+      builder: (context) => CupertinoAlertDialog(
+        title: const Text('Google Drive Connected'),
+        content: const Text(
+          'Your Google Drive is already connected. What would you like to do?',
+        ),
+        actions: [
+          CupertinoDialogAction(
+            onPressed: () {
+              Navigator.pop(context);
+              _triggerGoogleDriveSync();
+            },
+            child: const Text('Sync Now'),
+          ),
+          CupertinoDialogAction(
+            onPressed: () {
+              Navigator.pop(context);
+              _disconnectGoogleDrive();
+            },
+            isDestructiveAction: true,
+            child: const Text('Disconnect'),
+          ),
+          CupertinoDialogAction(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _triggerGoogleDriveSync() async {
+    try {
+      final googleDriveRepo = _getIt<GoogleDriveRepository>();
+      final currentUser = FirebaseAuth.instance.currentUser;
+      if (currentUser == null) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('🔄 Syncing Google Drive...'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+
+      await googleDriveRepo.triggerDriveSync(currentUser.uid);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('✅ Google Drive sync completed.'),
+          backgroundColor: Colors.green,
+          duration: Duration(seconds: 2),
+        ),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('❌ Error syncing Google Drive: $e'),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    }
+  }
+
+  Future<void> _disconnectGoogleDrive() async {
+    try {
+      final googleDriveRepo = _getIt<GoogleDriveRepository>();
+      final currentUser = FirebaseAuth.instance.currentUser;
+      if (currentUser == null) return;
+
+      await googleDriveRepo.disconnectGoogleDrive(currentUser.uid);
+
+      setState(() {
+        _isGoogleDriveConnected = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Google Drive disconnected'),
+          backgroundColor: Colors.blue,
+          duration: Duration(seconds: 2),
+        ),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error disconnecting Google Drive: $e'),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    }
+  }
+
+  Future<void> _completeGoogleDriveOAuth(String authCode) async {
+    try {
+      setState(() {
+        _isConnectingGoogleDrive = true;
+      });
+
+      final googleDriveRepo = _getIt<GoogleDriveRepository>();
+      final currentUser = FirebaseAuth.instance.currentUser;
+      if (currentUser == null) return;
+
+      final success = await googleDriveRepo.connectGoogleDriveAccount(
+        userId: currentUser.uid,
+        authCode: authCode,
+      );
+
+      if (success) {
+        setState(() {
+          _isGoogleDriveConnected = true;
+          _isConnectingGoogleDrive = false;
+        });
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('✅ Google Drive connected successfully!'),
+              backgroundColor: Colors.green,
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+
+        try {
+          await GoogleDriveContextPrewarmService().prewarmGoogleDriveContext();
+        } catch (_) {}
+      } else {
+        setState(() {
+          _isConnectingGoogleDrive = false;
+          _error =
+              'Failed to complete Google Drive connection. Please try again.';
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _isConnectingGoogleDrive = false;
+        _error = 'Error completing OAuth: $e';
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -985,38 +1245,53 @@ class _PdaChatGptStylePageState extends State<PdaChatGptStylePage> {
                   ),
                   const SizedBox(height: 16),
 
-                  // Gmail Plugin
-                  _buildPluginButton(
-                    icon: Icons.mail_outline,
-                    title: 'Gmail',
-                    subtitle: _isGmailConnected ? 'Connected' : 'Connect',
-                    isConnected: _isGmailConnected,
-                    isLoading: _isConnectingGmail,
-                    onTap: _onConnectGmailPressed,
-                  ),
-                  const SizedBox(height: 12),
+                  // Gmail Plugin - HIDDEN
+                  // _buildPluginButton(
+                  //   icon: Icons.mail_outline,
+                  //   title: 'Gmail',
+                  //   subtitle: _isGmailConnected ? 'Connected' : 'Connect',
+                  //   isConnected: _isGmailConnected,
+                  //   isLoading: _isConnectingGmail,
+                  //   onTap: _onConnectGmailPressed,
+                  // ),
+                  // const SizedBox(height: 12),
 
-                  // LinkedIn Plugin
-                  _buildPluginButton(
-                    icon: Icons.work_outline,
-                    title: 'LinkedIn',
-                    subtitle: _isLinkedInConnected ? 'Connected' : 'Connect',
-                    isConnected: _isLinkedInConnected,
-                    isLoading: _isConnectingLinkedIn,
-                    onTap: _onConnectLinkedInPressed,
-                  ),
-                  const SizedBox(height: 12),
+                  // LinkedIn Plugin - HIDDEN
+                  // _buildPluginButton(
+                  //   icon: Icons.work_outline,
+                  //   title: 'LinkedIn',
+                  //   subtitle: _isLinkedInConnected ? 'Connected' : 'Connect',
+                  //   isConnected: _isLinkedInConnected,
+                  //   isLoading: _isConnectingLinkedIn,
+                  //   onTap: _onConnectLinkedInPressed,
+                  // ),
+                  // const SizedBox(height: 12),
 
                   // Google Meet Plugin
                   _buildPluginButton(
                     icon: Icons.video_call_outlined,
                     title: 'Google Meet',
-                    subtitle: _isGoogleMeetConnected ? 'Connected' : 'Connect',
+                    subtitle: _isGoogleMeetConnected
+                        ? 'View meetings'
+                        : 'Connect',
                     isConnected: _isGoogleMeetConnected,
                     isLoading: _isConnectingGoogleMeet,
-                    onTap: _onConnectGoogleMeetPressed,
+                    onTap: _isGoogleMeetConnected
+                        ? () => _navigateToGoogleMeetPage()
+                        : _onConnectGoogleMeetPressed,
                   ),
                   const SizedBox(height: 12),
+
+                  // Google Drive Plugin - HIDDEN
+                  // _buildPluginButton(
+                  //   icon: Icons.drive_folder_upload_outlined,
+                  //   title: 'Google Drive',
+                  //   subtitle: _isGoogleDriveConnected ? 'Connected' : 'Connect',
+                  //   isConnected: _isGoogleDriveConnected,
+                  //   isLoading: _isConnectingGoogleDrive,
+                  //   onTap: _onConnectGoogleDrivePressed,
+                  // ),
+                  // const SizedBox(height: 12),
 
                   // Vault Plugin
                   _buildPluginButton(

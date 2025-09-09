@@ -16,6 +16,8 @@ import 'features/pda/di/gmail_module.dart';
 import 'features/pda/di/linkedin_module.dart';
 import 'features/pda/di/google_meet_module.dart';
 import 'features/pda/di/google_calendar_module.dart';
+import 'features/pda/di/google_drive_module.dart';
+import 'features/pda/di/calendar_module.dart';
 import 'features/profile/di/profile_module.dart';
 import 'features/discover/di/discover_module.dart';
 import 'features/notifications/di/notification_module.dart';
@@ -61,6 +63,8 @@ Future<void> mainApp() async {
   LinkedInModule.register();
   GoogleMeetModule.register();
   GoogleCalendarModule.register();
+  GoogleDriveModule.register();
+  CalendarModule.register();
   ProfileModule.init();
   DiscoverModule.init();
   NotificationModule.register();
