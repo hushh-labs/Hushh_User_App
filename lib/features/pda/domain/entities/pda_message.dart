@@ -10,6 +10,7 @@ class PdaMessage extends Equatable {
   final DateTime timestamp;
   final MessageType messageType;
   final String? metadata;
+  final double? cost; // Cost in USD for AI response
 
   const PdaMessage({
     required this.id,
@@ -19,6 +20,7 @@ class PdaMessage extends Equatable {
     required this.timestamp,
     this.messageType = MessageType.text,
     this.metadata,
+    this.cost,
   });
 
   @override
@@ -30,5 +32,6 @@ class PdaMessage extends Equatable {
     timestamp,
     messageType,
     metadata,
+    cost,
   ];
 }

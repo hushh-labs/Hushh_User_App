@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:get_it/get_it.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:hushh_user_app/features/pda/domain/entities/calendar_event.dart';
 import 'package:hushh_user_app/features/pda/domain/usecases/calendar_use_cases.dart';
 
@@ -95,6 +96,38 @@ class _GoogleMeetPageState extends State<GoogleMeetPage>
         _isLoading = false;
         _error = 'Failed to load calendar data: $e';
       });
+    }
+  }
+
+  Future<void> _openMeetingLink(String meetingLink) async {
+    try {
+      final Uri url = Uri.parse(meetingLink);
+      if (await canLaunchUrl(url)) {
+        await launchUrl(
+          url,
+          mode: LaunchMode.externalApplication, // This will open in Safari
+        );
+      } else {
+        // Show error message if can't launch
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Could not open meeting link'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      // Show error message if launch fails
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error opening meeting: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 
@@ -466,7 +499,7 @@ class _GoogleMeetPageState extends State<GoogleMeetPage>
             CupertinoDialogAction(
               onPressed: () {
                 Navigator.pop(context);
-                // TODO: Open meeting link
+                _openMeetingLink(event.meetingLink!);
               },
               child: const Text('Join Meeting'),
             ),

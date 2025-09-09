@@ -1,5 +1,7 @@
+import 'dart:io';
 import 'package:dartz/dartz.dart';
 import 'package:hushh_user_app/features/pda/domain/entities/pda_message.dart';
+import 'package:hushh_user_app/features/pda/domain/entities/pda_response.dart';
 import 'package:hushh_user_app/core/errors/failures.dart';
 
 abstract class PdaRepository {
@@ -7,10 +9,11 @@ abstract class PdaRepository {
   Future<Either<Failure, void>> saveMessage(PdaMessage message);
   Future<Either<Failure, void>> deleteMessage(String messageId);
   Future<Either<Failure, void>> clearMessages(String userId);
-  Future<Either<Failure, String>> sendToVertexAI(
+  Future<Either<Failure, PdaResponse>> sendToVertexAI(
     String message,
-    List<PdaMessage> context,
-  );
+    List<PdaMessage> context, {
+    List<File>? imageFiles,
+  });
   Future<Either<Failure, void>> prewarmUserContext(String hushhId);
   Future<Either<Failure, Map<String, dynamic>>> getUserContext(String hushhId);
 

@@ -1,4 +1,6 @@
+import 'dart:io';
 import 'package:dartz/dartz.dart';
+import 'package:flutter/foundation.dart';
 import 'package:hushh_user_app/features/pda/domain/entities/pda_message.dart';
 import 'package:hushh_user_app/features/pda/domain/repository/pda_repository.dart';
 import 'package:hushh_user_app/core/errors/failures.dart';
@@ -13,14 +15,23 @@ class PdaSendMessageUseCase {
     required String hushhId,
     required String message,
     required List<PdaMessage> context,
+    List<File>? imageFiles,
   }) async {
     // Save user message first
     final userMessage = PdaMessage(
       id: const Uuid().v4(),
       hushhId: hushhId,
-      content: message,
+      content: message.isEmpty
+          ? '[${imageFiles?.length ?? 0} Image${(imageFiles?.length ?? 0) > 1 ? 's' : ''}]'
+          : message,
       isFromUser: true,
       timestamp: DateTime.now(),
+      messageType: (imageFiles?.isNotEmpty ?? false)
+          ? MessageType.image
+          : MessageType.text,
+      metadata: imageFiles?.isNotEmpty == true
+          ? imageFiles!.map((f) => f.path).join('|')
+          : null,
     );
 
     final saveUserResult = await repository.saveMessage(userMessage);
@@ -31,7 +42,20 @@ class PdaSendMessageUseCase {
     }
 
     // Send to Vertex AI Claude and get response
-    final vertexAiResult = await repository.sendToVertexAI(message, context);
+    debugPrint(
+      '🔍 [SEND MESSAGE] Sending to Vertex AI with ${imageFiles?.length ?? 0} images',
+    );
+    if (imageFiles != null && imageFiles.isNotEmpty) {
+      for (int i = 0; i < imageFiles.length; i++) {
+        debugPrint('🔍 [SEND MESSAGE] Image ${i + 1}: ${imageFiles[i].path}');
+      }
+    }
+
+    final vertexAiResult = await repository.sendToVertexAI(
+      message,
+      context,
+      imageFiles: imageFiles,
+    );
     if (vertexAiResult.isLeft()) {
       return Left(
         vertexAiResult.fold((error) => error, (r) => throw Exception()),
@@ -43,13 +67,14 @@ class PdaSendMessageUseCase {
       (response) => response,
     );
 
-    // Save AI response
+    // Save AI response with cost information
     final aiMessage = PdaMessage(
       id: const Uuid().v4(),
       hushhId: hushhId,
-      content: vertexAiResponse,
+      content: vertexAiResponse.content,
       isFromUser: false,
       timestamp: DateTime.now(),
+      cost: vertexAiResponse.cost,
     );
 
     final saveAiResult = await repository.saveMessage(aiMessage);

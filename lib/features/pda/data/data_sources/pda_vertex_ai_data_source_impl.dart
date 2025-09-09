@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -8,6 +9,7 @@ import 'package:googleapis_auth/auth_io.dart';
 import 'package:hushh_user_app/shared/constants/firestore_constants.dart';
 import 'package:hushh_user_app/features/pda/data/data_sources/pda_data_source.dart';
 import 'package:hushh_user_app/features/pda/data/models/pda_message_model.dart';
+import 'package:hushh_user_app/features/pda/domain/entities/pda_response.dart';
 import 'package:hushh_user_app/features/pda/data/config/vertex_ai_config.dart';
 import 'package:hushh_user_app/shared/services/gmail_connector_service.dart';
 import 'package:get_it/get_it.dart';
@@ -172,10 +174,11 @@ class PdaVertexAiDataSourceImpl implements PdaDataSource {
   }
 
   @override
-  Future<String> sendToVertexAI(
+  Future<PdaResponse> sendToVertexAI(
     String message,
-    List<PdaMessageModel> context,
-  ) async {
+    List<PdaMessageModel> context, {
+    List<File>? imageFiles,
+  }) async {
     try {
       final currentUserId = _getCurrentUserId();
       if (currentUserId == null) {
@@ -234,12 +237,60 @@ class PdaVertexAiDataSourceImpl implements PdaDataSource {
           : '';
 
       // Get document files for multimodal input
-      final documentFiles = await _getDocumentFilesForClaude();
+      final documentResult = await _getDocumentFilesForClaude();
+      final documentFiles = (documentResult['files'] as List)
+          .cast<Map<String, dynamic>>();
+      final vaultGeminiCost = documentResult['geminiCost'] as double;
+
+      // Handle user-uploaded images
+      debugPrint(
+        '🔍 [VERTEX AI] Image files received: ${imageFiles?.length ?? 0}',
+      );
+      if (imageFiles != null && imageFiles.isNotEmpty) {
+        debugPrint(
+          '🔍 [VERTEX AI] Processing ${imageFiles.length} user images...',
+        );
+        for (int i = 0; i < imageFiles.length; i++) {
+          final imageFile = imageFiles[i];
+          try {
+            debugPrint(
+              '🔍 [VERTEX AI] Processing image ${i + 1}/${imageFiles.length}: ${imageFile.path}',
+            );
+            final imageBytes = await imageFile.readAsBytes();
+            final base64Image = base64Encode(imageBytes);
+            final mimeType = _getMimeTypeFromFile(imageFile);
+
+            documentFiles.add({
+              'type': 'image',
+              'source': {
+                'type': 'base64',
+                'media_type': mimeType,
+                'data': base64Image,
+              },
+            });
+
+            debugPrint(
+              '📸 [VERTEX AI] ✅ Successfully added user image ${i + 1} to multimodal input: ${imageFile.path} (${imageBytes.length} bytes, $mimeType)',
+            );
+          } catch (e) {
+            debugPrint(
+              '❌ [VERTEX AI] Error processing user image ${i + 1}: $e',
+            );
+          }
+        }
+        debugPrint(
+          '🔍 [VERTEX AI] Total document files after adding user images: ${documentFiles.length}',
+        );
+      } else {
+        debugPrint('⚠️ [VERTEX AI] No user images provided or empty list');
+      }
 
       // Build the main prompt text
       final mainPromptText =
           '''
 You are Hush, a personal digital assistant for the Hushh app - a platform that connects users with agents who sell products and services. You help users navigate the app, understand features, and get the most out of their Hushh experience.
+
+IMPORTANT: Keep your responses professional and avoid using emojis in your messages. Use clear, concise language that maintains a professional tone throughout the conversation.
 
 User Context:
 ${_formatUserContext(userContext)}$gmailContextText$linkedInContextText$calendarContextText$documentContextText
@@ -376,14 +427,57 @@ Be conversational, helpful, and concise in your responses.
           if (content['text'] != null) {
             final responseText = content['text'] as String;
 
+            // Calculate cost for this API call
+            final inputTokens = ApiCostLogger.estimateTokensFromText(
+              mainPromptText,
+            );
+            final outputTokens = ApiCostLogger.estimateTokensFromText(
+              responseText,
+            );
+
+            // Add tokens for document files
+            int documentTokens = 0;
+            for (final file in documentFiles) {
+              if (file['type'] == 'image' && file['source'] != null) {
+                final source = file['source'] as Map<String, dynamic>;
+                final base64Data = source['data'] as String? ?? '';
+                final mimeType = source['media_type'] as String? ?? '';
+                documentTokens += ApiCostLogger.estimateTokensFromBase64(
+                  base64Data,
+                  mimeType,
+                );
+              }
+            }
+
+            final totalInputTokens = inputTokens + documentTokens;
+            final claudeCost = ApiCostLogger.calculateVertexAiCost(
+              inputTokens: totalInputTokens,
+              outputTokens: outputTokens,
+            );
+
+            // Get Gemini preprocessing cost for vault documents
+            final totalCost = claudeCost + vaultGeminiCost;
+
             // Log cost information for this API call
+            debugPrint(
+              '💰 [COST BREAKDOWN] Claude 3.5 Sonnet: \$${claudeCost.toStringAsFixed(6)}',
+            );
+            if (vaultGeminiCost > 0) {
+              debugPrint(
+                '💰 [COST BREAKDOWN] Gemini 1.5 Pro (vault preprocessing): \$${vaultGeminiCost.toStringAsFixed(6)}',
+              );
+            }
+            debugPrint(
+              '💰 [COST BREAKDOWN] TOTAL COST: \$${totalCost.toStringAsFixed(6)}',
+            );
+
             ApiCostLogger.logVertexAiCost(
               prompt: mainPromptText,
               response: responseText,
               documentFiles: documentFiles,
             );
 
-            return responseText;
+            return PdaResponse(content: responseText, cost: totalCost);
           }
         }
 
@@ -887,10 +981,10 @@ Keywords: ${keywords.join(', ')}$updatedInfo$contentInstructions
   }
 
   /// Get document files for Claude multimodal input with Gemini preprocessing
-  Future<List<Map<String, dynamic>>> _getDocumentFilesForClaude() async {
+  Future<Map<String, dynamic>> _getDocumentFilesForClaude() async {
     try {
       final currentUserId = _getCurrentUserId();
-      if (currentUserId == null) return [];
+      if (currentUserId == null) return {'files': [], 'geminiCost': 0.0};
 
       // Initialize cache service
       await _cacheService.initialize();
@@ -952,7 +1046,7 @@ Keywords: ${keywords.join(', ')}$updatedInfo$contentInstructions
 
       if (filesToProcess.isEmpty) {
         debugPrint('📄 [CLAUDE FILES] No files to process');
-        return [];
+        return {'files': [], 'geminiCost': 0.0};
       }
 
       // Use Gemini to extract content from complex file types (PDFs, CSVs, etc.)
@@ -992,22 +1086,21 @@ ${extractedText}
 
 ''';
 
-              // Calculate Gemini cost for this file (estimation based on file size and response)
+              // Calculate Gemini cost for this file processing
+              final geminiInputTokens =
+                  ApiCostLogger.estimateTokensFromBase64(base64Data, mimeType) +
+                  1000; // +1000 for prompt
+              final geminiOutputTokens = ApiCostLogger.estimateTokensFromText(
+                extractedText,
+              );
               final geminiCost = ApiCostLogger.calculateGeminiCost(
-                inputTokens:
-                    ApiCostLogger.estimateTokensFromBase64(
-                      base64Data,
-                      mimeType,
-                    ) +
-                    1000, // Estimate for prompt tokens
-                outputTokens: ApiCostLogger.estimateTokensFromText(
-                  extractedText,
-                ),
+                inputTokens: geminiInputTokens,
+                outputTokens: geminiOutputTokens,
               );
               totalGeminiCost += geminiCost;
 
               debugPrint(
-                '✅ [GEMINI PREPROCESSING] Successfully extracted ${extractedText.length} characters from $fileName',
+                '✅ [GEMINI PREPROCESSING] Successfully extracted ${extractedText.length} characters from $fileName (Cost: \$${geminiCost.toStringAsFixed(6)})',
               );
             } else {
               debugPrint(
@@ -1071,11 +1164,16 @@ This extracted content provides detailed information from your documents that ca
       debugPrint(
         '📄 [CLAUDE FILES] Total content prepared for Claude: ${documentFiles.length} items (${geminiExtractedContent.isNotEmpty ? 'with Gemini extraction' : 'original files only'})',
       );
+      if (totalGeminiCost > 0) {
+        debugPrint(
+          '💰 [GEMINI COST] Total vault document preprocessing cost: \$${totalGeminiCost.toStringAsFixed(6)}',
+        );
+      }
 
-      return documentFiles;
+      return {'files': documentFiles, 'geminiCost': totalGeminiCost};
     } catch (e) {
       debugPrint('❌ [CLAUDE FILES] Error preparing document files: $e');
-      return [];
+      return {'files': [], 'geminiCost': 0.0};
     }
   }
 
@@ -1119,6 +1217,26 @@ This extracted content provides detailed information from your documents that ca
       debugPrint('✅ [QUICK SYNC] Quick calendar sync completed');
     } catch (e) {
       debugPrint('❌ [QUICK SYNC] Quick calendar sync error: $e');
+    }
+  }
+
+  /// Get MIME type from file extension
+  String _getMimeTypeFromFile(File file) {
+    final extension = file.path.split('.').last.toLowerCase();
+    switch (extension) {
+      case 'jpg':
+      case 'jpeg':
+        return 'image/jpeg';
+      case 'png':
+        return 'image/png';
+      case 'gif':
+        return 'image/gif';
+      case 'webp':
+        return 'image/webp';
+      case 'bmp':
+        return 'image/bmp';
+      default:
+        return 'image/jpeg'; // Default fallback
     }
   }
 
