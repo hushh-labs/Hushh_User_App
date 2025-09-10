@@ -9,11 +9,14 @@ import 'package:hushh_user_app/shared/constants/firestore_constants.dart';
 import 'package:hushh_user_app/features/pda/data/data_sources/pda_data_source.dart';
 import 'package:hushh_user_app/features/pda/data/models/pda_message_model.dart';
 import 'package:hushh_user_app/features/pda/domain/entities/pda_response.dart';
+import '../services/prewarming_coordinator_service.dart';
 
 class PdaFirebaseDataSourceImpl implements PdaDataSource {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFunctions _functions = FirebaseFunctions.instance;
+  final PrewarmingCoordinatorService _prewarmingCoordinator =
+      PrewarmingCoordinatorService();
 
   // Gemini API key
   static const String _geminiApiKey = 'AIzaSyD192xVzwNr_C4pwgGHenWpuPVOIH5Pa4w';
@@ -272,46 +275,52 @@ Keep responses relevant to the Hushh app ecosystem and user experience. If the u
 
   @override
   Future<void> prewarmUserContext(String hushhId) async {
-    debugPrint(
-      '🚀 [PDA PREWARM] Starting PDA context prewarming for user: $hushhId',
-    );
-    try {
-      final currentUserId = _getCurrentUserId();
-      if (currentUserId == null) {
-        debugPrint('Warning: User not authenticated when prewarming context');
-        return;
-      }
+    const prewarmProcessName = 'pda_firebase_prewarm';
 
-      // Call Cloud Function to prewarm PDA with email context
-      debugPrint('🧠 [PDA PREWARM] Calling prewarmPDA Cloud Function...');
-      final callable = _functions.httpsCallable('prewarmPDA');
-      final result = await callable.call();
-
-      final data = result.data as Map<String, dynamic>;
-
-      if (data['success'] == true) {
-        if (data['hasGmailData'] == true) {
-          debugPrint('✅ [PDA PREWARM] PDA prewarmed with email context');
-          debugPrint(
-            '📧 [PDA PREWARM] Email stats: ${data['context']?['emailStats']}',
-          );
-        } else {
-          debugPrint(
-            'ℹ️ [PDA PREWARM] PDA prewarmed without email data (Gmail not connected)',
-          );
-        }
-      } else {
-        debugPrint('⚠️ [PDA PREWARM] PDA prewarming completed with warnings');
-      }
-
-      // Also get local user context
-      await getUserContext(currentUserId);
+    // Use coordinator to prevent duplicate prewarming
+    await _prewarmingCoordinator.startProcess(prewarmProcessName, () async {
       debugPrint(
-        '🚀 [PDA PREWARM] ✅ PDA context prewarming completed successfully',
+        '🚀 [PDA PREWARM] Starting PDA context prewarming for user: $hushhId',
       );
-    } catch (e) {
-      debugPrint('🚀 [PDA PREWARM] ⚠️ PDA context prewarming failed: $e');
-    }
+      try {
+        final currentUserId = _getCurrentUserId();
+        if (currentUserId == null) {
+          debugPrint('Warning: User not authenticated when prewarming context');
+          return;
+        }
+
+        // Call Cloud Function to prewarm PDA with email context
+        debugPrint('🧠 [PDA PREWARM] Calling prewarmPDA Cloud Function...');
+        final callable = _functions.httpsCallable('prewarmPDA');
+        final result = await callable.call();
+
+        final data = result.data as Map<String, dynamic>;
+
+        if (data['success'] == true) {
+          if (data['hasGmailData'] == true) {
+            debugPrint('✅ [PDA PREWARM] PDA prewarmed with email context');
+            debugPrint(
+              '📧 [PDA PREWARM] Email stats: ${data['context']?['emailStats']}',
+            );
+          } else {
+            debugPrint(
+              'ℹ️ [PDA PREWARM] PDA prewarmed without email data (Gmail not connected)',
+            );
+          }
+        } else {
+          debugPrint('⚠️ [PDA PREWARM] PDA prewarming completed with warnings');
+        }
+
+        // Also get local user context
+        await getUserContext(currentUserId);
+        debugPrint(
+          '🚀 [PDA PREWARM] ✅ PDA context prewarming completed successfully',
+        );
+      } catch (e) {
+        debugPrint('🚀 [PDA PREWARM] ⚠️ PDA context prewarming failed: $e');
+        rethrow;
+      }
+    });
   }
 
   @override

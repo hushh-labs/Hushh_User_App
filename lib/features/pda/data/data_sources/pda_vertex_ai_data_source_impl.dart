@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 // import 'package:http/http.dart' as http; // Not needed - using googleapis_auth client
 import 'package:googleapis_auth/auth_io.dart';
 import 'package:hushh_user_app/shared/constants/firestore_constants.dart';
@@ -16,8 +17,11 @@ import 'package:get_it/get_it.dart';
 import '../services/linkedin_context_prewarm_service.dart';
 import '../services/gmail_context_prewarm_service.dart';
 import '../services/google_calendar_context_prewarm_service.dart';
+import '../services/google_meet_context_prewarm_service.dart';
+import '../services/prewarming_coordinator_service.dart';
 import '../services/gemini_file_processor_service.dart';
 import 'package:hushh_user_app/features/vault/data/services/supabase_document_context_prewarm_service.dart';
+import 'package:hushh_user_app/features/vault/data/services/vault_startup_prewarm_service.dart';
 import 'package:hushh_user_app/features/vault/data/services/local_file_cache_service.dart';
 import '../services/api_cost_logger.dart';
 
@@ -30,8 +34,13 @@ class PdaVertexAiDataSourceImpl implements PdaDataSource {
   final GmailContextPrewarmService _gmailPrewarmService =
       GmailContextPrewarmService();
   late final GoogleCalendarContextPrewarmService _googleCalendarPrewarmService;
+  final GoogleMeetContextPrewarmService _googleMeetPrewarmService =
+      GoogleMeetContextPrewarmService();
   final SupabaseDocumentContextPrewarmService _documentPrewarmService =
       SupabaseDocumentContextPrewarmServiceImpl();
+  late final VaultStartupPrewarmService _vaultPrewarmService;
+  final PrewarmingCoordinatorService _prewarmingCoordinator =
+      PrewarmingCoordinatorService();
 
   // Constructor to initialize GetIt dependencies
   PdaVertexAiDataSourceImpl() {
@@ -47,6 +56,13 @@ class PdaVertexAiDataSourceImpl implements PdaDataSource {
       debugPrint(
         '⚠️ [PDA VERTEX AI] Failed to initialize Google Calendar service: $e',
       );
+    }
+
+    try {
+      _vaultPrewarmService = GetIt.instance<VaultStartupPrewarmService>();
+      debugPrint('✅ [PDA VERTEX AI] Vault service initialized');
+    } catch (e) {
+      debugPrint('⚠️ [PDA VERTEX AI] Failed to initialize Vault service: $e');
     }
   }
 
@@ -495,43 +511,65 @@ Be conversational, helpful, and concise in your responses.
 
   @override
   Future<void> prewarmUserContext(String hushhId) async {
-    debugPrint(
-      '🚀 [PDA PREWARM] Starting PDA context prewarming for user: \$hushhId',
-    );
-    try {
-      final currentUserId = _getCurrentUserId();
-      if (currentUserId == null) {
-        debugPrint('Warning: User not authenticated when prewarming context');
-        return;
-      }
+    const prewarmProcessName = 'pda_vertex_ai_prewarm';
 
-      // Pre-warm user context
-      await getUserContext(currentUserId);
-
-      // Pre-warm Gmail, LinkedIn, and Calendar context in parallel for faster loading
-      final gmailPrewarmFuture = _gmailPrewarmService.prewarmGmailContext();
-      final linkedInPrewarmFuture = _linkedInPrewarmService
-          .prewarmLinkedInContext();
-      final calendarPrewarmFuture = _googleCalendarPrewarmService
-          .prewarmOnStartup(currentUserId);
-      final documentPrewarmFuture = _documentPrewarmService.getPrewarmedContext(
-        userId: currentUserId,
-      );
-
-      // Wait for all to complete
-      await Future.wait([
-        gmailPrewarmFuture,
-        linkedInPrewarmFuture,
-        calendarPrewarmFuture,
-        documentPrewarmFuture,
-      ]);
-
+    // Use coordinator to prevent duplicate prewarming
+    await _prewarmingCoordinator.startProcess(prewarmProcessName, () async {
       debugPrint(
-        '🚀 [PDA PREWARM] ✅ PDA context prewarming completed successfully',
+        '🚀 [PDA PREWARM] Starting PDA context prewarming for user: \$hushhId',
       );
-    } catch (e) {
-      debugPrint('🚀 [PDA PREWARM] ⚠️ PDA context prewarming failed: $e');
-    }
+      try {
+        final currentUserId = _getCurrentUserId();
+        if (currentUserId == null) {
+          debugPrint('Warning: User not authenticated when prewarming context');
+          return;
+        }
+
+        // Pre-warm user context
+        await getUserContext(currentUserId);
+
+        // Pre-warm all services in parallel using coordinator
+        // This handles all prewarming to eliminate duplicates
+        final futures = <Future<void>>[
+          _prewarmingCoordinator.startProcess(
+            'gmail_prewarm',
+            () => _gmailPrewarmService.prewarmGmailContext(),
+          ),
+          _prewarmingCoordinator.startProcess(
+            'linkedin_prewarm',
+            () => _linkedInPrewarmService.prewarmLinkedInContext(),
+          ),
+          _prewarmingCoordinator.startProcess(
+            'google_calendar_prewarm',
+            () => _googleCalendarPrewarmService.prewarmOnStartup(currentUserId),
+          ),
+          _prewarmingCoordinator.startProcess(
+            'document_prewarm',
+            () => _documentPrewarmService.getPrewarmedContext(
+              userId: currentUserId,
+            ),
+          ),
+          _prewarmingCoordinator.startProcess(
+            'google_meet_prewarm',
+            () => _googleMeetPrewarmService.prewarmGoogleMeetContext(),
+          ),
+          _prewarmingCoordinator.startProcess(
+            'vault_prewarm',
+            () => _vaultPrewarmService.prewarmVaultOnStartup(),
+          ),
+        ];
+
+        // Wait for all to complete
+        await Future.wait(futures);
+
+        debugPrint(
+          '🚀 [PDA PREWARM] ✅ PDA context prewarming completed successfully',
+        );
+      } catch (e) {
+        debugPrint('🚀 [PDA PREWARM] ⚠️ PDA context prewarming failed: $e');
+        rethrow;
+      }
+    });
   }
 
   @override
@@ -631,28 +669,66 @@ Last Updated: $updatedAt
       final currentUserId = _getCurrentUserId();
       if (currentUserId == null) return '';
 
-      // First try to get from Firestore cache (fastest)
-      final doc = await _firestore
-          .collection('HushUsers')
-          .doc(currentUserId)
-          .collection('pda_context')
-          .doc('gmail')
-          .get();
+      // First try to get from local cache (fastest)
+      final prefs = await SharedPreferences.getInstance();
+      final contextJson = prefs.getString('gmail_pda_context_$currentUserId');
 
-      if (doc.exists) {
-        final data = doc.data() as Map<String, dynamic>;
-        final context = data['context'] as Map<String, dynamic>? ?? {};
-        final summary = context['summary'] as String?;
-        if (summary != null && summary.isNotEmpty) {
-          debugPrint('📦 [PDA GMAIL CONTEXT] Using cached Gmail context');
-          return summary;
+      if (contextJson != null && contextJson.isNotEmpty) {
+        try {
+          final context = jsonDecode(contextJson) as Map<String, dynamic>;
+          final summary = context['summary'] as String?;
+          final recentEmails = context['recentEmails'] as List<dynamic>? ?? [];
+
+          if (summary != null && summary.isNotEmpty) {
+            debugPrint(
+              '📦 [PDA GMAIL CONTEXT] Using local cached Gmail context',
+            );
+
+            // Include both summary and detailed email data
+            final detailedContext = StringBuffer();
+            detailedContext.writeln(summary);
+
+            // Add detailed email data for better AI responses
+            if (recentEmails.isNotEmpty) {
+              detailedContext.writeln('\n=== DETAILED EMAIL DATA ===');
+              detailedContext.writeln('ALL Emails (Complete Full Data):');
+              // Show ALL emails - no limits
+              for (int i = 0; i < recentEmails.length; i++) {
+                final email = recentEmails[i] as Map<String, dynamic>;
+                detailedContext.writeln('\n--- Email ${i + 1} ---');
+                detailedContext.writeln(
+                  'From: ${email['fromName'] ?? email['fromEmail'] ?? 'Unknown'}',
+                );
+                detailedContext.writeln(
+                  'Subject: ${email['subject'] ?? 'No Subject'}',
+                );
+                detailedContext.writeln('Date: ${email['receivedAt']}');
+                detailedContext.writeln('Read: ${email['isRead']}');
+                detailedContext.writeln('Important: ${email['isImportant']}');
+
+                if (email['bodyText'] != null &&
+                    email['bodyText'].toString().isNotEmpty) {
+                  final bodyText = email['bodyText'].toString();
+                  final bodyPreview = bodyText.length > 300
+                      ? '${bodyText.substring(0, 300)}...'
+                      : bodyText;
+                  detailedContext.writeln('Content: $bodyPreview');
+                } else if (email['snippet'] != null &&
+                    email['snippet'].toString().isNotEmpty) {
+                  detailedContext.writeln('Snippet: ${email['snippet']}');
+                }
+              }
+            }
+
+            return detailedContext.toString();
+          }
+        } catch (e) {
+          debugPrint('❌ [PDA GMAIL CONTEXT] Error parsing local cache: $e');
         }
       }
 
-      // Fallback to prewarm service if no cache
-      debugPrint(
-        '📦 [PDA GMAIL CONTEXT] No cached context, fetching fresh data',
-      );
+      // Fallback to prewarm service if no local cache
+      debugPrint('📦 [PDA GMAIL CONTEXT] No local cache, fetching fresh data');
       return await _gmailPrewarmService.getGmailContextForPda();
     } catch (e) {
       debugPrint('❌ [PDA GMAIL CONTEXT] Error getting Gmail context: $e');
@@ -879,8 +955,8 @@ Last Updated: $updatedAt
             final originalName = doc['originalName'] ?? title;
             final wordCount = doc['wordCount'] ?? 0;
             final keywords = doc['keywords'] as List<dynamic>? ?? [];
-            final hasFullContent = doc['hasFullContent'] ?? false;
-            final fullContent = doc['fullContent'] ?? '';
+            // final hasFullContent = doc['hasFullContent'] ?? false;
+            // final fullContent = doc['fullContent'] ?? '';
 
             String docInfo =
                 '- $title ($fileType, ${_formatFileSize(fileSize)})';
