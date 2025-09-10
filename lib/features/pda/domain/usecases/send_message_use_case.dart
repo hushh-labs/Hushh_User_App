@@ -16,6 +16,7 @@ class PdaSendMessageUseCase {
     required String message,
     required List<PdaMessage> context,
     List<File>? imageFiles,
+    List<String>? imageUrls,
   }) async {
     // Save user message first
     final userMessage = PdaMessage(
@@ -29,9 +30,11 @@ class PdaSendMessageUseCase {
       messageType: (imageFiles?.isNotEmpty ?? false)
           ? MessageType.image
           : MessageType.text,
-      metadata: imageFiles?.isNotEmpty == true
-          ? imageFiles!.map((f) => f.path).join('|')
-          : null,
+      metadata: (imageUrls != null && imageUrls.isNotEmpty)
+          ? imageUrls.join('|')
+          : (imageFiles?.isNotEmpty == true
+                ? imageFiles!.map((f) => f.path).join('|')
+                : null),
     );
 
     final saveUserResult = await repository.saveMessage(userMessage);

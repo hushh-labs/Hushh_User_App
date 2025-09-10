@@ -5,6 +5,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 
 import 'package:get_it/get_it.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
@@ -30,6 +31,7 @@ import '../../data/services/google_drive_context_prewarm_service.dart';
 import 'package:hushh_user_app/shared/utils/app_local_storage.dart';
 import 'package:go_router/go_router.dart';
 import 'package:hushh_user_app/core/routing/route_paths.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class PdaChatGptStylePage extends StatefulWidget {
   const PdaChatGptStylePage({super.key});
@@ -63,6 +65,11 @@ class _PdaChatGptStylePageState extends State<PdaChatGptStylePage> {
   // Image picker
   final ImagePicker _imagePicker = ImagePicker();
   List<File> _selectedImages = [];
+
+  // Conversations
+  String? _currentConversationId;
+  String _currentConversationTitle = 'New chat';
+  List<Map<String, dynamic>> _conversations = [];
 
   // Typing indicator variations
   final List<String> _typingMessages = [
@@ -105,7 +112,7 @@ class _PdaChatGptStylePageState extends State<PdaChatGptStylePage> {
   @override
   void initState() {
     super.initState();
-    _loadMessages();
+    _initializeConversations();
     _getCurrentUserName();
     _checkGmailConnectionStatus();
     _checkLinkedInConnectionStatus();
@@ -117,6 +124,17 @@ class _PdaChatGptStylePageState extends State<PdaChatGptStylePage> {
     Future.delayed(const Duration(seconds: 1), () {
       _getCurrentUserName();
     });
+  }
+
+  Future<void> _initializeConversations() async {
+    await _loadConversations();
+    // If we have conversations, load last used; otherwise do not auto-create
+    if (_currentConversationId != null) {
+      await _loadMessages();
+    } else if (_conversations.isEmpty) {
+      // Create first only if there are none
+      await _createNewConversation();
+    }
   }
 
   void _updateSendButtonState() {
@@ -266,6 +284,198 @@ class _PdaChatGptStylePageState extends State<PdaChatGptStylePage> {
     });
   }
 
+  Future<void> _ensureConversation() async {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null) return;
+    if (_currentConversationId != null) return;
+
+    final docRef = FirebaseFirestore.instance
+        .collection(FirestoreCollections.users)
+        .doc(currentUser.uid)
+        .collection('pda_conversations')
+        .doc();
+    await docRef.set({
+      'title': _currentConversationTitle,
+      'createdAt': DateTime.now().toIso8601String(),
+      'updatedAt': DateTime.now().toIso8601String(),
+    });
+    setState(() {
+      _currentConversationId = docRef.id;
+    });
+  }
+
+  Future<void> _loadConversations() async {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null) return;
+    final qs = await FirebaseFirestore.instance
+        .collection(FirestoreCollections.users)
+        .doc(currentUser.uid)
+        .collection('pda_conversations')
+        .orderBy('updatedAt', descending: true)
+        .limit(50)
+        .get();
+    final list = qs.docs.map((d) => {'id': d.id, ...(d.data())}).toList();
+    // Restore last active conversation from prefs
+    final prefs = await SharedPreferences.getInstance();
+    final lastId = prefs.getString('pda_last_conversation_id');
+    setState(() {
+      _conversations = list;
+      if (lastId != null && list.any((c) => c['id'] == lastId)) {
+        _currentConversationId = lastId;
+        _currentConversationTitle =
+            (list.firstWhere((c) => c['id'] == lastId)['title'] as String?) ??
+            'Conversation';
+      } else if (list.isNotEmpty && _currentConversationId == null) {
+        _currentConversationId = list.first['id'] as String;
+        _currentConversationTitle =
+            (list.first['title'] as String?) ?? 'Conversation';
+      }
+    });
+  }
+
+  Future<void> _createNewConversation() async {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null) return;
+    final docRef = FirebaseFirestore.instance
+        .collection(FirestoreCollections.users)
+        .doc(currentUser.uid)
+        .collection('pda_conversations')
+        .doc();
+    await docRef.set({
+      'title': 'New chat',
+      'createdAt': DateTime.now().toIso8601String(),
+      'updatedAt': DateTime.now().toIso8601String(),
+    });
+    setState(() {
+      _currentConversationId = docRef.id;
+      _currentConversationTitle = 'New chat';
+      _messages.clear();
+    });
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('pda_last_conversation_id', docRef.id);
+    await _loadConversations();
+  }
+
+  Future<void> _openConversation(Map<String, dynamic> convo) async {
+    setState(() {
+      _currentConversationId = convo['id'] as String;
+      _currentConversationTitle = (convo['title'] as String?) ?? 'Conversation';
+      _messages.clear();
+    });
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('pda_last_conversation_id', _currentConversationId!);
+    await _loadMessages();
+    if (mounted) Navigator.of(context).maybePop();
+  }
+
+  Future<List<String>> _uploadSelectedImages(List<File> images) async {
+    if (images.isEmpty) return [];
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null) return [];
+    final storage = FirebaseStorage.instance;
+    final List<String> urls = [];
+    for (final file in images) {
+      final fileName = file.path.split('/').last;
+      final ref = storage.ref().child(
+        'pda/${currentUser.uid}/${_currentConversationId ?? 'default'}/${DateTime.now().millisecondsSinceEpoch}_$fileName',
+      );
+      final task = await ref.putFile(file);
+      final url = await task.ref.getDownloadURL();
+      urls.add(url);
+    }
+    return urls;
+  }
+
+  Future<void> _deleteConversation(String conversationId) async {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null) return;
+
+    final convoRef = FirebaseFirestore.instance
+        .collection(FirestoreCollections.users)
+        .doc(currentUser.uid)
+        .collection('pda_conversations')
+        .doc(conversationId);
+
+    try {
+      // Delete all messages in subcollection (chunked batches of 400)
+      const int chunkSize = 400;
+      while (true) {
+        final msgChunk = await convoRef
+            .collection('messages')
+            .limit(chunkSize)
+            .get();
+        if (msgChunk.docs.isEmpty) break;
+        final batch = FirebaseFirestore.instance.batch();
+        for (final d in msgChunk.docs) {
+          batch.delete(d.reference);
+        }
+        await batch.commit();
+      }
+
+      // Finally delete the conversation doc
+      await convoRef.delete();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to delete chat: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      return;
+    }
+
+    if (_currentConversationId == conversationId) {
+      setState(() {
+        _currentConversationId = null;
+        _messages.clear();
+        _currentConversationTitle = 'New chat';
+      });
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('pda_last_conversation_id');
+      await _loadConversations();
+      if (_conversations.isEmpty) {
+        await _createNewConversation();
+      }
+      await _loadMessages();
+    }
+    await _loadConversations();
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Chat deleted'),
+          backgroundColor: Colors.green,
+          duration: Duration(seconds: 2),
+        ),
+      );
+    }
+  }
+
+  void _confirmDeleteConversation(String conversationId) {
+    showCupertinoDialog(
+      context: context,
+      builder: (ctx) => CupertinoAlertDialog(
+        title: const Text('Delete chat?'),
+        content: const Text('This will permanently delete this conversation.'),
+        actions: [
+          CupertinoDialogAction(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          CupertinoDialogAction(
+            isDestructiveAction: true,
+            onPressed: () async {
+              Navigator.pop(ctx);
+              await _deleteConversation(conversationId);
+            },
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildImageGrid(String metadata) {
     final imagePaths = metadata.split('|');
 
@@ -273,12 +483,19 @@ class _PdaChatGptStylePageState extends State<PdaChatGptStylePage> {
       // Single image - display as square
       return ClipRRect(
         borderRadius: BorderRadius.circular(8),
-        child: Image.file(
-          File(imagePaths[0]),
-          width: 150,
-          height: 150,
-          fit: BoxFit.cover,
-        ),
+        child: imagePaths[0].startsWith('http')
+            ? Image.network(
+                imagePaths[0],
+                width: 150,
+                height: 150,
+                fit: BoxFit.cover,
+              )
+            : Image.file(
+                File(imagePaths[0]),
+                width: 150,
+                height: 150,
+                fit: BoxFit.cover,
+              ),
       );
     } else {
       // Multiple images - display in a grid
@@ -288,12 +505,19 @@ class _PdaChatGptStylePageState extends State<PdaChatGptStylePage> {
         children: imagePaths.map((path) {
           return ClipRRect(
             borderRadius: BorderRadius.circular(8),
-            child: Image.file(
-              File(path),
-              width: 100,
-              height: 100,
-              fit: BoxFit.cover,
-            ),
+            child: path.startsWith('http')
+                ? Image.network(
+                    path,
+                    width: 100,
+                    height: 100,
+                    fit: BoxFit.cover,
+                  )
+                : Image.file(
+                    File(path),
+                    width: 100,
+                    height: 100,
+                    fit: BoxFit.cover,
+                  ),
           );
         }).toList(),
       );
@@ -319,29 +543,64 @@ class _PdaChatGptStylePageState extends State<PdaChatGptStylePage> {
     }
 
     try {
-      final getMessagesUseCase = _getIt<GetMessagesUseCase>();
-      final result = await getMessagesUseCase(currentUser.uid);
+      if (_currentConversationId != null) {
+        final qs = await FirebaseFirestore.instance
+            .collection(FirestoreCollections.users)
+            .doc(currentUser.uid)
+            .collection('pda_conversations')
+            .doc(_currentConversationId)
+            .collection('messages')
+            .orderBy('timestamp')
+            .get();
 
-      result.fold(
-        (failure) {
-          if (mounted) {
-            setState(() {
-              _error = failure.toString();
-              _isLoadingMessages = false;
-            });
-          }
-        },
-        (messages) {
-          if (mounted) {
-            setState(() {
-              // Reverse the messages to show oldest first (chronological order)
-              _messages = messages.reversed.toList();
-              _isLoadingMessages = false;
-            });
-            _scrollToBottom();
-          }
-        },
-      );
+        final list = qs.docs.map((d) {
+          final data = d.data();
+          final type = (data['message_type'] as String?) ?? 'text';
+          return PdaMessage(
+            id: d.id,
+            hushhId: data['hushh_id'] ?? currentUser.uid,
+            content: data['content'] ?? '',
+            isFromUser: data['is_from_user'] ?? false,
+            timestamp:
+                DateTime.tryParse(data['timestamp'] ?? '') ?? DateTime.now(),
+            messageType: type == 'image' ? MessageType.image : MessageType.text,
+            metadata: data['metadata'] as String?,
+            cost: (data['cost'] is num)
+                ? (data['cost'] as num).toDouble()
+                : null,
+          );
+        }).toList();
+
+        if (mounted) {
+          setState(() {
+            _messages = list;
+            _isLoadingMessages = false;
+          });
+          _scrollToBottom();
+        }
+      } else {
+        final getMessagesUseCase = _getIt<GetMessagesUseCase>();
+        final result = await getMessagesUseCase(currentUser.uid);
+        result.fold(
+          (failure) {
+            if (mounted) {
+              setState(() {
+                _error = failure.toString();
+                _isLoadingMessages = false;
+              });
+            }
+          },
+          (messages) {
+            if (mounted) {
+              setState(() {
+                _messages = messages.reversed.toList();
+                _isLoadingMessages = false;
+              });
+              _scrollToBottom();
+            }
+          },
+        );
+      }
     } catch (e) {
       if (mounted) {
         setState(() {
@@ -404,12 +663,16 @@ class _PdaChatGptStylePageState extends State<PdaChatGptStylePage> {
         }
       }
 
+      // Upload images (if any) to Firebase Storage to get URLs
+      final imageUrls = await _uploadSelectedImages(imagesToSend);
+
       final sendMessageUseCase = _getIt<PdaSendMessageUseCase>();
       final result = await sendMessageUseCase(
         hushhId: currentUser.uid,
         message: message,
         context: _messages,
         imageFiles: imagesToSend.isNotEmpty ? imagesToSend : null,
+        imageUrls: imageUrls,
       );
 
       result.fold(
@@ -420,13 +683,63 @@ class _PdaChatGptStylePageState extends State<PdaChatGptStylePage> {
             _isSendingMessage = false;
           });
         },
-        (aiMessage) {
+        (aiMessage) async {
           _stopTypingAnimation();
           setState(() {
             _messages.add(aiMessage);
             _isSendingMessage = false;
             _selectedImages.clear(); // Clear images after successful send
           });
+          // Persist the last user and AI messages into conversation history
+          try {
+            final currentUser = FirebaseAuth.instance.currentUser;
+            final convId = _currentConversationId;
+            if (currentUser != null &&
+                convId != null &&
+                _messages.length >= 2) {
+              final convoRef = FirebaseFirestore.instance
+                  .collection(FirestoreCollections.users)
+                  .doc(currentUser.uid)
+                  .collection('pda_conversations')
+                  .doc(convId);
+              final msgsRef = convoRef.collection('messages');
+
+              final userMsg = _messages[_messages.length - 2];
+              await msgsRef.doc(userMsg.id).set({
+                'hushh_id': userMsg.hushhId,
+                'content': userMsg.content,
+                'is_from_user': true,
+                'timestamp': userMsg.timestamp.toIso8601String(),
+                'message_type': userMsg.messageType.name,
+                'metadata': imageUrls.isNotEmpty
+                    ? imageUrls.join('|')
+                    : userMsg.metadata,
+              });
+
+              await msgsRef.doc(aiMessage.id).set({
+                'hushh_id': aiMessage.hushhId,
+                'content': aiMessage.content,
+                'is_from_user': false,
+                'timestamp': aiMessage.timestamp.toIso8601String(),
+                'message_type': aiMessage.messageType.name,
+                'metadata': aiMessage.metadata,
+                'cost': aiMessage.cost,
+              });
+
+              await convoRef.update({
+                'updatedAt': DateTime.now().toIso8601String(),
+                if (_currentConversationTitle == 'New chat' &&
+                    message.isNotEmpty)
+                  'title': message.length > 40
+                      ? message.substring(0, 40)
+                      : message,
+              });
+
+              await _loadConversations();
+            }
+          } catch (e) {
+            debugPrint('❌ [PDA] Failed to persist conversation: $e');
+          }
           _scrollToBottom();
         },
       );
@@ -1391,23 +1704,30 @@ class _PdaChatGptStylePageState extends State<PdaChatGptStylePage> {
     return Scaffold(
       backgroundColor: lightBackground,
       drawer: _buildSideDrawer(),
-      body: Column(
-        children: [
-          _buildChatGptStyleAppBar(),
-          if (_error != null) _buildErrorBanner(),
-          Expanded(
-            child: _isLoadingMessages && _messages.isEmpty
-                ? PdaLoadingAnimation(
-                    isLoading: _isLoadingMessages,
-                    onAnimationComplete: () {},
-                  )
-                : _messages.isEmpty
-                ? _buildWelcomeScreen()
-                : _buildMessagesList(),
-          ),
-          if (_messages.isEmpty && !_isLoadingMessages) _buildSuggestionChips(),
-          _buildChatGptStyleInputBar(),
-        ],
+      body: GestureDetector(
+        onTap: () {
+          // Dismiss keyboard when tapping outside
+          FocusScope.of(context).unfocus();
+        },
+        child: Column(
+          children: [
+            _buildChatGptStyleAppBar(),
+            if (_error != null) _buildErrorBanner(),
+            Expanded(
+              child: _isLoadingMessages && _messages.isEmpty
+                  ? PdaLoadingAnimation(
+                      isLoading: _isLoadingMessages,
+                      onAnimationComplete: () {},
+                    )
+                  : _messages.isEmpty
+                  ? _buildWelcomeScreen()
+                  : _buildMessagesList(),
+            ),
+            if (_messages.isEmpty && !_isLoadingMessages)
+              _buildSuggestionChips(),
+            _buildChatGptStyleInputBar(),
+          ],
+        ),
       ),
     );
   }
@@ -1449,11 +1769,30 @@ class _PdaChatGptStylePageState extends State<PdaChatGptStylePage> {
             ),
             const Divider(color: borderColor, height: 1),
 
-            // Plugin Buttons Section
+            // Content
             Expanded(
               child: ListView(
                 padding: const EdgeInsets.all(16),
                 children: [
+                  InkWell(
+                    onTap: _createNewConversation,
+                    borderRadius: BorderRadius.circular(12),
+                    child: Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: assistantBubbleColor,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: borderColor),
+                      ),
+                      child: Row(
+                        children: const [
+                          Icon(Icons.edit_outlined, size: 18, color: textColor),
+                          SizedBox(width: 12),
+                          Text('New chat', style: TextStyle(color: textColor)),
+                        ],
+                      ),
+                    ),
+                  ),
                   const Text(
                     'Plugins',
                     style: TextStyle(
@@ -1522,6 +1861,62 @@ class _PdaChatGptStylePageState extends State<PdaChatGptStylePage> {
                     isLoading: false,
                     onTap: () => context.push(RoutePaths.vault),
                   ),
+
+                  const SizedBox(height: 24),
+                  const Text(
+                    'Recent',
+                    style: TextStyle(
+                      color: hintColor,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  ..._conversations.map((c) {
+                    final isActive = c['id'] == _currentConversationId;
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: InkWell(
+                        onTap: () => _openConversation(c),
+                        onLongPress: () =>
+                            _confirmDeleteConversation(c['id'] as String),
+                        borderRadius: BorderRadius.circular(12),
+                        child: Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: assistantBubbleColor,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: isActive ? userBubbleColor : borderColor,
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.chat_bubble_outline,
+                                size: 16,
+                                color: isActive ? userBubbleColor : hintColor,
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  (c['title'] as String?) ?? 'Conversation',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: isActive
+                                        ? userBubbleColor
+                                        : sidebarTextColor,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    );
+                  }),
                 ],
               ),
             ),
