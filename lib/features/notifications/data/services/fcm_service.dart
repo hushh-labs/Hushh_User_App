@@ -7,8 +7,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:get_it/get_it.dart';
 import '../../../discover/presentation/bloc/cart_bloc.dart';
 import 'notification_service.dart';
-import '../../../../core/routing/navigation_service.dart';
-import 'package:get_it/get_it.dart' as di;
 
 class FCMService {
   static final FCMService _instance = FCMService._internal();
@@ -43,16 +41,17 @@ class FCMService {
       // iOS: ensure foreground notifications are displayed when sent with notification payload
       await FirebaseMessaging.instance
           .setForegroundNotificationPresentationOptions(
-        alert: true,
-        badge: true,
-        sound: true,
-      );
+            alert: true,
+            badge: true,
+            sound: true,
+          );
 
       // Handle notification taps when app is in background/resumed
       FirebaseMessaging.onMessageOpenedApp.listen(_onMessageOpened);
 
       // Handle the case when the app was launched by tapping a notification
-      final initialMessage = await FirebaseMessaging.instance.getInitialMessage();
+      final initialMessage = await FirebaseMessaging.instance
+          .getInitialMessage();
       if (initialMessage != null) {
         _onMessageOpened(initialMessage);
       }
@@ -73,21 +72,33 @@ class FCMService {
 
       // Accept explicit type or infer from presence of bid payload
       final agentId = (data['agentId'] ?? data['agent_id'] ?? '').toString();
-      final productId = (data['productId'] ?? data['product_id'] ?? data['id'] ?? data['sku'] ?? '').toString();
+      final productId =
+          (data['productId'] ??
+                  data['product_id'] ??
+                  data['id'] ??
+                  data['sku'] ??
+                  '')
+              .toString();
       final productName = data['productName']?.toString();
 
       // Try to parse values from common keys
-      double? discountAmount = double.tryParse(data['discount']?.toString() ?? '');
-      discountAmount ??=
-          double.tryParse(data['discountAmount']?.toString() ?? '');
-      discountAmount ??=
-          double.tryParse(data['bidAmount']?.toString() ?? ''); // legacy
+      double? discountAmount = double.tryParse(
+        data['discount']?.toString() ?? '',
+      );
+      discountAmount ??= double.tryParse(
+        data['discountAmount']?.toString() ?? '',
+      );
+      discountAmount ??= double.tryParse(
+        data['bidAmount']?.toString() ?? '',
+      ); // legacy
 
-      final productPrice = double.tryParse(data['productPrice']?.toString() ?? '')
-          ?? double.tryParse(data['price']?.toString() ?? '');
-      final bidPrice = double.tryParse(data['bidPrice']?.toString() ?? '')
-          ?? double.tryParse(data['offerPrice']?.toString() ?? '')
-          ?? double.tryParse(data['finalPrice']?.toString() ?? '');
+      final productPrice =
+          double.tryParse(data['productPrice']?.toString() ?? '') ??
+          double.tryParse(data['price']?.toString() ?? '');
+      final bidPrice =
+          double.tryParse(data['bidPrice']?.toString() ?? '') ??
+          double.tryParse(data['offerPrice']?.toString() ?? '') ??
+          double.tryParse(data['finalPrice']?.toString() ?? '');
 
       // Derive discount from price fields if available
       double? derivedDiscount;
@@ -97,7 +108,9 @@ class FCMService {
 
       final effectiveDiscount = derivedDiscount ?? discountAmount;
       final looksLikeBid =
-          agentId.isNotEmpty && productId.isNotEmpty && effectiveDiscount != null;
+          agentId.isNotEmpty &&
+          productId.isNotEmpty &&
+          effectiveDiscount != null;
 
       if (type == 'bid_approved' || looksLikeBid) {
         CartBloc? bloc;
@@ -111,7 +124,7 @@ class FCMService {
             BidApprovedEvent(
               agentId: agentId,
               productId: productId,
-              bidAmount: effectiveDiscount!,
+              bidAmount: effectiveDiscount,
               productName: productName,
             ),
           );
@@ -120,14 +133,17 @@ class FCMService {
           NotificationService().showLocalNotification(
             id: 'bid_${productId}_${DateTime.now().millisecondsSinceEpoch}',
             title: 'Bid received',
-            body: derivedDiscount != null && productPrice != null && bidPrice != null
+            body:
+                derivedDiscount != null &&
+                    productPrice != null &&
+                    bidPrice != null
                 ? 'New price \$${bidPrice.toStringAsFixed(2)} (saved \$${derivedDiscount.toStringAsFixed(2)})'
                 : 'Discount \$${effectiveDiscount.toStringAsFixed(2)} applied',
           );
 
           // Optional quick action: navigate to cart or product detail if desired
           try {
-            final nav = di.GetIt.instance<NavigationService>();
+            // final nav = di.GetIt.instance<NavigationService>();
             // Navigate to a cart or product route if you have named routes set up
             // nav.navigateTo('cart');
           } catch (_) {}
@@ -141,25 +157,38 @@ class FCMService {
     try {
       final data = message.data;
       final agentId = (data['agentId'] ?? data['agent_id'] ?? '').toString();
-      final productId = (data['productId'] ?? data['product_id'] ?? data['id'] ?? data['sku'] ?? '').toString();
+      final productId =
+          (data['productId'] ??
+                  data['product_id'] ??
+                  data['id'] ??
+                  data['sku'] ??
+                  '')
+              .toString();
       final productName = data['productName']?.toString();
 
-      double? discountAmount = double.tryParse(data['discount']?.toString() ?? '');
-      discountAmount ??= double.tryParse(data['discountAmount']?.toString() ?? '');
+      double? discountAmount = double.tryParse(
+        data['discount']?.toString() ?? '',
+      );
+      discountAmount ??= double.tryParse(
+        data['discountAmount']?.toString() ?? '',
+      );
       discountAmount ??= double.tryParse(data['bidAmount']?.toString() ?? '');
 
-      final productPrice = double.tryParse(data['productPrice']?.toString() ?? '')
-          ?? double.tryParse(data['price']?.toString() ?? '');
-      final bidPrice = double.tryParse(data['bidPrice']?.toString() ?? '')
-          ?? double.tryParse(data['offerPrice']?.toString() ?? '')
-          ?? double.tryParse(data['finalPrice']?.toString() ?? '');
+      final productPrice =
+          double.tryParse(data['productPrice']?.toString() ?? '') ??
+          double.tryParse(data['price']?.toString() ?? '');
+      final bidPrice =
+          double.tryParse(data['bidPrice']?.toString() ?? '') ??
+          double.tryParse(data['offerPrice']?.toString() ?? '') ??
+          double.tryParse(data['finalPrice']?.toString() ?? '');
       double? derivedDiscount;
       if (productPrice != null && bidPrice != null) {
         derivedDiscount = (productPrice - bidPrice).clamp(0, double.infinity);
       }
       final effectiveDiscount = derivedDiscount ?? discountAmount;
 
-      if (agentId.isEmpty || productId.isEmpty || effectiveDiscount == null) return;
+      if (agentId.isEmpty || productId.isEmpty || effectiveDiscount == null)
+        return;
 
       CartBloc? bloc;
       try {
@@ -178,7 +207,7 @@ class FCMService {
 
       // Optional: navigate to cart
       try {
-        final nav = di.GetIt.instance<NavigationService>();
+        // final nav = di.GetIt.instance<NavigationService>();
         // nav.navigateTo('cart');
       } catch (_) {}
     } catch (_) {}
@@ -259,7 +288,9 @@ class FCMService {
             if (token != null) {
               await _saveToken(token);
               _currentToken = token;
-              debugPrint('FCM Token obtained without APNS: ${token.substring(0, 20)}...');
+              debugPrint(
+                'FCM Token obtained without APNS: ${token.substring(0, 20)}...',
+              );
               return;
             }
           } catch (e) {
@@ -367,6 +398,14 @@ class FCMService {
   Future<void> forceTokenGeneration() async {
     try {
       debugPrint('Forcing FCM token generation...');
+
+      // Check if we already have a valid token
+      if (_currentToken != null) {
+        debugPrint(
+          'FCM token already exists, skipping generation: ${_currentToken!.substring(0, 20)}...',
+        );
+        return;
+      }
 
       // Try to get FCM token directly first
       String? token = await _firebaseMessaging.getToken();

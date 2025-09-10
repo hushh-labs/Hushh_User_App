@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:get_it/get_it.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'core/config/firebase_init.dart';
 import 'core/config/supabase_init.dart';
@@ -30,11 +31,8 @@ import 'features/discover/presentation/bloc/cart_bloc.dart';
 import 'features/notifications/domain/repositories/notification_repository.dart';
 import 'shared/services/gmail_connector_service.dart';
 import 'features/pda/data/data_sources/pda_vertex_ai_data_source_impl.dart';
-import 'features/pda/data/services/linkedin_context_prewarm_service.dart';
+import 'features/pda/data/services/prewarming_coordinator_service.dart';
 import 'features/pda/data/services/gmail_context_prewarm_service.dart';
-import 'features/pda/data/services/google_meet_context_prewarm_service.dart';
-import 'features/pda/data/services/google_calendar_context_prewarm_service.dart';
-import 'features/vault/data/services/vault_startup_prewarm_service.dart';
 import 'features/vault/data/services/local_file_cache_service.dart';
 
 final GetIt getIt = GetIt.instance;
@@ -114,25 +112,15 @@ class _AppContent extends StatefulWidget {
 
 class _AppContentState extends State<_AppContent> {
   final GmailConnectorService _gmailService = GmailConnectorService();
-  final LinkedInContextPrewarmService _linkedInPrewarmService =
-      LinkedInContextPrewarmService();
-  final GmailContextPrewarmService _gmailPrewarmService =
-      GmailContextPrewarmService();
-  final GoogleMeetContextPrewarmService _googleMeetPrewarmService =
-      GoogleMeetContextPrewarmService();
-  late final GoogleCalendarContextPrewarmService _googleCalendarPrewarmService;
-  late final VaultStartupPrewarmService _vaultPrewarmService;
+  final PrewarmingCoordinatorService _prewarmingCoordinator =
+      PrewarmingCoordinatorService();
   PdaVertexAiDataSourceImpl? _pdaDataSource;
+  bool _isPrewarmingInProgress = false;
+  bool _isEmailMonitoringInProgress = false;
 
   @override
   void initState() {
     super.initState();
-    // Initialize vault prewarm service
-    _vaultPrewarmService = getIt<VaultStartupPrewarmService>();
-    // Initialize Google Calendar prewarm service
-    _googleCalendarPrewarmService =
-        getIt<GoogleCalendarContextPrewarmService>();
-
     // Check authentication state on app start
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<AuthBloc>().add(CheckAuthStateEvent());
@@ -147,24 +135,42 @@ class _AppContentState extends State<_AppContent> {
 
   /// Start email monitoring for real-time updates
   Future<void> _startEmailMonitoring() async {
-    try {
-      debugPrint('📧 [APP] Starting Gmail email monitoring...');
-
-      // Start Gmail connector monitoring
-      await _gmailService.startEmailMonitoring();
-
-      // Start PDA email monitoring
-      try {
-        _pdaDataSource = getIt<PdaVertexAiDataSourceImpl>();
-        await _pdaDataSource?.startEmailMonitoring();
-      } catch (e) {
-        debugPrint('📧 [APP] PDA service not available: $e');
-      }
-
-      debugPrint('📧 [APP] Email monitoring started successfully');
-    } catch (e) {
-      debugPrint('❌ [APP] Error starting email monitoring: $e');
+    // Check if email monitoring is already in progress
+    if (_isEmailMonitoringInProgress) {
+      debugPrint('🔄 [APP] Email monitoring already in progress, skipping...');
+      return;
     }
+
+    const emailMonitoringProcessName = 'email_monitoring';
+
+    // Use coordinator to prevent duplicate email monitoring
+    await _prewarmingCoordinator.startProcess(
+      emailMonitoringProcessName,
+      () async {
+        _isEmailMonitoringInProgress = true;
+        try {
+          debugPrint('📧 [APP] Starting Gmail email monitoring...');
+
+          // Start Gmail connector monitoring
+          await _gmailService.startEmailMonitoring();
+
+          // Start PDA email monitoring
+          try {
+            _pdaDataSource = getIt<PdaVertexAiDataSourceImpl>();
+            await _pdaDataSource?.startEmailMonitoring();
+          } catch (e) {
+            debugPrint('📧 [APP] PDA service not available: $e');
+          }
+
+          debugPrint('📧 [APP] Email monitoring started successfully');
+        } catch (e) {
+          debugPrint('❌ [APP] Error starting email monitoring: $e');
+          rethrow;
+        } finally {
+          _isEmailMonitoringInProgress = false;
+        }
+      },
+    );
   }
 
   /// Stop email monitoring
@@ -176,6 +182,13 @@ class _AppContentState extends State<_AppContent> {
       _pdaDataSource?.stopEmailMonitoring();
       _pdaDataSource = null;
 
+      // Cancel all prewarming processes when stopping
+      _prewarmingCoordinator.cancelAllProcesses();
+
+      // Reset flags
+      _isEmailMonitoringInProgress = false;
+      _isPrewarmingInProgress = false;
+
       debugPrint('📧 [APP] Email monitoring stopped');
     } catch (e) {
       debugPrint('❌ [APP] Error stopping email monitoring: $e');
@@ -184,44 +197,82 @@ class _AppContentState extends State<_AppContent> {
 
   /// Prewarm PDA with user context, email data, LinkedIn context, and vault documents
   Future<void> _prewarmPDA(String userId) async {
-    try {
-      debugPrint('🧠 [APP] Starting PDA prewarming for user: $userId');
-
-      // Clear local file cache and Firestore context on app restart to ensure fresh data
-      try {
-        final cacheService = getIt<LocalFileCacheService>();
-        await cacheService.clearUserCache(userId);
-        debugPrint('🗑️ [APP] Cleared local file cache for fresh restart');
-
-        // Also clear the Firestore vault context to force rebuild
-        await FirebaseFirestore.instance
-            .collection('HushUsers')
-            .doc(userId)
-            .collection('pda_context')
-            .doc('vault')
-            .delete();
-        debugPrint(
-          '🗑️ [APP] Cleared Firestore vault context for fresh restart',
-        );
-      } catch (e) {
-        debugPrint('⚠️ [APP] Error clearing cache: $e');
-      }
-
-      // Get PDA data source and prewarm context
-      _pdaDataSource = getIt<PdaVertexAiDataSourceImpl>();
-      await _pdaDataSource?.prewarmUserContext(userId);
-
-      // Also pre-warm Gmail, LinkedIn, Google Meet, Google Calendar, and Vault context in parallel for faster loading
-      _gmailPrewarmService.prewarmGmailContext();
-      _linkedInPrewarmService.prewarmLinkedInContext();
-      _googleMeetPrewarmService.prewarmGoogleMeetContext();
-      _googleCalendarPrewarmService.prewarmOnStartup(userId);
-      _vaultPrewarmService.prewarmVaultOnStartup();
-
-      debugPrint('🧠 [APP] PDA prewarming completed');
-    } catch (e) {
-      debugPrint('❌ [APP] Error prewarming PDA: $e');
+    // Check if prewarming is already in progress
+    if (_isPrewarmingInProgress) {
+      debugPrint('🔄 [APP] PDA prewarming already in progress, skipping...');
+      return;
     }
+
+    const prewarmProcessName = 'pda_prewarm';
+
+    // Use coordinator to prevent duplicate prewarming
+    await _prewarmingCoordinator.startProcess(prewarmProcessName, () async {
+      _isPrewarmingInProgress = true;
+      try {
+        debugPrint('🧠 [APP] Starting PDA prewarming for user: $userId');
+
+        // Clear local file cache and Firestore context on app restart to ensure fresh data
+        // Only clear if this is a fresh app start (not a hot reload)
+        try {
+          final prefs = await SharedPreferences.getInstance();
+          final lastClearTime = prefs.getInt('last_cache_clear') ?? 0;
+          final now = DateTime.now().millisecondsSinceEpoch;
+          const clearInterval = 5 * 60 * 1000; // 5 minutes
+
+          if (now - lastClearTime > clearInterval) {
+            final cacheService = getIt<LocalFileCacheService>();
+            await cacheService.clearUserCache(userId);
+            debugPrint('🗑️ [APP] Cleared local file cache for fresh restart');
+
+            // Also clear the Firestore vault context to force rebuild
+            await FirebaseFirestore.instance
+                .collection('HushUsers')
+                .doc(userId)
+                .collection('pda_context')
+                .doc('vault')
+                .delete();
+            debugPrint(
+              '🗑️ [APP] Cleared Firestore vault context for fresh restart',
+            );
+
+            // Clear Gmail context cache to force fresh data fetch
+            try {
+              final gmailPrewarmService = getIt<GmailContextPrewarmService>();
+              await gmailPrewarmService.clearGmailContextCache();
+              debugPrint(
+                '🗑️ [APP] Cleared Gmail context cache for fresh restart',
+              );
+            } catch (e) {
+              debugPrint('⚠️ [APP] Error clearing Gmail context cache: $e');
+            }
+
+            // Update last clear time
+            await prefs.setInt('last_cache_clear', now);
+          } else {
+            debugPrint(
+              '🗑️ [APP] Cache recently cleared, skipping clear operation',
+            );
+          }
+        } catch (e) {
+          debugPrint('⚠️ [APP] Error clearing cache: $e');
+        }
+
+        // Get PDA data source and prewarm context
+        // This will handle all the individual service prewarming
+        _pdaDataSource = getIt<PdaVertexAiDataSourceImpl>();
+        await _pdaDataSource?.prewarmUserContext(userId);
+
+        // PDA data source handles all core services, so we don't need additional prewarming
+        // This eliminates all duplicate processes
+
+        debugPrint('🧠 [APP] PDA prewarming completed');
+      } catch (e) {
+        debugPrint('❌ [APP] Error prewarming PDA: $e');
+        rethrow;
+      } finally {
+        _isPrewarmingInProgress = false;
+      }
+    });
   }
 
   @override

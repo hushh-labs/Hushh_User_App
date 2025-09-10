@@ -379,7 +379,9 @@ class SupabaseGmailService {
   /// Notify listeners about email updates
   Future<void> _notifyEmailsUpdated(String userId) async {
     try {
-      final emails = await _getEmailsUseCase.call(userId, limit: 50);
+      final emails = await _getEmailsUseCase.call(
+        userId,
+      ); // No limit = get all emails
       _emailController.add(emails);
     } catch (e) {
       debugPrint('❌ [GMAIL SERVICE] Error notifying email updates: $e');

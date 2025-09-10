@@ -67,11 +67,17 @@ serve(async (req) => {
   } catch (error) {
     console.error('❌ Google Meet sync error:', error)
     
+    // Provide more specific error information
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred'
+    const errorDetails = {
+      success: false,
+      error: errorMessage,
+      timestamp: new Date().toISOString(),
+      path: new URL(req.url).pathname
+    }
+    
     return new Response(
-      JSON.stringify({ 
-        success: false, 
-        error: error.message 
-      }),
+      JSON.stringify(errorDetails),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 500,
@@ -402,57 +408,112 @@ async function checkConnectionStatus(userId: string, supabaseClient: any) {
 }
 
 async function handleSyncRequest(userId: string, supabaseClient: any) {
-  // Get stored access token
-  const { data: account, error: accountError } = await supabaseClient
-    .from('google_meet_accounts')
-    .select('access_token_encrypted, refresh_token_encrypted, token_expires_at')
-    .eq('user_id', userId)
-    .eq('is_active', true)
-    .single()
-
-  if (accountError || !account) {
-    throw new Error('Google Meet account not connected')
-  }
-
-  // Check if token needs refresh
-  const tokenExpiresAt = new Date(account.token_expires_at)
-  const now = new Date()
+  console.log(`🔄 [GOOGLE MEET SUPABASE] Syncing data for user: ${userId}`)
   
-  let accessToken = account.access_token_encrypted
+  try {
+    // Validate environment variables first
+    const clientId = Deno.env.get('GOOGLE_MEET_CLIENT_ID')
+    const clientSecret = Deno.env.get('GOOGLE_MEET_CLIENT_SECRET')
+    
+    if (!clientId || !clientSecret) {
+      console.error('❌ [GOOGLE MEET SUPABASE] Missing environment variables')
+      throw new Error('Google Meet OAuth configuration missing')
+    }
+    
+    console.log('✅ [GOOGLE MEET SUPABASE] Environment variables validated')
 
-  if (tokenExpiresAt <= now) {
-    // Refresh the token
-    accessToken = await refreshAccessToken(account.refresh_token_encrypted, supabaseClient, userId)
-  }
+    // Get stored access token
+    const { data: account, error: accountError } = await supabaseClient
+      .from('google_meet_accounts')
+      .select('access_token_encrypted, refresh_token_encrypted, token_expires_at')
+      .eq('user_id', userId)
+      .eq('is_active', true)
+      .single()
 
-  // Fetch and store Google Meet data
-  const meetData = await fetchGoogleMeetData(accessToken)
-  await storeGoogleMeetData(supabaseClient, userId, meetData)
+    if (accountError || !account) {
+      console.log('❌ [GOOGLE MEET SUPABASE] Account not found or error:', accountError)
+      throw new Error('Google Meet account not connected')
+    }
 
-  // Fetch and store Google Calendar data
-  const calendarData = await fetchGoogleCalendarData(accessToken)
-  await storeGoogleCalendarData(supabaseClient, userId, calendarData)
+    console.log('✅ [GOOGLE MEET SUPABASE] Account found')
 
-  // Correlate calendar events with meet conferences
-  await correlateCalendarWithMeetings(supabaseClient, userId)
+    // Check if token needs refresh
+    const tokenExpiresAt = new Date(account.token_expires_at)
+    const now = new Date()
+    const fiveMinutesFromNow = new Date(now.getTime() + 5 * 60 * 1000) // 5 minutes buffer
+    
+    let accessToken = account.access_token_encrypted
 
-  return new Response(
-    JSON.stringify({ 
-      success: true, 
-      message: 'Google Meet and Calendar data synced successfully',
-      syncedData: {
-        conferences: meetData.conferences.length,
-        recordings: meetData.recordings.length,
-        transcripts: meetData.transcripts.length,
-        calendarEvents: calendarData.events.length,
-        attendees: calendarData.attendees.length
+    if (tokenExpiresAt <= fiveMinutesFromNow) {
+      console.log('🔄 [GOOGLE MEET SUPABASE] Token needs refresh')
+      try {
+        // Refresh the token
+        accessToken = await refreshAccessToken(account.refresh_token_encrypted, supabaseClient, userId)
+        console.log('✅ [GOOGLE MEET SUPABASE] Token refreshed successfully')
+      } catch (refreshError) {
+        console.error('❌ [GOOGLE MEET SUPABASE] Token refresh failed:', refreshError)
+        throw new Error(`Token refresh failed: ${refreshError.message}`)
       }
-    }),
-    {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      status: 200,
-    },
-  )
+    } else {
+      console.log('✅ [GOOGLE MEET SUPABASE] Token is still valid')
+    }
+
+    // Fetch and store Google Meet data with error handling
+    let meetData = { conferences: [], recordings: [], transcripts: [], participants: [] }
+    try {
+      console.log('📊 [GOOGLE MEET SUPABASE] Fetching Google Meet data...')
+      meetData = await fetchGoogleMeetData(accessToken)
+      await storeGoogleMeetData(supabaseClient, userId, meetData)
+      console.log('✅ [GOOGLE MEET SUPABASE] Google Meet data synced successfully')
+    } catch (meetError) {
+      console.error('⚠️ [GOOGLE MEET SUPABASE] Google Meet sync failed:', meetError)
+      // Continue with calendar sync even if Meet sync fails
+    }
+
+    // Fetch and store Google Calendar data with error handling
+    let calendarData = { events: [], attendees: [] }
+    try {
+      console.log('📅 [GOOGLE MEET SUPABASE] Fetching Google Calendar data...')
+      calendarData = await fetchGoogleCalendarData(accessToken)
+      await storeGoogleCalendarData(supabaseClient, userId, calendarData)
+      console.log('✅ [GOOGLE MEET SUPABASE] Google Calendar data synced successfully')
+    } catch (calendarError) {
+      console.error('⚠️ [GOOGLE MEET SUPABASE] Google Calendar sync failed:', calendarError)
+      // Continue even if calendar sync fails
+    }
+
+    // Correlate calendar events with meet conferences (optional)
+    try {
+      await correlateCalendarWithMeetings(supabaseClient, userId)
+      console.log('✅ [GOOGLE MEET SUPABASE] Calendar-Meet correlation completed')
+    } catch (correlationError) {
+      console.error('⚠️ [GOOGLE MEET SUPABASE] Correlation failed:', correlationError)
+      // Don't fail the entire sync for correlation issues
+    }
+
+    console.log('✅ [GOOGLE MEET SUPABASE] Sync completed successfully')
+
+    return new Response(
+      JSON.stringify({ 
+        success: true, 
+        message: 'Google Meet and Calendar data synced successfully',
+        syncedData: {
+          conferences: meetData.conferences.length,
+          recordings: meetData.recordings.length,
+          transcripts: meetData.transcripts.length,
+          calendarEvents: calendarData.events.length,
+          attendees: calendarData.attendees.length
+        }
+      }),
+      {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 200,
+      },
+    )
+  } catch (error) {
+    console.error('❌ [GOOGLE MEET SUPABASE] Error syncing data:', error)
+    throw error
+  }
 }
 
 async function refreshAccessToken(refreshToken: string, supabaseClient: any, userId: string) {
@@ -506,8 +567,13 @@ async function fetchGoogleMeetData(accessToken: string) {
     { headers }
   )
 
+  console.log('📊 Google Meet API response status:', conferencesResponse.status)
+  console.log('📊 Google Meet API response headers:', Object.fromEntries(conferencesResponse.headers.entries()))
+
   if (!conferencesResponse.ok) {
-    throw new Error(`Failed to fetch conferences: ${conferencesResponse.status}`)
+    const errorText = await conferencesResponse.text()
+    console.error('❌ Google Meet API error response:', errorText)
+    throw new Error(`Failed to fetch conferences: ${conferencesResponse.status} - ${errorText}`)
   }
 
   const conferencesData = await conferencesResponse.json()

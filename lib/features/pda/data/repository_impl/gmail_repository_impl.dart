@@ -305,7 +305,7 @@ class GmailRepositoryImpl implements GmailRepository {
   }
 
   Future<void> _notifyEmailsUpdated(String userId) async {
-    final emails = await getEmails(userId, limit: 50);
+    final emails = await getEmails(userId); // No limit = get all emails
     _emailsController.add(emails);
   }
 

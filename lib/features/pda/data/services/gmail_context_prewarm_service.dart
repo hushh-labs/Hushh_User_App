@@ -113,9 +113,9 @@ class GmailContextPrewarmService {
         // Cache the context
         _gmailContextCache = gmailContext;
 
-        // Store context in local cache and Firestore
+        // Store context in local cache only (skip Firestore to avoid size limits)
         await _storeGmailContextInCache(gmailContext);
-        await _storeGmailContextInFirestore(gmailContext);
+        // Skip Firestore storage to avoid size limits with large email datasets
 
         // Update PDA with Gmail context
         await _updatePdaWithGmailContext(gmailContext);
@@ -138,18 +138,25 @@ class GmailContextPrewarmService {
     try {
       debugPrint('📊 [GMAIL PREWARM] Fetching Gmail context...');
 
-      // Fetch Gmail data in parallel for efficiency
-      final futures = await Future.wait([
-        _repository.getGmailAccount(userId),
-        _repository.getEmails(userId, limit: 50),
-        _repository.getEmails(userId, limit: 20),
-        _repository.getEmails(userId, limit: 10),
-      ]);
+      // Get account info first
+      final account = await _repository.getGmailAccount(userId);
 
-      final account = futures[0] as GmailAccount?;
-      final recentEmails = futures[1] as List<GmailEmail>;
-      final unreadEmails = futures[2] as List<GmailEmail>;
-      final importantEmails = futures[3] as List<GmailEmail>;
+      // Get ALL emails for comprehensive context
+      debugPrint('📊 [GMAIL PREWARM] Fetching ALL emails from database...');
+      final allEmails = await _repository.getEmails(
+        userId,
+      ); // No limit = get ALL emails
+
+      debugPrint(
+        '📊 [GMAIL PREWARM] Retrieved ${allEmails.length} total emails',
+      );
+
+      // Filter emails by status for different categories
+      final recentEmails = allEmails; // All emails are recent in this context
+      final unreadEmails = allEmails.where((email) => !email.isRead).toList();
+      final importantEmails = allEmails
+          .where((email) => email.isImportant)
+          .toList();
 
       // Create comprehensive context
       final context = {
@@ -173,7 +180,7 @@ class GmailContextPrewarmService {
       };
 
       debugPrint(
-        '📊 [GMAIL PREWARM] Gmail context fetched: ${recentEmails.length} recent emails, ${unreadEmails.length} unread, ${importantEmails.length} important',
+        '📊 [GMAIL PREWARM] Gmail context fetched: ${allEmails.length} total emails (${unreadEmails.length} unread, ${importantEmails.length} important)',
       );
       return context;
     } catch (e) {
@@ -202,12 +209,19 @@ class GmailContextPrewarmService {
       'subject': email.subject,
       'fromEmail': email.fromEmail,
       'fromName': email.fromName,
+      'toEmails': email.toEmails,
+      'ccEmails': email.ccEmails,
+      'bccEmails': email.bccEmails,
+      'bodyText': email.bodyText, // Include email body content
+      'bodyHtml': email.bodyHtml, // Include HTML body content
       'snippet': email.snippet,
       'isRead': email.isRead,
       'isImportant': email.isImportant,
       'isStarred': email.isStarred,
       'labels': email.labels,
+      'attachments': email.attachments,
       'receivedAt': email.receivedAt.toIso8601String(),
+      'sentAt': email.sentAt?.toIso8601String(),
     };
   }
 
@@ -233,49 +247,103 @@ class GmailContextPrewarmService {
 
     // Email statistics
     buffer.writeln('Email Statistics:');
-    buffer.writeln('- Total Recent Emails: ${recentEmails.length}');
+    buffer.writeln('- Total Emails in Context: ${recentEmails.length}');
     buffer.writeln('- Unread Emails: ${unreadEmails.length}');
     buffer.writeln('- Important Emails: ${importantEmails.length}');
     buffer.writeln();
 
-    // Recent email activity
+    // Email activity (showing ALL emails from all time periods)
     if (recentEmails.isNotEmpty) {
-      buffer.writeln('Recent Email Activity:');
-      final recentCount = recentEmails.take(5).length;
-      for (int i = 0; i < recentCount; i++) {
+      buffer.writeln('ALL Email Activity (complete email history):');
+
+      // Show ALL emails - no limits
+      for (int i = 0; i < recentEmails.length; i++) {
         final email = recentEmails[i];
         final from = email.fromName ?? email.fromEmail ?? 'Unknown';
         final subject = email.subject ?? 'No Subject';
         final isRead = email.isRead ? 'Read' : 'Unread';
-        buffer.writeln('- $from: $subject ($isRead)');
+        final receivedDate = email.receivedAt.toLocal().toString().split(
+          ' ',
+        )[0];
+
+        buffer.writeln('--- Email ${i + 1} ---');
+        buffer.writeln('From: $from');
+        buffer.writeln('Subject: $subject');
+        buffer.writeln('Date: $receivedDate');
+        buffer.writeln('Status: $isRead');
+
+        // Include email body content if available
+        if (email.bodyText != null && email.bodyText!.isNotEmpty) {
+          final bodyPreview = email.bodyText!.length > 200
+              ? '${email.bodyText!.substring(0, 200)}...'
+              : email.bodyText!;
+          buffer.writeln('Content: $bodyPreview');
+        } else if (email.snippet != null && email.snippet!.isNotEmpty) {
+          buffer.writeln('Snippet: ${email.snippet}');
+        }
+
+        buffer.writeln();
       }
-      buffer.writeln();
     }
 
-    // Unread emails summary
+    // Unread emails summary with content
     if (unreadEmails.isNotEmpty) {
-      buffer.writeln('Unread Emails Summary:');
-      final unreadCount = unreadEmails.take(3).length;
-      for (int i = 0; i < unreadCount; i++) {
+      buffer.writeln('ALL Unread Emails (with content):');
+      for (int i = 0; i < unreadEmails.length; i++) {
         final email = unreadEmails[i];
         final from = email.fromName ?? email.fromEmail ?? 'Unknown';
         final subject = email.subject ?? 'No Subject';
-        buffer.writeln('- $from: $subject');
+        final receivedDate = email.receivedAt.toLocal().toString().split(
+          ' ',
+        )[0];
+
+        buffer.writeln('--- Unread Email ${i + 1} ---');
+        buffer.writeln('From: $from');
+        buffer.writeln('Subject: $subject');
+        buffer.writeln('Date: $receivedDate');
+
+        // Include email body content if available
+        if (email.bodyText != null && email.bodyText!.isNotEmpty) {
+          final bodyPreview = email.bodyText!.length > 150
+              ? '${email.bodyText!.substring(0, 150)}...'
+              : email.bodyText!;
+          buffer.writeln('Content: $bodyPreview');
+        } else if (email.snippet != null && email.snippet!.isNotEmpty) {
+          buffer.writeln('Snippet: ${email.snippet}');
+        }
+
+        buffer.writeln();
       }
-      buffer.writeln();
     }
 
-    // Important emails summary
+    // Important emails summary with content
     if (importantEmails.isNotEmpty) {
-      buffer.writeln('Important Emails:');
-      final importantCount = importantEmails.take(3).length;
-      for (int i = 0; i < importantCount; i++) {
+      buffer.writeln('ALL Important Emails (with content):');
+      for (int i = 0; i < importantEmails.length; i++) {
         final email = importantEmails[i];
         final from = email.fromName ?? email.fromEmail ?? 'Unknown';
         final subject = email.subject ?? 'No Subject';
-        buffer.writeln('- $from: $subject');
+        final receivedDate = email.receivedAt.toLocal().toString().split(
+          ' ',
+        )[0];
+
+        buffer.writeln('--- Important Email ${i + 1} ---');
+        buffer.writeln('From: $from');
+        buffer.writeln('Subject: $subject');
+        buffer.writeln('Date: $receivedDate');
+
+        // Include email body content if available
+        if (email.bodyText != null && email.bodyText!.isNotEmpty) {
+          final bodyPreview = email.bodyText!.length > 150
+              ? '${email.bodyText!.substring(0, 150)}...'
+              : email.bodyText!;
+          buffer.writeln('Content: $bodyPreview');
+        } else if (email.snippet != null && email.snippet!.isNotEmpty) {
+          buffer.writeln('Snippet: ${email.snippet}');
+        }
+
+        buffer.writeln();
       }
-      buffer.writeln();
     }
 
     return buffer.toString();
@@ -299,7 +367,7 @@ class GmailContextPrewarmService {
     }
   }
 
-  /// Store Gmail context in PDA's internal cache
+  /// Store Gmail context in PDA's internal cache (local only)
   Future<void> _storeGmailContextInPdaCache(
     Map<String, dynamic> context,
   ) async {
@@ -307,19 +375,16 @@ class GmailContextPrewarmService {
       final user = _auth.currentUser;
       if (user == null) return;
 
-      // Store in Firestore under user's PDA context (using HushUsers collection)
-      await _firestore
-          .collection('HushUsers')
-          .doc(user.uid)
-          .collection('pda_context')
-          .doc('gmail')
-          .set({
-            'context': context,
-            'lastUpdated': FieldValue.serverTimestamp(),
-            'version': '1.0',
-          });
+      // Store locally only to avoid Firestore size limits
+      final prefs = await SharedPreferences.getInstance();
+      final contextJson = jsonEncode(context);
+      await prefs.setString('gmail_pda_context_${user.uid}', contextJson);
+      await prefs.setString(
+        'gmail_pda_context_timestamp_${user.uid}',
+        DateTime.now().toIso8601String(),
+      );
 
-      debugPrint('💾 [GMAIL PREWARM] Gmail context stored in PDA cache');
+      debugPrint('💾 [GMAIL PREWARM] Gmail context stored in local PDA cache');
     } catch (e) {
       debugPrint(
         '❌ [GMAIL PREWARM] Error storing Gmail context in PDA cache: $e',
@@ -345,28 +410,6 @@ class GmailContextPrewarmService {
     } catch (e) {
       debugPrint(
         '❌ [GMAIL PREWARM] Error storing Gmail context in local cache: $e',
-      );
-    }
-  }
-
-  /// Store Gmail context in Firestore for persistence
-  Future<void> _storeGmailContextInFirestore(
-    Map<String, dynamic> context,
-  ) async {
-    try {
-      final user = _auth.currentUser;
-      if (user == null) return;
-
-      await _firestore.collection('gmail_context_cache').doc(user.uid).set({
-        'context': context,
-        'lastUpdated': FieldValue.serverTimestamp(),
-        'version': '1.0',
-      });
-
-      debugPrint('💾 [GMAIL PREWARM] Gmail context stored in Firestore');
-    } catch (e) {
-      debugPrint(
-        '❌ [GMAIL PREWARM] Error storing Gmail context in Firestore: $e',
       );
     }
   }
@@ -432,19 +475,10 @@ class GmailContextPrewarmService {
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove('gmail_context_cache');
       await prefs.remove('gmail_context_last_update');
+      await prefs.remove('gmail_pda_context_${user.uid}');
+      await prefs.remove('gmail_pda_context_timestamp_${user.uid}');
 
-      // Clear Firestore cache
-      await _firestore.collection('gmail_context_cache').doc(user.uid).delete();
-
-      // Clear PDA context cache
-      await _firestore
-          .collection('users')
-          .doc(user.uid)
-          .collection('pda_context')
-          .doc('gmail')
-          .delete();
-
-      debugPrint('🧹 [GMAIL PREWARM] Gmail context cache cleared');
+      debugPrint('🧹 [GMAIL PREWARM] Gmail context cache cleared (local only)');
     } catch (e) {
       debugPrint('❌ [GMAIL PREWARM] Error clearing Gmail context cache: $e');
     }
@@ -457,7 +491,46 @@ class GmailContextPrewarmService {
       final context = await _loadGmailContextFromCache();
 
       if (context.isNotEmpty && context['summary'] != null) {
-        return context['summary'] as String;
+        final summary = context['summary'] as String;
+        final recentEmails = context['recentEmails'] as List<dynamic>? ?? [];
+
+        // Include both summary and detailed email data
+        final detailedContext = StringBuffer();
+        detailedContext.writeln(summary);
+
+        // Add detailed email data for better AI responses
+        if (recentEmails.isNotEmpty) {
+          detailedContext.writeln('\n=== DETAILED EMAIL DATA ===');
+          detailedContext.writeln('ALL Emails (Complete Full Data):');
+          // Show ALL emails - no limits
+          for (int i = 0; i < recentEmails.length; i++) {
+            final email = recentEmails[i] as Map<String, dynamic>;
+            detailedContext.writeln('\n--- Email ${i + 1} ---');
+            detailedContext.writeln(
+              'From: ${email['fromName'] ?? email['fromEmail'] ?? 'Unknown'}',
+            );
+            detailedContext.writeln(
+              'Subject: ${email['subject'] ?? 'No Subject'}',
+            );
+            detailedContext.writeln('Date: ${email['receivedAt']}');
+            detailedContext.writeln('Read: ${email['isRead']}');
+            detailedContext.writeln('Important: ${email['isImportant']}');
+
+            if (email['bodyText'] != null &&
+                email['bodyText'].toString().isNotEmpty) {
+              final bodyText = email['bodyText'].toString();
+              final bodyPreview = bodyText.length > 300
+                  ? '${bodyText.substring(0, 300)}...'
+                  : bodyText;
+              detailedContext.writeln('Content: $bodyPreview');
+            } else if (email['snippet'] != null &&
+                email['snippet'].toString().isNotEmpty) {
+              detailedContext.writeln('Snippet: ${email['snippet']}');
+            }
+          }
+        }
+
+        return detailedContext.toString();
       }
 
       // If no cache, try to pre-warm quickly
@@ -465,7 +538,47 @@ class GmailContextPrewarmService {
       if (user != null) {
         final quickContext = await _fetchGmailContext(user.uid);
         if (quickContext.isNotEmpty && quickContext['summary'] != null) {
-          return quickContext['summary'] as String;
+          final summary = quickContext['summary'] as String;
+          final recentEmails =
+              quickContext['recentEmails'] as List<dynamic>? ?? [];
+
+          // Include both summary and detailed email data
+          final detailedContext = StringBuffer();
+          detailedContext.writeln(summary);
+
+          // Add detailed email data for better AI responses
+          if (recentEmails.isNotEmpty) {
+            detailedContext.writeln('\n=== DETAILED EMAIL DATA ===');
+            detailedContext.writeln('ALL Emails (Complete Full Data):');
+            // Show ALL emails - no limits
+            for (int i = 0; i < recentEmails.length; i++) {
+              final email = recentEmails[i] as Map<String, dynamic>;
+              detailedContext.writeln('\n--- Email ${i + 1} ---');
+              detailedContext.writeln(
+                'From: ${email['fromName'] ?? email['fromEmail'] ?? 'Unknown'}',
+              );
+              detailedContext.writeln(
+                'Subject: ${email['subject'] ?? 'No Subject'}',
+              );
+              detailedContext.writeln('Date: ${email['receivedAt']}');
+              detailedContext.writeln('Read: ${email['isRead']}');
+              detailedContext.writeln('Important: ${email['isImportant']}');
+
+              if (email['bodyText'] != null &&
+                  email['bodyText'].toString().isNotEmpty) {
+                final bodyText = email['bodyText'].toString();
+                final bodyPreview = bodyText.length > 300
+                    ? '${bodyText.substring(0, 300)}...'
+                    : bodyText;
+                detailedContext.writeln('Content: $bodyPreview');
+              } else if (email['snippet'] != null &&
+                  email['snippet'].toString().isNotEmpty) {
+                detailedContext.writeln('Snippet: ${email['snippet']}');
+              }
+            }
+          }
+
+          return detailedContext.toString();
         }
       }
 

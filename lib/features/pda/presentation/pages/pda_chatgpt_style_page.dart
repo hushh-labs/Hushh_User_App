@@ -336,6 +336,15 @@ class _PdaChatGptStylePageState extends State<PdaChatGptStylePage> {
   Future<void> _createNewConversation() async {
     final currentUser = FirebaseAuth.instance.currentUser;
     if (currentUser == null) return;
+
+    // Close the drawer first
+    if (mounted) {
+      Navigator.of(context).pop();
+    }
+
+    // Delete any empty conversations before creating a new one
+    await _deleteEmptyConversations();
+
     final docRef = FirebaseFirestore.instance
         .collection(FirestoreCollections.users)
         .doc(currentUser.uid)
@@ -357,6 +366,11 @@ class _PdaChatGptStylePageState extends State<PdaChatGptStylePage> {
   }
 
   Future<void> _openConversation(Map<String, dynamic> convo) async {
+    // Close the drawer first
+    if (mounted) {
+      Navigator.of(context).pop();
+    }
+
     setState(() {
       _currentConversationId = convo['id'] as String;
       _currentConversationTitle = (convo['title'] as String?) ?? 'Conversation';
@@ -365,7 +379,6 @@ class _PdaChatGptStylePageState extends State<PdaChatGptStylePage> {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('pda_last_conversation_id', _currentConversationId!);
     await _loadMessages();
-    if (mounted) Navigator.of(context).maybePop();
   }
 
   Future<List<String>> _uploadSelectedImages(List<File> images) async {
@@ -386,7 +399,10 @@ class _PdaChatGptStylePageState extends State<PdaChatGptStylePage> {
     return urls;
   }
 
-  Future<void> _deleteConversation(String conversationId) async {
+  Future<void> _deleteConversation(
+    String conversationId, {
+    bool showSnackbar = true,
+  }) async {
     final currentUser = FirebaseAuth.instance.currentUser;
     if (currentUser == null) return;
 
@@ -441,7 +457,7 @@ class _PdaChatGptStylePageState extends State<PdaChatGptStylePage> {
       await _loadMessages();
     }
     await _loadConversations();
-    if (mounted) {
+    if (mounted && showSnackbar) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Chat deleted'),
@@ -449,6 +465,49 @@ class _PdaChatGptStylePageState extends State<PdaChatGptStylePage> {
           duration: Duration(seconds: 2),
         ),
       );
+    }
+  }
+
+  /// Delete all empty conversations (conversations with no messages)
+  Future<void> _deleteEmptyConversations() async {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null) return;
+
+    try {
+      // Get all conversations
+      final conversationsSnapshot = await FirebaseFirestore.instance
+          .collection(FirestoreCollections.users)
+          .doc(currentUser.uid)
+          .collection('pda_conversations')
+          .get();
+
+      final emptyConversationIds = <String>[];
+
+      // Check each conversation for messages
+      for (final conversationDoc in conversationsSnapshot.docs) {
+        final messagesSnapshot = await conversationDoc.reference
+            .collection('messages')
+            .limit(1) // We only need to check if any messages exist
+            .get();
+
+        // If no messages exist, mark for deletion
+        if (messagesSnapshot.docs.isEmpty) {
+          emptyConversationIds.add(conversationDoc.id);
+        }
+      }
+
+      // Delete all empty conversations (silently, no snackbar)
+      for (final conversationId in emptyConversationIds) {
+        await _deleteConversation(conversationId, showSnackbar: false);
+      }
+
+      if (emptyConversationIds.isNotEmpty) {
+        debugPrint(
+          '🗑️ [PDA] Deleted ${emptyConversationIds.length} empty conversations',
+        );
+      }
+    } catch (e) {
+      debugPrint('❌ [PDA] Error deleting empty conversations: $e');
     }
   }
 
@@ -1805,15 +1864,15 @@ class _PdaChatGptStylePageState extends State<PdaChatGptStylePage> {
                   const SizedBox(height: 16),
 
                   // Gmail Plugin - HIDDEN
-                  // _buildPluginButton(
-                  //   icon: Icons.mail_outline,
-                  //   title: 'Gmail',
-                  //   subtitle: _isGmailConnected ? 'Connected' : 'Connect',
-                  //   isConnected: _isGmailConnected,
-                  //   isLoading: _isConnectingGmail,
-                  //   onTap: _onConnectGmailPressed,
-                  // ),
-                  // const SizedBox(height: 12),
+                  _buildPluginButton(
+                    icon: Icons.mail_outline,
+                    title: 'Gmail',
+                    subtitle: _isGmailConnected ? 'Connected' : 'Connect',
+                    isConnected: _isGmailConnected,
+                    isLoading: _isConnectingGmail,
+                    onTap: _onConnectGmailPressed,
+                  ),
+                  const SizedBox(height: 12),
 
                   // LinkedIn Plugin - HIDDEN
                   // _buildPluginButton(
@@ -1928,34 +1987,35 @@ class _PdaChatGptStylePageState extends State<PdaChatGptStylePage> {
                 children: [
                   const Divider(color: borderColor, height: 1),
                   const SizedBox(height: 16),
-                  InkWell(
-                    onTap: _showClearConfirmation,
-                    borderRadius: BorderRadius.circular(8),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        vertical: 12,
-                        horizontal: 16,
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.cleaning_services_outlined,
-                            color: Colors.red[400],
-                            size: 20,
-                          ),
-                          const SizedBox(width: 12),
-                          Text(
-                            'Clear Chat',
-                            style: TextStyle(
-                              color: Colors.red[400],
-                              fontSize: 14,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
+                  // Clear Chat button - commented out
+                  // InkWell(
+                  //   onTap: _showClearConfirmation,
+                  //   borderRadius: BorderRadius.circular(8),
+                  //   child: Container(
+                  //     padding: const EdgeInsets.symmetric(
+                  //       vertical: 12,
+                  //       horizontal: 16,
+                  //     ),
+                  //     child: Row(
+                  //       children: [
+                  //         Icon(
+                  //           Icons.cleaning_services_outlined,
+                  //           color: Colors.red[400],
+                  //           size: 20,
+                  //         ),
+                  //         const SizedBox(width: 12),
+                  //         Text(
+                  //           'Clear Chat',
+                  //           style: TextStyle(
+                  //             color: Colors.red[400],
+                  //             fontSize: 14,
+                  //             fontWeight: FontWeight.w500,
+                  //           ),
+                  //         ),
+                  //       ],
+                  //     ),
+                  //   ),
+                  // ),
                 ],
               ),
             ),
@@ -2078,21 +2138,21 @@ class _PdaChatGptStylePageState extends State<PdaChatGptStylePage> {
                 ),
               ),
               const Spacer(),
-              // Clear chat button
-              GestureDetector(
-                onTap: _showClearConfirmation,
-                child: Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Icon(
-                    Icons.cleaning_services_outlined,
-                    color: Colors.red[400],
-                    size: 20,
-                  ),
-                ),
-              ),
+              // Clear chat button - commented out
+              // GestureDetector(
+              //   onTap: _showClearConfirmation,
+              //   child: Container(
+              //     padding: const EdgeInsets.all(8),
+              //     decoration: BoxDecoration(
+              //       borderRadius: BorderRadius.circular(8),
+              //     ),
+              //     child: Icon(
+              //       Icons.cleaning_services_outlined,
+              //       color: Colors.red[400],
+              //       size: 20,
+              //     ),
+              //   ),
+              // ),
             ],
           ),
         ),
