@@ -19,6 +19,9 @@ import 'package:hushh_user_app/features/pda/presentation/components/pda_loading_
 import '../../data/services/supabase_gmail_service.dart';
 import '../../data/services/simple_linkedin_service.dart';
 import '../widgets/gmail_sync_dialog.dart';
+import '../widgets/sync_progress_dialog.dart';
+import '../../data/services/pda_preprocessing_manager.dart';
+import '../widgets/preprocessing_status_widget.dart';
 import '../../domain/repositories/gmail_repository.dart';
 import '../../domain/repositories/google_meet_repository.dart';
 import '../../data/data_sources/google_meet_supabase_data_source_impl.dart';
@@ -47,10 +50,15 @@ class _PdaChatGptStylePageState extends State<PdaChatGptStylePage> {
   final SupabaseGmailService _supabaseGmailService = SupabaseGmailService();
   final SupabaseLinkedInService _supabaseLinkedInService =
       SupabaseLinkedInService();
+  final PdaPreprocessingManager _preprocessingManager =
+      PdaPreprocessingManager();
 
   List<PdaMessage> _messages = [];
   bool _isLoadingMessages = false;
   bool _isSendingMessage = false;
+  bool _isPreprocessingRequired = false;
+  bool _isPreprocessingComplete = false;
+  PreprocessingStatus? _preprocessingStatus;
   bool _isGmailConnected = false;
   bool _isConnectingGmail = false;
   bool _isLinkedInConnected = false;
@@ -120,10 +128,84 @@ class _PdaChatGptStylePageState extends State<PdaChatGptStylePage> {
     _checkGoogleDriveConnectionStatus();
     _messageController.addListener(_updateSendButtonState);
 
+    // Initialize preprocessing
+    _initializePreprocessing();
+
     // Refresh username after a short delay to ensure Firebase is ready
     Future.delayed(const Duration(seconds: 1), () {
       _getCurrentUserName();
     });
+  }
+
+  /// Initialize preprocessing system
+  Future<void> _initializePreprocessing() async {
+    try {
+      // Check if preprocessing is already completed
+      if (_preprocessingManager.isCompleted) {
+        debugPrint('✅ [PDA] Preprocessing already completed');
+        setState(() {
+          _isPreprocessingRequired = false;
+          _isPreprocessingComplete = true;
+        });
+        return;
+      }
+
+      // Check if preprocessing is currently in progress
+      if (_preprocessingManager.isPreprocessing) {
+        debugPrint(
+          '🔄 [PDA] Preprocessing already in progress, showing status',
+        );
+        setState(() {
+          _isPreprocessingRequired = true;
+          _isPreprocessingComplete = false;
+        });
+
+        // Listen to preprocessing status
+        _preprocessingManager.statusStream.listen((status) {
+          if (mounted) {
+            setState(() {
+              _preprocessingStatus = status;
+              _isPreprocessingComplete = status.isCompleted;
+            });
+          }
+        });
+        return;
+      }
+
+      // Check if preprocessing is required
+      final isRequired = await _preprocessingManager.isPreprocessingRequired();
+
+      setState(() {
+        _isPreprocessingRequired = isRequired;
+        _isPreprocessingComplete =
+            !isRequired; // If not required, mark as complete
+      });
+
+      if (isRequired) {
+        debugPrint('🚀 [PDA] Preprocessing required, starting...');
+
+        // Listen to preprocessing status
+        _preprocessingManager.statusStream.listen((status) {
+          if (mounted) {
+            setState(() {
+              _preprocessingStatus = status;
+              _isPreprocessingComplete = status.isCompleted;
+            });
+          }
+        });
+
+        // Start preprocessing (this will now check if already completed/in progress)
+        await _preprocessingManager.startPreprocessing();
+      } else {
+        debugPrint('ℹ️ [PDA] No preprocessing required');
+      }
+    } catch (e) {
+      debugPrint('❌ [PDA] Error initializing preprocessing: $e');
+      // If there's an error, allow messaging anyway
+      setState(() {
+        _isPreprocessingComplete = true;
+      });
+    }
   }
 
   Future<void> _initializeConversations() async {
@@ -674,6 +756,20 @@ class _PdaChatGptStylePageState extends State<PdaChatGptStylePage> {
     final message = predefinedMessage ?? _messageController.text.trim();
     if (message.isEmpty && _selectedImages.isEmpty) return;
 
+    // Block sending messages if preprocessing is not complete
+    if (_isPreprocessingRequired && !_isPreprocessingComplete) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            '⏳ Please wait for data preprocessing to complete before sending messages',
+          ),
+          backgroundColor: Colors.orange,
+          duration: Duration(seconds: 3),
+        ),
+      );
+      return;
+    }
+
     final currentUser = FirebaseAuth.instance.currentUser;
     if (currentUser == null) {
       setState(() {
@@ -1023,31 +1119,29 @@ class _PdaChatGptStylePageState extends State<PdaChatGptStylePage> {
   }
 
   Future<void> _triggerGmailSyncWithOptions(SyncOptions syncOptions) async {
-    try {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              '🔄 Syncing Gmail (${syncOptions.duration.displayName})...',
+    // Show sync progress dialog with PDA animation
+    showSyncProgressDialog(
+      context,
+      title: 'Syncing Gmail',
+      description: 'Fetching emails from ${syncOptions.duration.displayName}',
+      onCompleted: () {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('✅ Gmail sync completed successfully!'),
+              backgroundColor: Colors.green,
+              duration: Duration(seconds: 2),
             ),
-            duration: const Duration(seconds: 2),
-          ),
-        );
-      }
+          );
+        }
+      },
+    );
 
+    try {
       final result = await _supabaseGmailService.syncEmails(syncOptions);
 
-      if (result.isSuccess && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              '✅ Gmail sync completed! Stored ${result.messagesCount} emails.',
-            ),
-            backgroundColor: Colors.green,
-            duration: const Duration(seconds: 3),
-          ),
-        );
-      } else {
+      if (!result.isSuccess && mounted) {
+        Navigator.of(context).pop(); // Close progress dialog
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('⚠️ Gmail sync failed: ${result.error}'),
@@ -1057,13 +1151,16 @@ class _PdaChatGptStylePageState extends State<PdaChatGptStylePage> {
         );
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('❌ Error during Gmail sync: $e'),
-          backgroundColor: Colors.red,
-          duration: const Duration(seconds: 3),
-        ),
-      );
+      if (mounted) {
+        Navigator.of(context).pop(); // Close progress dialog
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('❌ Error during Gmail sync: $e'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
     }
   }
 
@@ -1222,6 +1319,24 @@ class _PdaChatGptStylePageState extends State<PdaChatGptStylePage> {
   }
 
   Future<void> _triggerLinkedInSync() async {
+    // Show sync progress dialog with PDA animation
+    showSyncProgressDialog(
+      context,
+      title: 'Syncing LinkedIn',
+      description: 'Fetching profile and posts data',
+      onCompleted: () {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('✅ LinkedIn data synced successfully!'),
+              backgroundColor: Colors.green,
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+      },
+    );
+
     try {
       const syncOptions = LinkedInSyncOptions(
         includeProfile: true,
@@ -1232,15 +1347,8 @@ class _PdaChatGptStylePageState extends State<PdaChatGptStylePage> {
         syncOptions,
       );
 
-      if (result) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('✅ LinkedIn data synced successfully!'),
-            backgroundColor: Colors.green,
-            duration: Duration(seconds: 2),
-          ),
-        );
-      } else {
+      if (!result && mounted) {
+        Navigator.of(context).pop(); // Close progress dialog
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Failed to sync LinkedIn data. Please try again.'),
@@ -1250,13 +1358,16 @@ class _PdaChatGptStylePageState extends State<PdaChatGptStylePage> {
         );
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error syncing LinkedIn data: $e'),
-          backgroundColor: Colors.red,
-          duration: Duration(seconds: 3),
-        ),
-      );
+      if (mounted) {
+        Navigator.of(context).pop(); // Close progress dialog
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error syncing LinkedIn data: $e'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
     }
   }
 
@@ -1460,35 +1571,41 @@ class _PdaChatGptStylePageState extends State<PdaChatGptStylePage> {
   }
 
   Future<void> _triggerGoogleMeetSync() async {
+    // Show sync progress dialog with PDA animation
+    showSyncProgressDialog(
+      context,
+      title: 'Syncing Google Meet',
+      description: 'Fetching meetings and recordings',
+      onCompleted: () {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('✅ Google Meet data synced successfully!'),
+              backgroundColor: Colors.green,
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+      },
+    );
+
     try {
       final googleMeetRepo = _getIt<GoogleMeetRepository>();
       final currentUser = FirebaseAuth.instance.currentUser;
       if (currentUser == null) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('🔄 Syncing Google Meet data...'),
-          duration: Duration(seconds: 2),
-        ),
-      );
-
       await googleMeetRepo.syncGoogleMeetData(currentUser.uid);
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('✅ Google Meet data synced successfully!'),
-          backgroundColor: Colors.green,
-          duration: Duration(seconds: 2),
-        ),
-      );
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('❌ Error syncing Google Meet data: $e'),
-          backgroundColor: Colors.red,
-          duration: Duration(seconds: 3),
-        ),
-      );
+      if (mounted) {
+        Navigator.of(context).pop(); // Close progress dialog
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('❌ Error syncing Google Meet data: $e'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
     }
   }
 
@@ -1647,35 +1764,41 @@ class _PdaChatGptStylePageState extends State<PdaChatGptStylePage> {
   }
 
   Future<void> _triggerGoogleDriveSync() async {
+    // Show sync progress dialog with PDA animation
+    showSyncProgressDialog(
+      context,
+      title: 'Syncing Google Drive',
+      description: 'Fetching files and documents',
+      onCompleted: () {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('✅ Google Drive sync completed.'),
+              backgroundColor: Colors.green,
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+      },
+    );
+
     try {
       final googleDriveRepo = _getIt<GoogleDriveRepository>();
       final currentUser = FirebaseAuth.instance.currentUser;
       if (currentUser == null) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('🔄 Syncing Google Drive...'),
-          duration: Duration(seconds: 2),
-        ),
-      );
-
       await googleDriveRepo.triggerDriveSync(currentUser.uid);
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('✅ Google Drive sync completed.'),
-          backgroundColor: Colors.green,
-          duration: Duration(seconds: 2),
-        ),
-      );
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('❌ Error syncing Google Drive: $e'),
-          backgroundColor: Colors.red,
-          duration: const Duration(seconds: 3),
-        ),
-      );
+      if (mounted) {
+        Navigator.of(context).pop(); // Close progress dialog
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('❌ Error syncing Google Drive: $e'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
     }
   }
 
@@ -1778,11 +1901,23 @@ class _PdaChatGptStylePageState extends State<PdaChatGptStylePage> {
                       isLoading: _isLoadingMessages,
                       onAnimationComplete: () {},
                     )
+                  : (_isPreprocessingRequired && !_isPreprocessingComplete)
+                  ? PdaLoadingAnimation(
+                      isLoading: true,
+                      showPreprocessingStatus: true,
+                      onAnimationComplete: () {
+                        setState(() {
+                          _isPreprocessingComplete = true;
+                        });
+                      },
+                    )
                   : _messages.isEmpty
                   ? _buildWelcomeScreen()
                   : _buildMessagesList(),
             ),
-            if (_messages.isEmpty && !_isLoadingMessages)
+            if (_messages.isEmpty &&
+                !_isLoadingMessages &&
+                _isPreprocessingComplete)
               _buildSuggestionChips(),
             _buildChatGptStyleInputBar(),
           ],
