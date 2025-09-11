@@ -141,48 +141,26 @@ class GoogleCalendarContextPrewarmService {
       // Use the Google Meet sync function which already handles Calendar data
       final syncResult = await _supabaseDataSource.syncGoogleMeetData(userId);
 
+      bool syncSuccess = false;
       if (syncResult['success'] == true) {
+        syncSuccess = true;
         debugPrint('✅ [CALENDAR PREWARM] Sync completed successfully');
         debugPrint(
           '📊 [CALENDAR PREWARM] Sync result: ${syncResult['syncedData']}',
-        );
-
-        // After sync, get the fresh data from Supabase database
-        final upcomingEvents = await _calendarSupabaseDataSource
-            .getUpcomingEvents(userId, days: 60, limit: 50);
-
-        final recentEvents = await _calendarSupabaseDataSource.getRecentEvents(
-          userId,
-          days: 30,
-          limit: 50,
-        );
-
-        final meetingEvents = upcomingEvents
-            .where((e) => e.hasMeetLink)
-            .toList();
-
-        // Cache the fresh data from database
-        await _cacheManager.cacheUpcomingEvents(userId, upcomingEvents);
-        await _cacheManager.cacheRecentEvents(userId, recentEvents);
-        await _cacheManager.cacheMeetingEvents(userId, meetingEvents);
-
-        // Update cache timestamp
-        await _cacheManager.updateLastSyncTime(userId);
-
-        debugPrint(
-          '🔄 [CALENDAR PREWARM] Cached fresh data: ${upcomingEvents.length} upcoming, ${recentEvents.length} recent, ${meetingEvents.length} meetings',
         );
       } else {
         debugPrint(
           '⚠️ [CALENDAR PREWARM] Sync failed: ${syncResult['message']}',
         );
       }
-    } catch (e) {
-      debugPrint('❌ [CALENDAR PREWARM] Error refreshing context: $e');
 
-      // Fallback: try to get data from database even if sync failed
+      // Always attempt to get data from Supabase database and cache it,
+      // regardless of whether the sync function succeeded or failed.
+      // This ensures we always try to provide some context.
       try {
-        debugPrint('🔄 [CALENDAR PREWARM] Attempting database fallback');
+        debugPrint(
+          '🔄 [CALENDAR PREWARM] Fetching fresh data from Supabase database',
+        );
 
         final upcomingEvents = await _calendarSupabaseDataSource
             .getUpcomingEvents(userId, days: 60, limit: 50);
@@ -202,18 +180,26 @@ class GoogleCalendarContextPrewarmService {
           await _cacheManager.cacheRecentEvents(userId, recentEvents);
           await _cacheManager.cacheMeetingEvents(userId, meetingEvents);
 
+          // Update cache timestamp only if data was successfully fetched and cached
+          await _cacheManager.updateLastSyncTime(userId);
+
           debugPrint(
-            '✅ [CALENDAR PREWARM] Database fallback successful: ${upcomingEvents.length} upcoming, ${recentEvents.length} recent',
+            '✅ [CALENDAR PREWARM] Fetched and cached data from database: ${upcomingEvents.length} upcoming, ${recentEvents.length} recent, ${meetingEvents.length} meetings',
+          );
+        } else {
+          debugPrint(
+            'ℹ️ [CALENDAR PREWARM] No calendar data found in Supabase database after sync attempt.',
           );
         }
-      } catch (fallbackError) {
+      } catch (dbError) {
         debugPrint(
-          '❌ [CALENDAR PREWARM] Database fallback also failed: $fallbackError',
+          '❌ [CALENDAR PREWARM] Error fetching/caching from database: $dbError',
         );
       }
+    } catch (e) {
+      debugPrint('❌ [CALENDAR PREWARM] Overall error refreshing context: $e');
     }
   }
-
   /// Build comprehensive PDA context from calendar data
   Future<Map<String, dynamic>> _buildPDAContext(
     String userId,
@@ -467,6 +453,7 @@ class GoogleCalendarContextPrewarmService {
 
       await _prefs.setString(cacheKey, contextJson);
       debugPrint('💾 [CALENDAR PREWARM] Cached PDA context for user: $userId');
+      debugPrint('📦 [CALENDAR PREWARM] Cached content: $contextJson');
     } catch (e) {
       debugPrint('❌ [CALENDAR PREWARM] Error caching PDA context: $e');
     }
@@ -830,7 +817,7 @@ ${nextMeeting['meetLink'] != null ? '- Meet Link: ${nextMeeting['meetLink']}' : 
 - Provide current date/time context for accurate scheduling assistance
 - Track recent meeting history for follow-up and context
 ''';
-
+    debugPrint('📝 [CALENDAR PDA] Formatted context for PDA: $formattedContext');
     return formattedContext;
   }
 
