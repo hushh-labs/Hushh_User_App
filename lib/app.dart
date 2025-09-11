@@ -24,6 +24,10 @@ import 'features/discover/di/discover_module.dart';
 import 'features/notifications/di/notification_module.dart';
 import 'features/chat/di/chat_module.dart';
 import 'features/vault/di/vault_module.dart';
+import 'features/micro_prompts/di/micro_prompts_module.dart';
+import 'features/micro_prompts/presentation/bloc/micro_prompts_bloc.dart';
+import 'features/micro_prompts/data/services/micro_prompts_scheduler_service.dart';
+import 'features/micro_prompts/presentation/widgets/micro_prompts_global_listener.dart';
 import 'shared/di/dependencies.dart';
 import 'shared/utils/app_local_storage.dart';
 import 'features/notifications/data/services/notification_service.dart';
@@ -99,6 +103,10 @@ class MyApp extends StatelessWidget {
         BlocProvider<AuthBloc>(create: (context) => getIt<AuthBloc>()),
         // Provide CartBloc globally so cart is always available across pages
         BlocProvider<CartBloc>.value(value: getIt<CartBloc>()),
+        // Provide MicroPromptsBloc globally for micro-prompts feature
+        BlocProvider<MicroPromptsBloc>(
+          create: (context) => getIt<MicroPromptsBloc>(),
+        ),
       ],
       child: _AppContent(),
     );
@@ -193,6 +201,36 @@ class _AppContentState extends State<_AppContent> {
     } catch (e) {
       debugPrint('❌ [APP] Error stopping email monitoring: $e');
     }
+  }
+
+  /// Initialize micro-prompts scheduler for the authenticated user
+  void _initializeMicroPromptsScheduler(String userId) {
+    // Delay initialization to ensure MaterialApp is fully built and navigation is complete
+    Future.delayed(const Duration(seconds: 8), () {
+      if (!mounted) return;
+
+      try {
+        // Check if scheduler is already initialized for this user
+        final scheduler = getIt<MicroPromptsSchedulerService>();
+        if (scheduler.currentUserId == userId && scheduler.isActive) {
+          debugPrint(
+            '🎯 [APP] Micro-prompts scheduler already initialized for user: $userId',
+          );
+          return;
+        }
+
+        debugPrint(
+          '🎯 [APP] Initializing micro-prompts scheduler for user: $userId',
+        );
+
+        final bloc = context.read<MicroPromptsBloc>();
+        scheduler.initialize(userId, bloc);
+
+        debugPrint('🎯 [APP] Micro-prompts scheduler initialized successfully');
+      } catch (e) {
+        debugPrint('❌ [APP] Error initializing micro-prompts scheduler: $e');
+      }
+    });
   }
 
   /// Prewarm PDA with user context, email data, LinkedIn context, and vault documents
@@ -291,6 +329,10 @@ class _AppContentState extends State<_AppContent> {
             // User is authenticated, start email monitoring and check profile completion
             _startEmailMonitoring();
             _prewarmPDA(state.user!.uid);
+
+            // Initialize micro-prompts scheduler with a delay
+            _initializeMicroPromptsScheduler(state.user!.uid);
+
             context.read<AuthBloc>().add(
               CheckUserProfileCompletionEvent(state.user!.uid),
             );
@@ -331,6 +373,11 @@ class _AppContentState extends State<_AppContent> {
         ),
         routerConfig: AppRouter.router,
         debugShowCheckedModeBanner: false,
+        builder: (context, child) {
+          // Wrap the entire app with MicroPromptsGlobalListener
+          // This ensures it has access to MaterialApp context
+          return MicroPromptsGlobalListener(child: child ?? Container());
+        },
       ),
     );
   }
