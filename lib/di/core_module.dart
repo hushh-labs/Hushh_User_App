@@ -11,6 +11,7 @@ import '../core/routing/navigation_service.dart';
 import '../core/routing/navigation_service_impl.dart';
 import '../core/routing/app_router.dart';
 import '../features/notifications/di/notification_module.dart';
+import '../features/micro_prompts/di/micro_prompts_module.dart';
 
 class CoreModule {
   static void register() {
@@ -40,5 +41,6 @@ class CoreModule {
 
     // Register feature modules
     NotificationModule.register();
+    MicroPromptsModule.init(sl);
   }
 }
