@@ -9,7 +9,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 /// Service to handle Gmail OAuth connection and management
 class GmailConnectorService {
-  static final GmailConnectorService _instance = GmailConnectorService._internal();
+  static final GmailConnectorService _instance =
+      GmailConnectorService._internal();
   factory GmailConnectorService() => _instance;
   GmailConnectorService._internal();
 
@@ -18,15 +19,15 @@ class GmailConnectorService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
   // Stream controllers for real-time email detection
-  final StreamController<List<EmailThreadSummary>> _emailThreadsController = 
+  final StreamController<List<EmailThreadSummary>> _emailThreadsController =
       StreamController<List<EmailThreadSummary>>.broadcast();
-  final StreamController<EmailEvent> _emailEventsController = 
+  final StreamController<EmailEvent> _emailEventsController =
       StreamController<EmailEvent>.broadcast();
 
   StreamSubscription<QuerySnapshot>? _threadsSubscription;
   List<EmailThreadSummary> _lastKnownThreads = [];
   bool _isMonitoringEmails = false;
-  
+
   // Google Sign-In instance (lazy initialization to prevent crashes)
   GoogleSignIn? _googleSignIn;
 
@@ -36,8 +37,9 @@ class GmailConnectorService {
       try {
         // Using the Web Client ID for server-side token exchange
         // This should match your OAuth 2.0 Web client from Google Cloud Console
-        const webClientId = '53407187172-kg46cau2e5vomuuqvh3c9tndgeig9epd.apps.googleusercontent.com';
-        
+        const webClientId =
+            '53407187172-kg46cau2e5vomuuqvh3c9tndgeig9epd.apps.googleusercontent.com';
+
         _googleSignIn = GoogleSignIn(
           scopes: [
             'email',
@@ -50,7 +52,7 @@ class GmailConnectorService {
           // Enable server auth code for token exchange
           hostedDomain: null,
         );
-        
+
         debugPrint('✅ [GMAIL SERVICE] GoogleSignIn initialized successfully');
       } catch (e) {
         debugPrint('❌ [GMAIL SERVICE] Error initializing GoogleSignIn: $e');
@@ -107,14 +109,16 @@ class GmailConnectorService {
 
       debugPrint('🔐 [GMAIL SERVICE] Starting Gmail OAuth flow...');
       debugPrint('🔐 [GMAIL SERVICE] Platform: ${Platform.operatingSystem}');
-      
+
       // Get Google Sign-In instance with error handling
       final googleSignIn = _getGoogleSignIn();
-      
+
       // Sign out first to ensure fresh authentication
       try {
         await googleSignIn.signOut();
-        debugPrint('🔐 [GMAIL SERVICE] Cleared previous Google Sign-In session');
+        debugPrint(
+          '🔐 [GMAIL SERVICE] Cleared previous Google Sign-In session',
+        );
       } catch (e) {
         debugPrint('⚠️ [GMAIL SERVICE] Warning during signOut: $e');
       }
@@ -126,21 +130,27 @@ class GmailConnectorService {
         debugPrint('🔐 [GMAIL SERVICE] Sign-in dialog presented');
       } catch (e) {
         debugPrint('❌ [GMAIL SERVICE] Sign-in failed: $e');
-        
+
         // Provide specific error messages based on error type
         if (e.toString().contains('PlatformException')) {
           if (e.toString().contains('12501')) {
             return GmailConnectionResult.failure('Sign-in was cancelled');
           } else if (e.toString().contains('12500')) {
-            return GmailConnectionResult.failure('Google Sign-In configuration error. Please check your setup.');
+            return GmailConnectionResult.failure(
+              'Google Sign-In configuration error. Please check your setup.',
+            );
           } else if (e.toString().contains('7')) {
-            return GmailConnectionResult.failure('Network error. Please check your connection.');
+            return GmailConnectionResult.failure(
+              'Network error. Please check your connection.',
+            );
           }
         }
-        
-        return GmailConnectionResult.failure('Failed to sign in: ${e.toString()}');
+
+        return GmailConnectionResult.failure(
+          'Failed to sign in: ${e.toString()}',
+        );
       }
-      
+
       if (googleUser == null) {
         debugPrint('🔐 [GMAIL SERVICE] User cancelled OAuth flow');
         return GmailConnectionResult.failure('OAuth flow cancelled by user');
@@ -155,23 +165,31 @@ class GmailConnectorService {
         debugPrint('🔐 [GMAIL SERVICE] Got authentication object');
       } catch (e) {
         debugPrint('❌ [GMAIL SERVICE] Failed to get authentication: $e');
-        return GmailConnectionResult.failure('Failed to authenticate: ${e.toString()}');
+        return GmailConnectionResult.failure(
+          'Failed to authenticate: ${e.toString()}',
+        );
       }
-      
+
       // Try to get server auth code (may be null on some platforms)
       final String? serverAuthCode = googleAuth.serverAuthCode;
       final String? accessToken = googleAuth.accessToken;
       final String? idToken = googleAuth.idToken;
 
       debugPrint('🔐 [GMAIL SERVICE] Auth details:');
-      debugPrint('  - Server Auth Code: ${serverAuthCode != null ? "Present" : "Missing"}');
-      debugPrint('  - Access Token: ${accessToken != null ? "Present" : "Missing"}');
+      debugPrint(
+        '  - Server Auth Code: ${serverAuthCode != null ? "Present" : "Missing"}',
+      );
+      debugPrint(
+        '  - Access Token: ${accessToken != null ? "Present" : "Missing"}',
+      );
       debugPrint('  - ID Token: ${idToken != null ? "Present" : "Missing"}');
 
       // For iOS, we might need to use access token if server auth code is not available
       if (serverAuthCode == null && accessToken == null) {
         debugPrint('❌ [GMAIL SERVICE] No auth tokens available');
-        return GmailConnectionResult.failure('Failed to get authentication tokens. Please try again.');
+        return GmailConnectionResult.failure(
+          'Failed to get authentication tokens. Please try again.',
+        );
       }
 
       debugPrint('🔐 [GMAIL SERVICE] Exchanging tokens via Cloud Function...');
@@ -181,25 +199,30 @@ class GmailConnectorService {
         final callable = _functions.httpsCallable('exchangeGoogleAuthCode');
         final result = await callable.call({
           'serverAuthCode': serverAuthCode,
-          'accessToken': accessToken, // Fallback for platforms without server auth code
+          'accessToken':
+              accessToken, // Fallback for platforms without server auth code
           'idToken': idToken,
           'email': googleUser.email,
         });
 
         final data = result.data as Map<String, dynamic>;
-        
+
         if (data['success'] == true) {
           debugPrint('✅ [GMAIL SERVICE] Gmail connected successfully');
           return GmailConnectionResult.success();
         } else {
-          debugPrint('❌ [GMAIL SERVICE] Token exchange failed: ${data['error']}');
+          debugPrint(
+            '❌ [GMAIL SERVICE] Token exchange failed: ${data['error']}',
+          );
           return GmailConnectionResult.failure(
-            data['error'] ?? 'Unknown error during token exchange'
+            data['error'] ?? 'Unknown error during token exchange',
           );
         }
       } catch (e) {
         debugPrint('❌ [GMAIL SERVICE] Cloud Function error: $e');
-        return GmailConnectionResult.failure('Server error during token exchange: ${e.toString()}');
+        return GmailConnectionResult.failure(
+          'Server error during token exchange: ${e.toString()}',
+        );
       }
     } catch (e, stackTrace) {
       debugPrint('❌ [GMAIL SERVICE] Unexpected error connecting Gmail: $e');
@@ -227,10 +250,7 @@ class GmailConnectorService {
       }
 
       // Update Firestore to mark as disconnected
-      await _firestore
-          .collection('gmailAccounts')
-          .doc(user.uid)
-          .update({
+      await _firestore.collection('gmailAccounts').doc(user.uid).update({
         'isConnected': false,
         'disconnectedAt': FieldValue.serverTimestamp(),
       });
@@ -261,7 +281,7 @@ class GmailConnectorService {
       final result = await callable.call();
 
       final data = result.data as Map<String, dynamic>;
-      
+
       if (data['success'] == true) {
         debugPrint('✅ [GMAIL SERVICE] Gmail sync completed successfully');
         return GmailSyncResult.success(
@@ -270,7 +290,7 @@ class GmailConnectorService {
         );
       } else {
         return GmailSyncResult.failure(
-          data['error'] ?? 'Unknown error during sync'
+          data['error'] ?? 'Unknown error during sync',
         );
       }
     } catch (e) {
@@ -309,14 +329,16 @@ class GmailConnectorService {
         .orderBy('lastMessageAt', descending: true)
         .limit(limit)
         .snapshots()
-        .map((snapshot) => snapshot.docs.map((doc) => {
-          'id': doc.id,
-          ...doc.data(),
-        }).toList());
+        .map(
+          (snapshot) => snapshot.docs
+              .map((doc) => {'id': doc.id, ...doc.data()})
+              .toList(),
+        );
   }
 
   /// Stream that emits email thread summaries in real-time
-  Stream<List<EmailThreadSummary>> get emailThreadsStream => _emailThreadsController.stream;
+  Stream<List<EmailThreadSummary>> get emailThreadsStream =>
+      _emailThreadsController.stream;
 
   /// Stream that emits email events (new, updated emails)
   Stream<EmailEvent> get emailEventsStream => _emailEventsController.stream;
@@ -344,8 +366,8 @@ class GmailConnectorService {
         .limit(100)
         .snapshots()
         .listen((snapshot) async {
-      await _handleThreadsUpdate(snapshot);
-    });
+          await _handleThreadsUpdate(snapshot);
+        });
   }
 
   /// Stop monitoring emails
@@ -378,11 +400,15 @@ class GmailConnectorService {
         if (existingThread == null) {
           // This is a completely new thread
           newThreads.add(thread);
-          debugPrint('📧 [GMAIL SERVICE] New email thread detected: ${thread.subject}');
+          debugPrint(
+            '📧 [GMAIL SERVICE] New email thread detected: ${thread.subject}',
+          );
         } else if (thread.lastMessageAt.isAfter(existingThread.lastMessageAt)) {
           // This thread has new messages
           newThreads.add(thread);
-          debugPrint('📧 [GMAIL SERVICE] Updated email thread detected: ${thread.subject}');
+          debugPrint(
+            '📧 [GMAIL SERVICE] Updated email thread detected: ${thread.subject}',
+          );
         }
       }
 
@@ -394,13 +420,17 @@ class GmailConnectorService {
 
       // Emit new email events if any
       if (newThreads.isNotEmpty) {
-        _emailEventsController.add(EmailEvent(
-          type: EmailEventType.newEmails,
-          threads: newThreads,
-          timestamp: DateTime.now(),
-        ));
+        _emailEventsController.add(
+          EmailEvent(
+            type: EmailEventType.newEmails,
+            threads: newThreads,
+            timestamp: DateTime.now(),
+          ),
+        );
 
-        debugPrint('📧 [GMAIL SERVICE] Emitted ${newThreads.length} new email events');
+        debugPrint(
+          '📧 [GMAIL SERVICE] Emitted ${newThreads.length} new email events',
+        );
       }
     } catch (e) {
       debugPrint('❌ [GMAIL SERVICE] Error handling threads update: $e');
@@ -410,16 +440,20 @@ class GmailConnectorService {
   /// Trigger sync and automatically update PDA context
   Future<GmailSyncResult> syncAndUpdateContext() async {
     try {
-      debugPrint('🔄 [GMAIL SERVICE] Syncing Gmail and updating PDA context...');
+      debugPrint(
+        '🔄 [GMAIL SERVICE] Syncing Gmail and updating PDA context...',
+      );
 
       final syncResult = await syncGmailNow();
       if (syncResult.isSuccess) {
         // Emit a context refresh event
-        _emailEventsController.add(EmailEvent(
-          type: EmailEventType.contextRefresh,
-          threads: [],
-          timestamp: DateTime.now(),
-        ));
+        _emailEventsController.add(
+          EmailEvent(
+            type: EmailEventType.contextRefresh,
+            threads: [],
+            timestamp: DateTime.now(),
+          ),
+        );
       }
 
       return syncResult;
@@ -435,13 +469,18 @@ class GmailConnectorService {
       final user = _auth.currentUser;
       if (user == null) return false;
 
-      final fiveMinutesAgo = DateTime.now().subtract(const Duration(minutes: 5));
+      final fiveMinutesAgo = DateTime.now().subtract(
+        const Duration(minutes: 5),
+      );
 
       final recentQuery = await _firestore
           .collection('gmailThreads')
           .doc(user.uid)
           .collection('threads')
-          .where('lastMessageAt', isGreaterThan: Timestamp.fromDate(fiveMinutesAgo))
+          .where(
+            'lastMessageAt',
+            isGreaterThan: Timestamp.fromDate(fiveMinutesAgo),
+          )
           .limit(1)
           .get();
 
@@ -474,20 +513,21 @@ class GmailConnectorService {
           .get();
 
       final summaries = <String>[];
-      
+
       for (final doc in threadsQuery.docs) {
         final data = doc.data();
         final subject = data['subject'] ?? 'No Subject';
         final snippet = data['snippet'] ?? '';
         final from = data['from'] ?? 'Unknown Sender';
         final lastMessageAt = data['lastMessageAt'];
-        
+
         // Create a concise summary for each thread
-        final timeAgo = lastMessageAt != null 
+        final timeAgo = lastMessageAt != null
             ? _formatTimeAgo((lastMessageAt as Timestamp).toDate())
             : 'recently';
-            
-        final summary = 'Email from $from ($timeAgo): "$subject" - ${snippet.length > 100 ? snippet.substring(0, 100) + '...' : snippet}';
+
+        final summary =
+            'Email from $from ($timeAgo): "$subject" - ${snippet.length > 100 ? snippet.substring(0, 100) + '...' : snippet}';
         summaries.add(summary);
       }
 
@@ -534,13 +574,17 @@ class EmailThreadSummary {
     required this.labels,
   });
 
-  factory EmailThreadSummary.fromFirestore(String id, Map<String, dynamic> data) {
+  factory EmailThreadSummary.fromFirestore(
+    String id,
+    Map<String, dynamic> data,
+  ) {
     return EmailThreadSummary(
       threadId: id,
       subject: data['subject'] ?? 'No Subject',
       snippet: data['snippet'] ?? '',
       from: data['from'] ?? 'Unknown Sender',
-      lastMessageAt: (data['lastMessageAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      lastMessageAt:
+          (data['lastMessageAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       messageCount: data['messageCount'] ?? 1,
       labels: List<String>.from(data['labels'] ?? []),
     );
@@ -568,10 +612,7 @@ class EmailThreadSummary {
 }
 
 /// Email event types
-enum EmailEventType {
-  newEmails,
-  contextRefresh,
-}
+enum EmailEventType { newEmails, contextRefresh }
 
 /// Represents an email event (new emails, context refresh, etc.)
 class EmailEvent {
@@ -605,8 +646,11 @@ class GmailSyncResult {
   GmailSyncResult.success({
     required this.threadsCount,
     required this.messagesCount,
-  }) : isSuccess = true, error = null;
-  
-  GmailSyncResult.failure(this.error) 
-      : isSuccess = false, threadsCount = 0, messagesCount = 0;
+  }) : isSuccess = true,
+       error = null;
+
+  GmailSyncResult.failure(this.error)
+    : isSuccess = false,
+      threadsCount = 0,
+      messagesCount = 0;
 }

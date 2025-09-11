@@ -1870,7 +1870,20 @@ class _PdaChatGptStylePageState extends State<PdaChatGptStylePage> {
                     subtitle: _isGmailConnected ? 'Connected' : 'Connect',
                     isConnected: _isGmailConnected,
                     isLoading: _isConnectingGmail,
-                    onTap: _onConnectGmailPressed,
+                    onTap: () {
+                      if (_isGmailConnected) {
+                        context.push(RoutePaths.gmail);
+                      } else {
+                        _onConnectGmailPressed();
+                      }
+                    },
+                    onLongPress: () {
+                      if (_isGmailConnected) {
+                        _showGmailOptionsDialog();
+                      } else {
+                        _onConnectGmailPressed();
+                      }
+                    },
                   ),
                   const SizedBox(height: 12),
 
@@ -2032,6 +2045,7 @@ class _PdaChatGptStylePageState extends State<PdaChatGptStylePage> {
     required bool isConnected,
     required bool isLoading,
     required VoidCallback onTap,
+    VoidCallback? onLongPress,
   }) {
     return InkWell(
       onTap: isLoading
@@ -2039,6 +2053,14 @@ class _PdaChatGptStylePageState extends State<PdaChatGptStylePage> {
           : () {
               debugPrint('🔥 Plugin button pressed: $title');
               onTap();
+            },
+      onLongPress: isLoading
+          ? null
+          : () {
+              if (onLongPress != null) {
+                debugPrint('🔥 Plugin button long-pressed: $title');
+                onLongPress();
+              }
             },
       borderRadius: BorderRadius.circular(12),
       child: Container(

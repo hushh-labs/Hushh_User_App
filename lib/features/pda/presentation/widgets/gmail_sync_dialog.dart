@@ -18,10 +18,23 @@ class _GmailSyncDialogState extends State<GmailSyncDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final bg = isDark ? Colors.black : Colors.white;
+    final fg = isDark ? Colors.white : Colors.black;
+    final subtle = isDark ? Colors.white70 : Colors.black54;
+    // Intentionally not used at root level; borders are set per-section
+
     return AlertDialog(
+      backgroundColor: bg,
       title: const Text(
         'Gmail Sync Settings',
         style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+      ),
+      titleTextStyle: TextStyle(
+        color: fg,
+        fontSize: 18,
+        fontWeight: FontWeight.w600,
       ),
       content: SizedBox(
         width: double.maxFinite,
@@ -29,9 +42,9 @@ class _GmailSyncDialogState extends State<GmailSyncDialog> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
+            Text(
               'How much email data would you like to store?',
-              style: TextStyle(fontSize: 14, color: Colors.grey),
+              style: TextStyle(fontSize: 14, color: subtle),
             ),
             const SizedBox(height: 16),
             ..._buildDurationOptions(),
@@ -47,13 +60,13 @@ class _GmailSyncDialogState extends State<GmailSyncDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
+          child: Text('Cancel', style: TextStyle(color: subtle)),
         ),
         ElevatedButton(
           onPressed: _isValidSelection() ? _onSyncPressed : null,
           style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFFA342FF),
-            foregroundColor: Colors.white,
+            backgroundColor: isDark ? Colors.white : Colors.black,
+            foregroundColor: isDark ? Colors.black : Colors.white,
           ),
           child: const Text('Start Sync'),
         ),
@@ -63,6 +76,11 @@ class _GmailSyncDialogState extends State<GmailSyncDialog> {
 
   List<Widget> _buildDurationOptions() {
     return SyncDuration.values.map((duration) {
+      final theme = Theme.of(context);
+      final isDark = theme.brightness == Brightness.dark;
+      final fg = isDark ? Colors.white : Colors.black;
+      final subtle = isDark ? Colors.white70 : Colors.black54;
+
       return RadioListTile<SyncDuration>(
         value: duration,
         groupValue: _selectedDuration,
@@ -75,29 +93,41 @@ class _GmailSyncDialogState extends State<GmailSyncDialog> {
             }
           });
         },
-        title: Text(duration.displayName),
+        title: Text(duration.displayName, style: TextStyle(color: fg)),
         subtitle: duration != SyncDuration.custom
-            ? Text(_getDurationSubtitle(duration))
-            : const Text('Select custom date range'),
+            ? Text(
+                _getDurationSubtitle(duration),
+                style: TextStyle(color: subtle),
+              )
+            : Text('Select custom date range', style: TextStyle(color: subtle)),
         contentPadding: EdgeInsets.zero,
-        activeColor: const Color(0xFFA342FF),
+        activeColor: isDark ? Colors.white : Colors.black,
       );
     }).toList();
   }
 
   Widget _buildCustomDatePicker() {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final fg = isDark ? Colors.white : Colors.black;
+    final border = isDark ? Colors.white24 : Colors.black26;
+
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        border: Border.all(color: Colors.grey.shade300),
+        border: Border.all(color: border),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             'Custom Date Range',
-            style: TextStyle(fontWeight: FontWeight.w500, fontSize: 14),
+            style: TextStyle(
+              fontWeight: FontWeight.w500,
+              fontSize: 14,
+              color: fg,
+            ),
           ),
           const SizedBox(height: 8),
           Row(
@@ -129,30 +159,30 @@ class _GmailSyncDialogState extends State<GmailSyncDialog> {
     required DateTime? date,
     required VoidCallback onPressed,
   }) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final fg = isDark ? Colors.white : Colors.black;
+    final subtle = isDark ? Colors.white70 : Colors.black54;
+    final border = isDark ? Colors.white38 : Colors.black38;
+
     return InkWell(
       onTap: onPressed,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
-          border: Border.all(color: Colors.grey.shade400),
+          border: Border.all(color: border),
           borderRadius: BorderRadius.circular(6),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              label,
-              style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
-            ),
+            Text(label, style: TextStyle(fontSize: 12, color: subtle)),
             const SizedBox(height: 2),
             Text(
               date != null
                   ? '${date.day}/${date.month}/${date.year}'
                   : 'Select date',
-              style: TextStyle(
-                fontSize: 14,
-                color: date != null ? Colors.black : Colors.grey.shade500,
-              ),
+              style: TextStyle(fontSize: 14, color: date != null ? fg : subtle),
             ),
           ],
         ),
@@ -161,6 +191,12 @@ class _GmailSyncDialogState extends State<GmailSyncDialog> {
   }
 
   Widget _buildStorageInfo() {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final bg = isDark ? Colors.grey.shade900 : Colors.grey.shade100;
+    final icon = isDark ? Colors.white70 : Colors.black54;
+    final text = isDark ? Colors.white70 : Colors.black87;
+
     int estimatedDays = _selectedDuration.days;
     if (_selectedDuration == SyncDuration.custom &&
         _customStartDate != null &&
@@ -171,18 +207,18 @@ class _GmailSyncDialogState extends State<GmailSyncDialog> {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.blue.shade50,
+        color: bg,
         borderRadius: BorderRadius.circular(8),
       ),
       child: Row(
         children: [
-          Icon(Icons.info_outline, color: Colors.blue.shade600, size: 20),
+          Icon(Icons.info_outline, color: icon, size: 20),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
               'Approximately $estimatedDays days of email data will be synced. '
               'This includes subject, sender, and content for PDA analysis.',
-              style: TextStyle(fontSize: 12, color: Colors.blue.shade700),
+              style: TextStyle(fontSize: 12, color: text),
             ),
           ),
         ],

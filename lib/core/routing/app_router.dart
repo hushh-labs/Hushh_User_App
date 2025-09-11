@@ -10,6 +10,7 @@ import 'package:hushh_user_app/features/auth/presentation/pages/card_created_suc
 import 'package:hushh_user_app/features/auth/presentation/pages/video_recording_page.dart';
 import 'package:hushh_user_app/features/pda/presentation/pages/pda_chatgpt_style_page.dart';
 import 'package:hushh_user_app/features/vault/presentation/pages/vault_page.dart';
+import 'package:hushh_user_app/features/pda/presentation/pages/gmail_page.dart';
 import 'package:hushh_user_app/features/vault/presentation/bloc/vault_bloc.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:get_it/get_it.dart';
@@ -88,6 +89,13 @@ class AppRouter {
           create: (context) => GetIt.instance<VaultBloc>(),
           child: const VaultPage(),
         ),
+      ),
+
+      // Gmail page
+      GoRoute(
+        path: RoutePaths.gmail,
+        name: 'gmail',
+        builder: (context, state) => const GmailPage(),
       ),
 
       // Auth routes for login/register pages

@@ -43,15 +43,84 @@ serve(async (req) => {
     }
 
     // Setup Gmail API client
-    const accessToken = gmailAccount.accessToken
+    let accessToken = gmailAccount.accessToken
     const refreshToken = gmailAccount.refreshToken
 
     if (!accessToken && !refreshToken) {
       throw new Error('No valid tokens found for Gmail API access')
     }
 
-    // Helper function to make Gmail API requests with rate limiting
-    async function makeGmailRequest(url: string, token: string, retryCount = 0) {
+    // Helper to refresh access token using refresh_token
+    async function refreshAccessToken(): Promise<string | null> {
+      try {
+        if (!refreshToken) return null;
+
+        // Prefer Gmail creds; fall back to Google Meet creds if Gmail not set
+        const clientId =
+          Deno.env.get('GMAIL_CLIENT_ID') || Deno.env.get('GOOGLE_MEET_CLIENT_ID')
+        const clientSecret =
+          Deno.env.get('GMAIL_CLIENT_SECRET') || Deno.env.get('GOOGLE_MEET_CLIENT_SECRET')
+        if (!clientId || !clientSecret) {
+          console.error('❌ [GMAIL INCREMENTAL] Missing OAuth CLIENT_ID/SECRET (looked for GMAIL_* then GOOGLE_MEET_*)')
+          return null
+        }
+
+        if (Deno.env.get('GMAIL_CLIENT_ID')) {
+          console.log('🔐 [GMAIL INCREMENTAL] Using GMAIL_CLIENT_ID/SECRET for refresh')
+        } else {
+          console.log('🔐 [GMAIL INCREMENTAL] Using GOOGLE_MEET_CLIENT_ID/SECRET for refresh (fallback)')
+        }
+
+        const tokenResp = await fetch('https://oauth2.googleapis.com/token', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({
+            client_id: clientId,
+            client_secret: clientSecret,
+            refresh_token: refreshToken,
+            grant_type: 'refresh_token',
+          }),
+        })
+
+        if (!tokenResp.ok) {
+          const t = await tokenResp.text()
+          console.error(`❌ [GMAIL INCREMENTAL] Token refresh failed: ${t}`)
+          return null
+        }
+
+        const tokenJson = await tokenResp.json()
+        const newAccessToken = tokenJson.access_token as string | undefined
+        const expiresIn = tokenJson.expires_in as number | undefined
+        if (!newAccessToken) {
+          console.error('❌ [GMAIL INCREMENTAL] Token refresh response missing access_token')
+          return null
+        }
+
+        // Persist new access token
+        const { error: tokenUpdateError } = await supabase
+          .from('gmail_accounts')
+          .update({
+            accessToken: newAccessToken,
+            accessTokenExpiresAt: expiresIn ? new Date(Date.now() + expiresIn * 1000).toISOString() : null,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('userId', userId)
+
+        if (tokenUpdateError) {
+          console.error('❌ [GMAIL INCREMENTAL] Failed to persist refreshed token:', tokenUpdateError)
+        } else {
+          console.log('🔐 [GMAIL INCREMENTAL] Access token refreshed and stored')
+        }
+
+        return newAccessToken
+      } catch (e) {
+        console.error('❌ [GMAIL INCREMENTAL] Error refreshing token:', e)
+        return null
+      }
+    }
+
+    // Helper function to make Gmail API requests with rate limiting and 401 refresh
+    async function makeGmailRequest(url: string, token: string, retryCount = 0, refreshed = false) {
       const response = await fetch(url, {
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -61,19 +130,36 @@ serve(async (req) => {
 
       if (!response.ok) {
         const errorText = await response.text()
-        
+
+        // On unauthorized, attempt single refresh and retry once
+        if (response.status === 401 && !refreshed) {
+          console.log('🔐 [GMAIL INCREMENTAL] Access token expired, attempting refresh...')
+          const newToken = await refreshAccessToken()
+          if (newToken) {
+            accessToken = newToken
+            return makeGmailRequest(url, accessToken, retryCount, true)
+          }
+        }
+
         // Handle rate limiting with exponential backoff
         if (response.status === 429 && retryCount < 3) {
           const delay = Math.pow(2, retryCount) * 1000 // 1s, 2s, 4s
           console.log(`⚠️ [GMAIL INCREMENTAL] Rate limited, retrying in ${delay}ms (attempt ${retryCount + 1})`)
           await new Promise(resolve => setTimeout(resolve, delay))
-          return makeGmailRequest(url, token, retryCount + 1)
+          return makeGmailRequest(url, token, retryCount + 1, refreshed)
         }
-        
+
         throw new Error(`Gmail API error: ${response.status} - ${errorText}`)
       }
 
       return response.json()
+    }
+
+    // If there is a refresh token and the access token is missing, refresh first
+    if (!accessToken && refreshToken) {
+      const newToken = await refreshAccessToken()
+      if (!newToken) throw new Error('Failed to refresh access token')
+      accessToken = newToken
     }
 
     // Helper function to process requests in batches
