@@ -25,6 +25,7 @@ class RoutePaths {
   static const String settings = '/settings';
   static const String notifications = '/notifications';
   static const String vault = '/vault';
+  static const String gmail = '/gmail';
 }
 
 class RouteNames {
