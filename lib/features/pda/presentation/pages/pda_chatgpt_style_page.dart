@@ -2425,7 +2425,7 @@ class _PdaChatGptStylePageState extends State<PdaChatGptStylePage> {
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: userBubbleColor,
+                      color: Color(0xFFF1F2F4),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Column(
@@ -2442,7 +2442,7 @@ class _PdaChatGptStylePageState extends State<PdaChatGptStylePage> {
                             message.content,
                             style: const TextStyle(
                               fontSize: 15,
-                              color: Colors.white,
+                              color: Colors.black87,
                               height: 1.5,
                             ),
                           ),
@@ -2458,10 +2458,10 @@ class _PdaChatGptStylePageState extends State<PdaChatGptStylePage> {
               width: 32,
               height: 32,
               decoration: BoxDecoration(
-                color: userBubbleColor,
+                color: Color(0xFFF1F2F4),
                 borderRadius: BorderRadius.circular(16),
               ),
-              child: const Icon(Icons.person, color: Colors.white, size: 18),
+              child: const Icon(Icons.person, color: Colors.black87, size: 18),
             ),
           ],
         ),

@@ -248,6 +248,12 @@ class _MessageBubbleState extends State<MessageBubble> {
     }
   }
 
+  // Helper method to check if message has both text and image
+  bool _hasTextAndImage() {
+    return widget.message.type == MessageType.image && 
+           widget.message.text.isNotEmpty;
+  }
+
   Widget _buildTextMessage(bool isRightAligned) {
     return Text(
       widget.message.text,

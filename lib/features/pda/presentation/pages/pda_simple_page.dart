@@ -136,8 +136,7 @@ class _PdaSimplePageState extends State<PdaSimplePage> {
         (messages) {
           if (mounted) {
             setState(() {
-              // Reverse the messages to show oldest first (chronological order)
-              _messages = messages.reversed.toList();
+              _messages = messages;
               _isLoadingMessages = false;
             });
             _scrollToBottom();
@@ -1145,8 +1144,10 @@ class _PdaSimplePageState extends State<PdaSimplePage> {
   Widget _buildChatMessageBubble(PdaMessage message) {
     final isUser = message.isFromUser;
     final alignment = isUser ? Alignment.centerRight : Alignment.centerLeft;
-    final bubbleColor = isUser ? Colors.white : chatBubblePda;
-    final textColor = isUser ? Colors.white : Colors.black87;
+    // Make user-sent prompt bubble a fixed light grey to avoid theme issues
+    final bubbleColor = isUser ? const Color(0xFFF1F2F4) : chatBubblePda;
+    // Use solid dark text for both for readability on light backgrounds
+    final textColor = Colors.black87;
     final borderColor = isUser
         ? primaryPurple.withValues(alpha: 0.3)
         : _PdaSimplePageState.borderColor; // User gets subtle purple border
@@ -1166,17 +1167,9 @@ class _PdaSimplePageState extends State<PdaSimplePage> {
             horizontal: 16,
           ), // More padding
           decoration: BoxDecoration(
-            color: isUser ? null : bubbleColor,
-            gradient: isUser
-                ? const LinearGradient(
-                    colors: [
-                      Color(0xFFA342FF), // Purple
-                      Color(0xFFE54D60), // Pink
-                    ],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  )
-                : null,
+            // Use solid color for both user and PDA bubbles
+            color: bubbleColor,
+            gradient: null,
             borderRadius: BorderRadius.only(
               topLeft: const Radius.circular(16),
               topRight: const Radius.circular(16),
