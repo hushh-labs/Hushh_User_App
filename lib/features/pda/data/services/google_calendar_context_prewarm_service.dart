@@ -213,7 +213,7 @@ class GoogleCalendarContextPrewarmService {
     debugPrint('🔍 [CALENDAR DEBUG] Building PDA context for user: $userId');
     debugPrint('🔍 [CALENDAR DEBUG] Current time: $now');
     debugPrint(
-      '🔍 [CALENDAR DEBUG] Upcoming events count: ${upcomingEvents.length}',
+      '🔍 [CALENDAR DEBUG] Raw upcoming events count: ${upcomingEvents.length}',
     );
     debugPrint(
       '🔍 [CALENDAR DEBUG] Recent events count: ${recentEvents.length}',
@@ -222,11 +222,29 @@ class GoogleCalendarContextPrewarmService {
       '🔍 [CALENDAR DEBUG] Meeting events count: ${meetingEvents.length}',
     );
 
-    // Log all upcoming events for debugging
-    for (int i = 0; i < upcomingEvents.length && i < 5; i++) {
-      final event = upcomingEvents[i];
+    // Filter out past events from "upcoming" events (defensive programming)
+    final actualUpcomingEvents = upcomingEvents.where((event) {
+      final eventLocalTime = event.startTime.toLocal();
+      final isActuallyUpcoming = eventLocalTime.isAfter(now);
+      
+      if (!isActuallyUpcoming) {
+        debugPrint(
+          '⚠️ [CALENDAR DEBUG] Filtering out past event from "upcoming": ${event.summary} at ${event.startTime} (UTC) / ${eventLocalTime} (Local) - Current: $now',
+        );
+      }
+      
+      return isActuallyUpcoming;
+    }).toList();
+
+    debugPrint(
+      '🔍 [CALENDAR DEBUG] Filtered upcoming events count: ${actualUpcomingEvents.length}',
+    );
+
+    // Log all actual upcoming events for debugging
+    for (int i = 0; i < actualUpcomingEvents.length && i < 5; i++) {
+      final event = actualUpcomingEvents[i];
       debugPrint(
-        '🔍 [CALENDAR DEBUG] Upcoming event $i: ${event.summary} at ${event.startTime} (UTC) / ${event.startTime.toLocal()} (Local)',
+        '🔍 [CALENDAR DEBUG] Actual upcoming event $i: ${event.summary} at ${event.startTime} (UTC) / ${event.startTime.toLocal()} (Local)',
       );
     }
 
@@ -249,7 +267,7 @@ class GoogleCalendarContextPrewarmService {
 
     // Categorize events for PDA with extended future coverage
     // Convert UTC times to local time (IST) for proper comparison
-    final todayEvents = upcomingEvents.where((event) {
+    final todayEvents = actualUpcomingEvents.where((event) {
       final eventDate = event.startTime.toLocal(); // Convert UTC to local time
       final isToday =
           eventDate.year == now.year &&
@@ -272,7 +290,7 @@ class GoogleCalendarContextPrewarmService {
       '🔍 [CALENDAR DEBUG] Today events count: ${allTodayEvents.length} (${todayEvents.length} upcoming, ${todayCompletedEvents.length} completed)',
     );
 
-    final tomorrowEvents = upcomingEvents.where((event) {
+    final tomorrowEvents = actualUpcomingEvents.where((event) {
       final tomorrow = now.add(const Duration(days: 1));
       final eventDate = event.startTime.toLocal(); // Convert UTC to local time
       return eventDate.year == tomorrow.year &&
@@ -280,14 +298,14 @@ class GoogleCalendarContextPrewarmService {
           eventDate.day == tomorrow.day;
     }).toList();
 
-    final thisWeekEvents = upcomingEvents.where((event) {
+    final thisWeekEvents = actualUpcomingEvents.where((event) {
       final weekFromNow = now.add(const Duration(days: 7));
       final eventLocalTime = event.startTime.toLocal();
       return eventLocalTime.isAfter(now) &&
           eventLocalTime.isBefore(weekFromNow);
     }).toList();
 
-    final nextWeekEvents = upcomingEvents.where((event) {
+    final nextWeekEvents = actualUpcomingEvents.where((event) {
       final nextWeekStart = now.add(const Duration(days: 7));
       final nextWeekEnd = now.add(const Duration(days: 14));
       final eventLocalTime = event.startTime.toLocal();
@@ -295,21 +313,21 @@ class GoogleCalendarContextPrewarmService {
           eventLocalTime.isBefore(nextWeekEnd);
     }).toList();
 
-    final thisMonthEvents = upcomingEvents.where((event) {
+    final thisMonthEvents = actualUpcomingEvents.where((event) {
       final monthFromNow = now.add(const Duration(days: 30));
       final eventLocalTime = event.startTime.toLocal();
       return eventLocalTime.isAfter(now) &&
           eventLocalTime.isBefore(monthFromNow);
     }).toList();
 
-    final futureEvents = upcomingEvents.where((event) {
+    final futureEvents = actualUpcomingEvents.where((event) {
       final monthFromNow = now.add(const Duration(days: 30));
       final eventLocalTime = event.startTime.toLocal();
       return eventLocalTime.isAfter(monthFromNow);
     }).toList();
 
     // Get next immediate meeting
-    final nextMeeting = upcomingEvents.isNotEmpty ? upcomingEvents.first : null;
+    final nextMeeting = actualUpcomingEvents.isNotEmpty ? actualUpcomingEvents.first : null;
 
     // Build context summary with current date/time
     final contextSummary = {
@@ -324,7 +342,7 @@ class GoogleCalendarContextPrewarmService {
         'timezone': 'Asia/Calcutta (UTC+5:30)',
       },
       'summary': {
-        'totalUpcoming': upcomingEvents.length,
+        'totalUpcoming': actualUpcomingEvents.length,
         'todayCount': allTodayEvents.length,
         'tomorrowCount': tomorrowEvents.length,
         'thisWeekCount': thisWeekEvents.length,

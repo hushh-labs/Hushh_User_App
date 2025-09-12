@@ -207,12 +207,14 @@ class MicroPromptsBloc extends Bloc<MicroPromptsEvent, MicroPromptsState> {
           id: _uuid.v4(),
           userId: event.userId,
           lastPromptShownAt: null,
-          nextPromptScheduledAt: DateTime.now().add(const Duration(minutes: 2)),
+          nextPromptScheduledAt: DateTime.now().add(
+            const Duration(minutes: 30),
+          ),
           quietHoursStart: '23:00:00',
           quietHoursEnd: '07:00:00',
           timezone: 'UTC',
           isPromptsEnabled: true,
-          promptFrequencyMinutes: 2,
+          promptFrequencyMinutes: 30,
           createdAt: DateTime.now(),
           updatedAt: DateTime.now(),
         );

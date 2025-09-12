@@ -26,12 +26,12 @@ class MicroPromptsSchedulerService {
     _startPeriodicCheck();
   }
 
-  /// Start the periodic check timer (every 2 minutes for testing)
+  /// Start the periodic check timer (every 30 minutes in production)
   void _startPeriodicCheck() {
     _schedulerTimer?.cancel();
 
     _schedulerTimer = Timer.periodic(
-      const Duration(minutes: 2),
+      const Duration(minutes: 30),
       (timer) => _checkAndShowPrompt(),
     );
 
