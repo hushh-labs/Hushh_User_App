@@ -22,6 +22,18 @@ class GoogleCalendarSupabaseDataSourceImpl
       debugPrint(
         '📅 [CALENDAR SUPABASE] Getting calendar events for user: $userId',
       );
+      debugPrint(
+        '📅 [CALENDAR SUPABASE] Date range: ${startDate?.toIso8601String()} to ${endDate?.toIso8601String()}',
+      );
+
+      // First, let's check if there are ANY calendar events for this user
+      final totalEventsResponse = await _supabase
+          .from('google_calendar_events')
+          .select('id')
+          .eq('userId', userId);
+      debugPrint(
+        '📅 [CALENDAR SUPABASE] Total events for user: ${totalEventsResponse.length}',
+      );
 
       // Build the query step by step
       var queryBuilder = _supabase
@@ -51,6 +63,10 @@ class GoogleCalendarSupabaseDataSourceImpl
       }
 
       final response = await finalQuery;
+      debugPrint(
+        '📅 [CALENDAR SUPABASE] Raw response: ${response.length} items',
+      );
+
       final events = (response as List)
           .map((e) => GoogleCalendarEventModel.fromJson(e))
           .toList();
@@ -58,6 +74,12 @@ class GoogleCalendarSupabaseDataSourceImpl
       debugPrint(
         '📅 [CALENDAR SUPABASE] Found ${events.length} calendar events',
       );
+
+      if (events.isNotEmpty) {
+        debugPrint(
+          '📅 [CALENDAR SUPABASE] First event: ${events.first.summary} at ${events.first.startTime}',
+        );
+      }
 
       return events;
     } catch (e) {

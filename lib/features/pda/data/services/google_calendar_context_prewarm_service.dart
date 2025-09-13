@@ -148,6 +148,12 @@ class GoogleCalendarContextPrewarmService {
         debugPrint(
           '📊 [CALENDAR PREWARM] Sync result: ${syncResult['syncedData']}',
         );
+
+        // Clear PDA context cache after successful sync to ensure fresh data
+        await _clearPDAContextCache(userId);
+        debugPrint(
+          '🧹 [CALENDAR PREWARM] Cleared PDA context cache after sync',
+        );
       } else {
         debugPrint(
           '⚠️ [CALENDAR PREWARM] Sync failed: ${syncResult['message']}',
@@ -200,6 +206,7 @@ class GoogleCalendarContextPrewarmService {
       debugPrint('❌ [CALENDAR PREWARM] Overall error refreshing context: $e');
     }
   }
+
   /// Build comprehensive PDA context from calendar data
   Future<Map<String, dynamic>> _buildPDAContext(
     String userId,
@@ -226,13 +233,13 @@ class GoogleCalendarContextPrewarmService {
     final actualUpcomingEvents = upcomingEvents.where((event) {
       final eventLocalTime = event.startTime.toLocal();
       final isActuallyUpcoming = eventLocalTime.isAfter(now);
-      
+
       if (!isActuallyUpcoming) {
         debugPrint(
           '⚠️ [CALENDAR DEBUG] Filtering out past event from "upcoming": ${event.summary} at ${event.startTime} (UTC) / ${eventLocalTime} (Local) - Current: $now',
         );
       }
-      
+
       return isActuallyUpcoming;
     }).toList();
 
@@ -327,7 +334,9 @@ class GoogleCalendarContextPrewarmService {
     }).toList();
 
     // Get next immediate meeting
-    final nextMeeting = actualUpcomingEvents.isNotEmpty ? actualUpcomingEvents.first : null;
+    final nextMeeting = actualUpcomingEvents.isNotEmpty
+        ? actualUpcomingEvents.first
+        : null;
 
     // Build context summary with current date/time
     final contextSummary = {
@@ -458,6 +467,19 @@ class GoogleCalendarContextPrewarmService {
     };
 
     return contextSummary;
+  }
+
+  /// Clear PDA context cache to force fresh data fetch
+  Future<void> _clearPDAContextCache(String userId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('${_contextCacheKey}_$userId');
+      debugPrint(
+        '🧹 [CALENDAR PDA] Cleared PDA context cache for user: $userId',
+      );
+    } catch (e) {
+      debugPrint('❌ [CALENDAR PDA] Error clearing PDA context cache: $e');
+    }
   }
 
   /// Cache PDA context for immediate access
@@ -835,7 +857,9 @@ ${nextMeeting['meetLink'] != null ? '- Meet Link: ${nextMeeting['meetLink']}' : 
 - Provide current date/time context for accurate scheduling assistance
 - Track recent meeting history for follow-up and context
 ''';
-    debugPrint('📝 [CALENDAR PDA] Formatted context for PDA: $formattedContext');
+    debugPrint(
+      '📝 [CALENDAR PDA] Formatted context for PDA: $formattedContext',
+    );
     return formattedContext;
   }
 
