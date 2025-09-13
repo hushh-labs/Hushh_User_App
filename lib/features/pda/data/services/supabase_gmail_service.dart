@@ -75,22 +75,23 @@ class SupabaseGmailService {
   GoogleSignIn _getGoogleSignIn() {
     if (_googleSignIn == null) {
       try {
-        // Using the Web Client ID for server-side token exchange
+        // Using the Google Meet Client ID that works for server-side token exchange
         const webClientId =
-            '53407187172-nremqtd8hlmnqbcc6jkfavlk6iljq803.apps.googleusercontent.com';
+            '53407187172-19ngqhdrank8o2c0ai5g566sk6q10jq8.apps.googleusercontent.com';
 
         _googleSignIn = GoogleSignIn(
           scopes: [
             'email',
             'profile',
             'https://www.googleapis.com/auth/gmail.readonly',
+            'https://www.googleapis.com/auth/gmail.modify',
           ],
           // For iOS, serverClientId is required for server-side access
           serverClientId: Platform.isIOS ? webClientId : null,
           hostedDomain: null,
         );
 
-        debugPrint('✅ [GMAIL SERVICE] GoogleSignIn initialized successfully');
+        debugPrint('✅ [GMAIL SERVICE] GoogleSignIn initialized successfully with Google Meet client ID');
       } catch (e) {
         debugPrint('❌ [GMAIL SERVICE] Error initializing GoogleSignIn: $e');
         // Create a basic instance without serverClientId as fallback
@@ -99,6 +100,7 @@ class SupabaseGmailService {
             'email',
             'profile',
             'https://www.googleapis.com/auth/gmail.readonly',
+            'https://www.googleapis.com/auth/gmail.modify',
           ],
         );
       }
@@ -125,7 +127,7 @@ class SupabaseGmailService {
   /// Stream to listen to email updates
   Stream<List<GmailEmail>> get emailsStream => _emailController.stream;
 
-  /// Connect Gmail account by performing OAuth flow and showing sync dialog
+  /// Connect Gmail account by performing OAuth flow
   Future<GmailConnectionResult> connectGmail() async {
     try {
       final user = _auth.currentUser;
