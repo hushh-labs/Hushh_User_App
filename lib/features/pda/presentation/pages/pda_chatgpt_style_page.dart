@@ -1083,9 +1083,7 @@ class _PdaChatGptStylePageState extends State<PdaChatGptStylePage> {
   Future<void> _showInitialSyncDialog() async {
     await showGmailSyncDialog(
       context,
-      onSyncSelected: (syncOptions) async {
-        await _triggerGmailSyncWithOptions(syncOptions);
-      },
+      onSyncSelected: _triggerGmailSyncWithOptions,
     );
   }
 
@@ -1132,52 +1130,81 @@ class _PdaChatGptStylePageState extends State<PdaChatGptStylePage> {
   Future<void> _showSyncOptionsDialog() async {
     await showGmailSyncDialog(
       context,
-      onSyncSelected: (syncOptions) async {
-        await _triggerGmailSyncWithOptions(syncOptions);
-      },
+      onSyncSelected: _triggerGmailSyncWithOptions,
     );
   }
 
   Future<void> _triggerGmailSyncWithOptions(SyncOptions syncOptions) async {
-    // Show sync progress dialog with PDA animation
-    showSyncProgressDialog(
-      context,
-      title: 'Syncing Gmail',
-      description: 'Fetching emails from ${syncOptions.duration.displayName}',
-      onCompleted: () {
-        if (mounted) {
+    // Show immediate feedback that sync has started
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Text('🔄 Gmail sync started in background...'),
+            ],
+          ),
+          backgroundColor: Colors.blue,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    }
+
+    // Start background sync (don't await - let it run in background)
+    _performBackgroundGmailSync(syncOptions);
+  }
+
+  Future<void> _performBackgroundGmailSync(SyncOptions syncOptions) async {
+    try {
+      debugPrint('🔄 [GMAIL SYNC] Starting background sync...');
+      final result = await _supabaseGmailService.syncEmails(syncOptions);
+
+      if (mounted) {
+        if (result.isSuccess) {
+          // Show success notification
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('✅ Gmail sync completed successfully!'),
               backgroundColor: Colors.green,
-              duration: Duration(seconds: 2),
+              duration: Duration(seconds: 3),
+            ),
+          );
+
+          // Trigger PDA prewarming after successful sync
+          debugPrint('🚀 [PDA] Triggering prewarming after Gmail sync...');
+          try {
+            await _preprocessingManager.startPreprocessing();
+            debugPrint('✅ [PDA] Prewarming completed after Gmail sync');
+          } catch (e) {
+            debugPrint('❌ [PDA] Prewarming failed after Gmail sync: $e');
+          }
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('⚠️ Gmail sync failed: ${result.error}'),
+              backgroundColor: Colors.orange,
+              duration: const Duration(seconds: 4),
             ),
           );
         }
-      },
-    );
-
-    try {
-      final result = await _supabaseGmailService.syncEmails(syncOptions);
-
-      if (!result.isSuccess && mounted) {
-        Navigator.of(context).pop(); // Close progress dialog
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('⚠️ Gmail sync failed: ${result.error}'),
-            backgroundColor: Colors.orange,
-            duration: const Duration(seconds: 3),
-          ),
-        );
       }
     } catch (e) {
+      debugPrint('❌ [GMAIL SYNC] Background sync error: $e');
       if (mounted) {
-        Navigator.of(context).pop(); // Close progress dialog
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('❌ Error during Gmail sync: $e'),
+            content: Text('❌ Gmail sync error: $e'),
             backgroundColor: Colors.red,
-            duration: const Duration(seconds: 3),
+            duration: const Duration(seconds: 4),
           ),
         );
       }

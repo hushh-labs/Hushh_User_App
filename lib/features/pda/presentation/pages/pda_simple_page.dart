@@ -356,9 +356,7 @@ class _PdaSimplePageState extends State<PdaSimplePage> {
   Future<void> _showInitialSyncDialog() async {
     await showGmailSyncDialog(
       context,
-      onSyncSelected: (syncOptions) async {
-        await _triggerGmailSyncWithOptions(syncOptions);
-      },
+      onSyncSelected: _triggerGmailSyncWithOptions,
     );
   }
 
@@ -415,47 +413,76 @@ class _PdaSimplePageState extends State<PdaSimplePage> {
 
   /// Trigger Gmail sync with options
   Future<void> _triggerGmailSyncWithOptions(SyncOptions syncOptions) async {
-    try {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              '🔄 Syncing Gmail (${syncOptions.duration.displayName})...',
-            ),
-            duration: const Duration(seconds: 2),
-          ),
-        );
-      }
-
-      final result = await _supabaseGmailService.syncEmails(syncOptions);
-
-      if (result.isSuccess && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              '✅ Gmail sync completed! Stored ${result.messagesCount} emails.',
-            ),
-            backgroundColor: Colors.green,
-            duration: const Duration(seconds: 3),
-          ),
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('⚠️ Gmail sync failed: ${result.error}'),
-            backgroundColor: Colors.orange,
-            duration: const Duration(seconds: 3),
-          ),
-        );
-      }
-    } catch (e) {
+    // Show immediate feedback that sync has started
+    if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('❌ Error during Gmail sync: $e'),
-          backgroundColor: Colors.red,
+          content: Row(
+            children: [
+              SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Text('🔄 Gmail sync started in background...'),
+            ],
+          ),
+          backgroundColor: Colors.blue,
           duration: const Duration(seconds: 3),
         ),
       );
+    }
+
+    // Start background sync (don't await - let it run in background)
+    _performBackgroundGmailSync(syncOptions);
+  }
+
+  Future<void> _performBackgroundGmailSync(SyncOptions syncOptions) async {
+    try {
+      debugPrint('🔄 [GMAIL SYNC] Starting background sync...');
+      final result = await _supabaseGmailService.syncEmails(syncOptions);
+
+      if (mounted) {
+        if (result.isSuccess) {
+          // Show success notification
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                '✅ Gmail sync completed! Stored ${result.messagesCount} emails.',
+              ),
+              backgroundColor: Colors.green,
+              duration: const Duration(seconds: 3),
+            ),
+          );
+
+          // Note: PDA prewarming would be triggered here if we had the preprocessing manager
+          // For the simple page, we'll just log that sync completed
+          debugPrint('✅ [PDA] Gmail sync completed - ready for enhanced responses');
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('⚠️ Gmail sync failed: ${result.error}'),
+              backgroundColor: Colors.orange,
+              duration: const Duration(seconds: 4),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint('❌ [GMAIL SYNC] Background sync error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('❌ Gmail sync error: $e'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
     }
   }
 

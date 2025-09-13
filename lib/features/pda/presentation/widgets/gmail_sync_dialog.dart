@@ -15,6 +15,8 @@ class _GmailSyncDialogState extends State<GmailSyncDialog> {
   SyncDuration _selectedDuration = SyncDuration.oneMonth;
   DateTime? _customStartDate;
   DateTime? _customEndDate;
+  bool _isSyncing = false;
+  String? _syncError;
 
   @override
   Widget build(BuildContext context) {
@@ -42,35 +44,28 @@ class _GmailSyncDialogState extends State<GmailSyncDialog> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              'How much email data would you like to store?',
-              style: TextStyle(fontSize: 14, color: subtle),
-            ),
-            const SizedBox(height: 16),
-            ..._buildDurationOptions(),
-            if (_selectedDuration == SyncDuration.custom) ...[
+            if (_isSyncing) ...[
+              _buildSyncingState(),
+            ] else if (_syncError != null) ...[
+              _buildErrorState(),
+            ] else ...[
+              Text(
+                'How much email data would you like to store?',
+                style: TextStyle(fontSize: 14, color: subtle),
+              ),
               const SizedBox(height: 16),
-              _buildCustomDatePicker(),
+              ..._buildDurationOptions(),
+              if (_selectedDuration == SyncDuration.custom) ...[
+                const SizedBox(height: 16),
+                _buildCustomDatePicker(),
+              ],
+              const SizedBox(height: 16),
+              _buildStorageInfo(),
             ],
-            const SizedBox(height: 16),
-            _buildStorageInfo(),
           ],
         ),
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: Text('Cancel', style: TextStyle(color: subtle)),
-        ),
-        ElevatedButton(
-          onPressed: _isValidSelection() ? _onSyncPressed : null,
-          style: ElevatedButton.styleFrom(
-            backgroundColor: isDark ? Colors.white : Colors.black,
-            foregroundColor: isDark ? Colors.black : Colors.white,
-          ),
-          child: const Text('Start Sync'),
-        ),
-      ],
+      actions: _buildActionButtons(isDark, subtle),
     );
   }
 
@@ -226,6 +221,95 @@ class _GmailSyncDialogState extends State<GmailSyncDialog> {
     );
   }
 
+  Widget _buildSyncingState() {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final fg = isDark ? Colors.white : Colors.black;
+    final subtle = isDark ? Colors.white70 : Colors.black54;
+
+    return Column(
+      children: [
+        const SizedBox(height: 20),
+        // Use a smaller, more elegant loading indicator
+        SizedBox(
+          width: 24,
+          height: 24,
+          child: CircularProgressIndicator(
+            strokeWidth: 2.5,
+            valueColor: AlwaysStoppedAnimation<Color>(
+              isDark ? Colors.white : Colors.black,
+            ),
+          ),
+        ),
+        const SizedBox(height: 20),
+        Text(
+          'Syncing Gmail Data...',
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+            color: fg,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'This may take a few moments. Please don\'t close this dialog.',
+          style: TextStyle(
+            fontSize: 14,
+            color: subtle,
+          ),
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 20),
+      ],
+    );
+  }
+
+  Widget _buildErrorState() {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final fg = isDark ? Colors.white : Colors.black;
+
+    return Column(
+      children: [
+        const SizedBox(height: 20),
+        Icon(
+          Icons.error_outline,
+          color: Colors.red,
+          size: 48,
+        ),
+        const SizedBox(height: 16),
+        Text(
+          'Sync Failed',
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+            color: fg,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          _syncError ?? 'An unknown error occurred',
+          style: TextStyle(
+            fontSize: 14,
+            color: Colors.red,
+          ),
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 20),
+        ElevatedButton(
+          onPressed: () {
+            setState(() {
+              _syncError = null;
+              _isSyncing = false;
+            });
+          },
+          child: const Text('Try Again'),
+        ),
+        const SizedBox(height: 10),
+      ],
+    );
+  }
+
   String _getDurationSubtitle(SyncDuration duration) {
     final now = DateTime.now();
     final startDate = now.subtract(Duration(days: duration.days));
@@ -234,10 +318,18 @@ class _GmailSyncDialogState extends State<GmailSyncDialog> {
 
   bool _isValidSelection() {
     if (_selectedDuration == SyncDuration.custom) {
-      return _customStartDate != null &&
+      final isValid =
+          _customStartDate != null &&
           _customEndDate != null &&
           _customStartDate!.isBefore(_customEndDate!);
+      debugPrint(
+        '🔄 [GMAIL SYNC DIALOG] Custom selection validation: $isValid (start: $_customStartDate, end: $_customEndDate)',
+      );
+      return isValid;
     }
+    debugPrint(
+      '🔄 [GMAIL SYNC DIALOG] Non-custom selection validation: true (duration: $_selectedDuration)',
+    );
     return true;
   }
 
@@ -274,15 +366,93 @@ class _GmailSyncDialogState extends State<GmailSyncDialog> {
     }
   }
 
-  void _onSyncPressed() {
+  List<Widget> _buildActionButtons(bool isDark, Color subtle) {
+    if (_isSyncing) {
+      // During sync, only show a disabled cancel button
+      return [
+        TextButton(
+          onPressed: null, // Disabled during sync
+          child: Text('Cancel', style: TextStyle(color: Colors.grey)),
+        ),
+      ];
+    } else if (_syncError != null) {
+      // During error state, show close button
+      return [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text('Close', style: TextStyle(color: subtle)),
+        ),
+      ];
+    } else {
+      // Normal state - show cancel and start sync buttons
+      return [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text('Cancel', style: TextStyle(color: subtle)),
+        ),
+        ElevatedButton(
+          onPressed: () {
+            final isValid = _isValidSelection();
+            debugPrint(
+              '🔄 [GMAIL SYNC DIALOG] Button pressed - isValid: $isValid',
+            );
+            if (isValid) {
+              _onSyncPressed();
+            } else {
+              debugPrint(
+                '🔄 [GMAIL SYNC DIALOG] Button disabled - validation failed',
+              );
+            }
+          },
+          style: ElevatedButton.styleFrom(
+            backgroundColor: isDark ? Colors.white : Colors.black,
+            foregroundColor: isDark ? Colors.black : Colors.white,
+          ),
+          child: const Text('Start Sync'),
+        ),
+      ];
+    }
+  }
+
+  Future<void> _onSyncPressed() async {
+    debugPrint('🔄 [GMAIL SYNC DIALOG] Start Sync button pressed');
+    debugPrint('🔄 [GMAIL SYNC DIALOG] Selected duration: $_selectedDuration');
+    debugPrint(
+      '🔄 [GMAIL SYNC DIALOG] Custom dates: $_customStartDate to $_customEndDate',
+    );
+
     final syncOptions = SyncOptions(
       duration: _selectedDuration,
       customStartDate: _customStartDate,
       customEndDate: _customEndDate,
     );
 
-    widget.onSyncSelected(syncOptions);
-    Navigator.of(context).pop();
+    // Set syncing state
+    setState(() {
+      _isSyncing = true;
+      _syncError = null;
+    });
+
+    debugPrint('🔄 [GMAIL SYNC DIALOG] Calling onSyncSelected callback');
+    
+    try {
+      // Call the sync function and wait for it to complete
+      await widget.onSyncSelected(syncOptions);
+      
+      // If we get here, sync was successful
+      if (mounted) {
+        Navigator.of(context).pop();
+      }
+    } catch (e) {
+      // Handle sync error
+      debugPrint('❌ [GMAIL SYNC DIALOG] Sync failed: $e');
+      if (mounted) {
+        setState(() {
+          _isSyncing = false;
+          _syncError = e.toString();
+        });
+      }
+    }
   }
 }
 

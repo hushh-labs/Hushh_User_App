@@ -71,11 +71,16 @@ class _SyncProgressDialogState extends State<SyncProgressDialog> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // PDA Animation
-              SizedBox(
-                height: 200,
+              // PDA Animation - with proper constraints and overflow handling
+              Container(
+                height: 180,
+                width: double.infinity,
+                clipBehavior: Clip.hardEdge,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                ),
                 child: PdaLoadingAnimation(
-                  isLoading: !_isCompleted,
+                  isLoading: true, // Keep animation running until dialog closes
                   onAnimationComplete: () {},
                 ),
               ),
