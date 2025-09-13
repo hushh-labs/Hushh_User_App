@@ -32,55 +32,16 @@ class GmailRepositoryImpl implements GmailRepository {
     required List<String> scopes,
   }) async {
     try {
-      // First, check if user has Google Meet OAuth credentials we can use
-      final googleMeetResponse = await http.get(
-        Uri.parse(
-          '${_supabaseUrl}/functions/v1/google-meet-sync?userId=$userId',
-        ),
-        headers: {
-          'Authorization': 'Bearer ${_supabaseKey}',
-          'Content-Type': 'application/json',
-        },
-      );
-
-      if (googleMeetResponse.statusCode == 200) {
-        final googleMeetData =
-            json.decode(googleMeetResponse.body) as Map<String, dynamic>;
-        if (googleMeetData['isConnected'] == true) {
-          print(
-            '✅ [GMAIL REPO] Using existing Google Meet OAuth credentials for Gmail',
-          );
-
-          // Use Google Meet OAuth credentials for Gmail connection
-          final response = await http.post(
-            Uri.parse('${_supabaseUrl}/functions/v1/gmail-oauth-exchange'),
-            headers: {
-              'Authorization': 'Bearer ${_supabaseKey}',
-              'Content-Type': 'application/json',
-            },
-            body: json.encode({
-              'userId': userId,
-              'useGoogleMeetCredentials':
-                  true, // Flag to use existing Google Meet credentials
-              'email': googleMeetData['email'] ?? email,
-            }),
-          );
-
-          if (response.statusCode == 200) {
-            _connectionStatusController.add(true);
-            return true;
-          } else {
-            print(
-              '❌ [GMAIL REPO] Failed to connect Gmail with Google Meet credentials: ${response.body}',
-            );
-          }
-        }
+      // Check if Gmail is already connected
+      final isAlreadyConnected = await isGmailConnected(userId);
+      if (isAlreadyConnected) {
+        print('✅ [GMAIL REPO] Gmail already connected for user: $userId');
+        _connectionStatusController.add(true);
+        return true;
       }
 
-      // Fallback to traditional OAuth if Google Meet credentials not available
-      print(
-        '🔄 [GMAIL REPO] Google Meet credentials not available, using traditional OAuth',
-      );
+      // Connect Gmail using OAuth exchange
+      print('🔄 [GMAIL REPO] Connecting Gmail with OAuth credentials');
       final response = await http.post(
         Uri.parse('${_supabaseUrl}/functions/v1/gmail-oauth-exchange'),
         headers: {
@@ -89,8 +50,7 @@ class GmailRepositoryImpl implements GmailRepository {
         },
         body: json.encode({
           'userId': userId,
-          'serverAuthCode': accessToken,
-          'accessToken': accessToken,
+          'serverAuthCode': accessToken, // This should be the server auth code
           'idToken': idToken,
           'email': email,
           'scopes': scopes,
@@ -99,6 +59,7 @@ class GmailRepositoryImpl implements GmailRepository {
 
       if (response.statusCode == 200) {
         _connectionStatusController.add(true);
+        print('✅ [GMAIL REPO] Gmail connected successfully');
         return true;
       } else {
         print('❌ [GMAIL REPO] OAuth exchange failed: ${response.body}');
