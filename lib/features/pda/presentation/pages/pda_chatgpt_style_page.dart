@@ -143,10 +143,12 @@ class _PdaChatGptStylePageState extends State<PdaChatGptStylePage> {
       // Check if preprocessing is already completed
       if (_preprocessingManager.isCompleted) {
         debugPrint('✅ [PDA] Preprocessing already completed');
-        setState(() {
-          _isPreprocessingRequired = false;
-          _isPreprocessingComplete = true;
-        });
+        if (mounted) {
+          setState(() {
+            _isPreprocessingRequired = false;
+            _isPreprocessingComplete = true;
+          });
+        }
         return;
       }
 
@@ -155,10 +157,12 @@ class _PdaChatGptStylePageState extends State<PdaChatGptStylePage> {
         debugPrint(
           '🔄 [PDA] Preprocessing already in progress, showing status',
         );
-        setState(() {
-          _isPreprocessingRequired = true;
-          _isPreprocessingComplete = false;
-        });
+        if (mounted) {
+          setState(() {
+            _isPreprocessingRequired = true;
+            _isPreprocessingComplete = false;
+          });
+        }
 
         // Listen to preprocessing status
         _preprocessingManager.statusStream.listen((status) {
@@ -175,11 +179,13 @@ class _PdaChatGptStylePageState extends State<PdaChatGptStylePage> {
       // Check if preprocessing is required
       final isRequired = await _preprocessingManager.isPreprocessingRequired();
 
-      setState(() {
-        _isPreprocessingRequired = isRequired;
-        _isPreprocessingComplete =
-            !isRequired; // If not required, mark as complete
-      });
+      if (mounted) {
+        setState(() {
+          _isPreprocessingRequired = isRequired;
+          _isPreprocessingComplete =
+              !isRequired; // If not required, mark as complete
+        });
+      }
 
       if (isRequired) {
         debugPrint('🚀 [PDA] Preprocessing required, starting...');
@@ -202,9 +208,11 @@ class _PdaChatGptStylePageState extends State<PdaChatGptStylePage> {
     } catch (e) {
       debugPrint('❌ [PDA] Error initializing preprocessing: $e');
       // If there's an error, allow messaging anyway
-      setState(() {
-        _isPreprocessingComplete = true;
-      });
+      if (mounted) {
+        setState(() {
+          _isPreprocessingComplete = true;
+        });
+      }
     }
   }
 
@@ -267,13 +275,15 @@ class _PdaChatGptStylePageState extends State<PdaChatGptStylePage> {
             '🔍 [PDA USERNAME] Available fields: ${userData.keys.toList()}',
           );
 
-          setState(() {
-            _currentUserName = fullName?.isNotEmpty == true
-                ? fullName
-                : currentUser.displayName ??
-                      currentUser.email?.split('@').first ??
-                      'User';
-          });
+          if (mounted) {
+            setState(() {
+              _currentUserName = fullName?.isNotEmpty == true
+                  ? fullName
+                  : currentUser.displayName ??
+                        currentUser.email?.split('@').first ??
+                        'User';
+            });
+          }
 
           debugPrint(
             '🔍 [PDA USERNAME] Final username set to: $_currentUserName',
@@ -283,12 +293,14 @@ class _PdaChatGptStylePageState extends State<PdaChatGptStylePage> {
             '🔍 [PDA USERNAME] Document does not exist, using fallback',
           );
           // Fallback to Firebase Auth data if HushUsers document doesn't exist
-          setState(() {
-            _currentUserName =
-                currentUser.displayName ??
-                currentUser.email?.split('@').first ??
-                'User';
-          });
+          if (mounted) {
+            setState(() {
+              _currentUserName =
+                  currentUser.displayName ??
+                  currentUser.email?.split('@').first ??
+                  'User';
+            });
+          }
           debugPrint(
             '🔍 [PDA USERNAME] Fallback username set to: $_currentUserName',
           );
@@ -296,12 +308,14 @@ class _PdaChatGptStylePageState extends State<PdaChatGptStylePage> {
       } catch (e) {
         debugPrint('❌ [PDA USERNAME] Error fetching username: $e');
         // Fallback to Firebase Auth data on error
-        setState(() {
-          _currentUserName =
-              currentUser.displayName ??
-              currentUser.email?.split('@').first ??
-              'User';
-        });
+        if (mounted) {
+          setState(() {
+            _currentUserName =
+                currentUser.displayName ??
+                currentUser.email?.split('@').first ??
+                'User';
+          });
+        }
         debugPrint(
           '🔍 [PDA USERNAME] Error fallback username set to: $_currentUserName',
         );
@@ -419,8 +433,8 @@ class _PdaChatGptStylePageState extends State<PdaChatGptStylePage> {
     final currentUser = FirebaseAuth.instance.currentUser;
     if (currentUser == null) return;
 
-    // Close the drawer first
-    if (mounted) {
+    // Close the drawer first if we can pop
+    if (mounted && Navigator.of(context).canPop()) {
       Navigator.of(context).pop();
     }
 
@@ -448,8 +462,8 @@ class _PdaChatGptStylePageState extends State<PdaChatGptStylePage> {
   }
 
   Future<void> _openConversation(Map<String, dynamic> convo) async {
-    // Close the drawer first
-    if (mounted) {
+    // Close the drawer first if we can pop
+    if (mounted && Navigator.of(context).canPop()) {
       Navigator.of(context).pop();
     }
 
@@ -974,9 +988,11 @@ class _PdaChatGptStylePageState extends State<PdaChatGptStylePage> {
   Future<void> _checkLinkedInConnectionStatus() async {
     try {
       final isConnected = await _supabaseLinkedInService.isLinkedInConnected();
-      setState(() {
-        _isLinkedInConnected = isConnected;
-      });
+      if (mounted) {
+        setState(() {
+          _isLinkedInConnected = isConnected;
+        });
+      }
     } catch (e) {
       debugPrint('❌ [PDA] Error checking LinkedIn connection: $e');
     }
@@ -991,9 +1007,11 @@ class _PdaChatGptStylePageState extends State<PdaChatGptStylePage> {
       final isConnected = await googleMeetRepo.isGoogleMeetConnected(
         currentUser.uid,
       );
-      setState(() {
-        _isGoogleMeetConnected = isConnected;
-      });
+      if (mounted) {
+        setState(() {
+          _isGoogleMeetConnected = isConnected;
+        });
+      }
     } catch (e) {
       debugPrint('❌ [PDA] Error checking Google Meet connection: $e');
     }
@@ -1007,9 +1025,11 @@ class _PdaChatGptStylePageState extends State<PdaChatGptStylePage> {
       final isConnected = await googleDriveRepo.isGoogleDriveConnected(
         currentUser.uid,
       );
-      setState(() {
-        _isGoogleDriveConnected = isConnected;
-      });
+      if (mounted) {
+        setState(() {
+          _isGoogleDriveConnected = isConnected;
+        });
+      }
     } catch (e) {
       debugPrint('❌ [PDA] Error checking Google Drive connection: $e');
     }
