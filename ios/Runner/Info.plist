@@ -71,6 +71,8 @@
 	<string>Hushh needs photo library access to let you choose a profile photo from your existing photos</string>
 	<key>NSContactsUsageDescription</key>
 	<string>Hushh needs access to your contacts to help you find and start conversations with other users in the app. This allows us to match you with people you know.</string>
+	<key>NSUserTrackingUsageDescription</key>
+	<string>Hushh would like to track your activity across other apps and websites to provide you with personalized content and improve your experience.</string>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>UIBackgroundModes</key>

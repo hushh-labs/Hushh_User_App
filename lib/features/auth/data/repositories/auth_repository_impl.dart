@@ -545,8 +545,10 @@ class AuthRepositoryImpl implements AuthRepository {
       final userExists = await doesUserCardExistInSupabase(userId);
 
       if (userExists) {
-        await _supabaseDataSource.deleteUserData(userId);
-        print('✅ [Supabase] User data deleted successfully');
+        await _supabaseDataSource.deleteAllUserDataFromAllTables(userId);
+        print(
+          '✅ [Supabase] All user data deleted successfully from all tables',
+        );
       } else {
         print('⏭️ [Supabase] User not found - skipping deletion');
       }

@@ -17,6 +17,7 @@ abstract class SupabaseAuthDataSource {
 
   // Account deletion methods
   Future<void> deleteUserData(String userId);
+  Future<void> deleteAllUserDataFromAllTables(String userId);
 }
 
 class SupabaseAuthDataSourceImpl implements SupabaseAuthDataSource {
@@ -195,6 +196,81 @@ class SupabaseAuthDataSourceImpl implements SupabaseAuthDataSource {
       await _client.from(_tableName).delete().eq('userId', userId);
     } catch (e) {
       throw Exception('Failed to delete user data from Supabase: $e');
+    }
+  }
+
+  @override
+  Future<void> deleteAllUserDataFromAllTables(String userId) async {
+    try {
+      print(
+        '🗑️ [SUPABASE] Starting comprehensive user data deletion for: $userId',
+      );
+
+      // List of all tables that contain user data (excluding micro_prompt_questions)
+      final List<Map<String, String>> tablesToDelete = [
+        // Core user data
+        {'table': 'hush_users', 'field': 'userId'},
+
+        // Gmail data
+        {'table': 'gmail_accounts', 'field': 'userId'},
+        {'table': 'gmail_emails', 'field': 'userId'},
+
+        // Google Calendar data
+        {'table': 'google_calendar_events', 'field': 'userId'},
+        {'table': 'google_calendar_attendees', 'field': 'userId'},
+
+        // Google Drive data
+        {'table': 'DriveFile', 'field': 'user_id'},
+        {'table': 'google_drive_accounts', 'field': 'user_id'},
+
+        // Google Meet data
+        {'table': 'google_meet_accounts', 'field': 'user_id'},
+        {'table': 'google_meet_calendar_links', 'field': 'user_id'},
+        {'table': 'google_meet_conferences', 'field': 'user_id'},
+        {'table': 'google_meet_participants', 'field': 'user_id'},
+        {'table': 'google_meet_recordings', 'field': 'user_id'},
+        {'table': 'google_meet_spaces', 'field': 'user_id'},
+        {'table': 'google_meet_transcripts', 'field': 'user_id'},
+
+        // PDA context data
+        {'table': 'pda_context', 'field': 'userId'},
+        {'table': 'pda_meeting_context', 'field': 'userId'},
+
+        // Micro prompts data (excluding micro_prompt_questions which is global)
+        {'table': 'user_app_state', 'field': 'userId'},
+        {'table': 'user_micro_prompt_profile', 'field': 'userId'},
+        {'table': 'user_micro_prompt_responses', 'field': 'userId'},
+        {'table': 'user_micro_prompt_schedule', 'field': 'userId'},
+        {'table': 'user_next_micro_prompt', 'field': 'userId'},
+
+        // Vault data
+        {'table': 'vault_documents', 'field': 'user_id'},
+
+        // Drive views (treating as tables)
+        {'table': 'v_drive_account_status', 'field': 'user_id'},
+        {'table': 'v_drive_files_by_user', 'field': 'user_id'},
+      ];
+
+      // Delete from each table
+      for (final tableInfo in tablesToDelete) {
+        try {
+          final result = await _client
+              .from(tableInfo['table']!)
+              .delete()
+              .eq(tableInfo['field']!, userId);
+
+          print('✅ [SUPABASE] Deleted from ${tableInfo['table']}');
+        } catch (e) {
+          // Log error but continue with other tables
+          print(
+            '⚠️ [SUPABASE] Failed to delete from ${tableInfo['table']}: $e',
+          );
+        }
+      }
+
+      print('🎯 [SUPABASE] Comprehensive user data deletion completed');
+    } catch (e) {
+      throw Exception('Failed to delete all user data from Supabase: $e');
     }
   }
 }
