@@ -5,6 +5,7 @@ import 'app.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'features/notifications/data/services/notification_service.dart';
 import 'core/services/logger_service.dart';
+import 'core/services/app_tracking_transparency_service.dart';
 
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
@@ -73,6 +74,16 @@ void main() async {
 
   // Register background handler for notifications (outside the app)
   FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+
+  // Request App Tracking Transparency permission early in app lifecycle
+  try {
+    final attService = AppTrackingTransparencyService();
+    await attService.requestTrackingAuthorization();
+  } catch (e) {
+    if (kDebugMode) {
+      print('Warning: Failed to request ATT permission: $e');
+    }
+  }
 
   await mainApp();
 }
