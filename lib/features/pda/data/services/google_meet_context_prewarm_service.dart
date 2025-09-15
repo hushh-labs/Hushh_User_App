@@ -476,6 +476,15 @@ class GoogleMeetContextPrewarmService {
   /// Get Google Meet context for PDA responses
   Future<String> getGoogleMeetContextForPda() async {
     try {
+      // Block if Google Meet is disconnected
+      final isConnected = await isGoogleMeetConnected();
+      if (!isConnected) {
+        debugPrint(
+          '🚫 [GOOGLE MEET PREWARM] Meet disconnected - blocking context access',
+        );
+        return '';
+      }
+
       // Try to get from cache first
       final context = await loadGoogleMeetContextFromCache();
 

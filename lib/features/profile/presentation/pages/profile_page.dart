@@ -16,6 +16,14 @@ import 'package:hushh_user_app/features/auth/domain/usecases/delete_user_data_du
 import 'package:get_it/get_it.dart';
 import 'package:hushh_user_app/shared/utils/app_local_storage.dart';
 import 'package:hushh_user_app/shared/utils/guest_access_control.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:hushh_user_app/features/pda/data/services/gmail_context_prewarm_service.dart';
+import 'package:hushh_user_app/features/pda/data/services/google_meet_context_prewarm_service.dart';
+import 'package:hushh_user_app/features/pda/data/services/google_calendar_context_prewarm_service.dart';
+import 'package:hushh_user_app/features/pda/data/services/google_calendar_cache_manager.dart';
+import 'package:hushh_user_app/features/pda/data/services/linkedin_cache_manager.dart';
+import 'package:hushh_user_app/features/vault/data/services/local_file_cache_service.dart';
+import 'package:hushh_user_app/features/pda/data/services/google_meet_cache_manager.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -1508,6 +1516,9 @@ class _ProfilePageState extends State<ProfilePage>
         throw Exception('No user is currently signed in');
       }
 
+      // Clear all local and cloud caches before deleting account
+      await _clearAllPluginCaches(currentUser.uid);
+
       // Delete user data from both Firebase and Supabase
       await deleteUseCase(currentUser.uid);
 
@@ -1526,6 +1537,177 @@ class _ProfilePageState extends State<ProfilePage>
       if (mounted) {
         _showErrorSnackBar('Failed to delete account: ${e.toString()}');
       }
+    }
+  }
+
+  /// Clear all plugin caches (Gmail, Google Meet, Calendar) from local and cloud storage
+  Future<void> _clearAllPluginCaches(String userId) async {
+    try {
+      debugPrint(
+        '🧹 [ACCOUNT DELETE] Starting comprehensive cache clearing...',
+      );
+
+      // Clear Gmail caches
+      try {
+        final gmailPrewarm = GetIt.instance<GmailContextPrewarmService>();
+        await gmailPrewarm.clearGmailContextCache();
+
+        // Verify Gmail keys removed
+        final prefs = await SharedPreferences.getInstance();
+        final gmailKeys = [
+          'gmail_context_cache',
+          'gmail_context_last_update',
+          'gmail_pda_context_$userId',
+          'gmail_pda_context_timestamp_$userId',
+        ];
+        final remainingGmail = gmailKeys.where((k) => prefs.get(k) != null);
+        if (remainingGmail.isEmpty) {
+          debugPrint(
+            '✅ [ACCOUNT DELETE] Gmail caches cleared (local verified)',
+          );
+        } else {
+          debugPrint(
+            '⚠️ [ACCOUNT DELETE] Gmail keys remaining: $remainingGmail',
+          );
+        }
+      } catch (e) {
+        debugPrint('⚠️ [ACCOUNT DELETE] Failed to clear Gmail caches: $e');
+      }
+
+      // Clear Google Meet caches
+      try {
+        final meetPrewarm = GetIt.instance<GoogleMeetContextPrewarmService>();
+        await meetPrewarm.clearGoogleMeetContextCache();
+
+        // Verify Meet keys removed with stats
+        try {
+          final meetCacheStats = await GetIt.instance<GoogleMeetCacheManager>()
+              .getCacheStats();
+          debugPrint(
+            '📊 [ACCOUNT DELETE] Meet cache after clear: $meetCacheStats',
+          );
+        } catch (e) {
+          debugPrint(
+            '⚠️ [ACCOUNT DELETE] Could not fetch Meet cache stats: $e',
+          );
+        }
+
+        final prefs = await SharedPreferences.getInstance();
+        final meetKeys = [
+          'google_meet_context_cache',
+          'google_meet_last_update',
+        ];
+        final remainingMeet = meetKeys.where((k) => prefs.get(k) != null);
+        if (remainingMeet.isEmpty) {
+          debugPrint(
+            '✅ [ACCOUNT DELETE] Google Meet caches cleared (local verified)',
+          );
+        } else {
+          debugPrint(
+            '⚠️ [ACCOUNT DELETE] Google Meet keys remaining: $remainingMeet',
+          );
+        }
+      } catch (e) {
+        debugPrint(
+          '⚠️ [ACCOUNT DELETE] Failed to clear Google Meet caches: $e',
+        );
+      }
+
+      // Clear Google Calendar caches
+      try {
+        final calendarPrewarm =
+            GetIt.instance<GoogleCalendarContextPrewarmService>();
+        await calendarPrewarm.clearPDAContextCachePublic(userId);
+
+        final calendarCache = GetIt.instance<GoogleCalendarCacheManager>();
+        await calendarCache.clearUserCache(userId);
+
+        // Verify calendar keys removed with stats
+        try {
+          final stats = await calendarCache.getCacheStats(userId);
+          debugPrint('📊 [ACCOUNT DELETE] Calendar cache after clear: $stats');
+        } catch (e) {
+          debugPrint(
+            '⚠️ [ACCOUNT DELETE] Could not fetch Calendar cache stats: $e',
+          );
+        }
+
+        debugPrint('✅ [ACCOUNT DELETE] Google Calendar caches cleared');
+      } catch (e) {
+        debugPrint(
+          '⚠️ [ACCOUNT DELETE] Failed to clear Google Calendar caches: $e',
+        );
+      }
+
+      // Clear LinkedIn caches
+      try {
+        final linkedinCache = GetIt.instance<LinkedInCacheManager>();
+        await linkedinCache.clearAllCaches();
+        debugPrint('✅ [ACCOUNT DELETE] LinkedIn caches cleared');
+      } catch (e) {
+        debugPrint('⚠️ [ACCOUNT DELETE] Failed to clear LinkedIn caches: $e');
+      }
+
+      // Clear Vault caches
+      try {
+        final vaultCache = GetIt.instance<LocalFileCacheService>();
+        await vaultCache.clearUserCache(userId);
+        debugPrint('✅ [ACCOUNT DELETE] Vault caches cleared');
+      } catch (e) {
+        debugPrint('⚠️ [ACCOUNT DELETE] Failed to clear Vault caches: $e');
+      }
+
+      // Clear all SharedPreferences for this user
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        final allKeys = prefs.getKeys();
+
+        // Identify and remove
+        final keysToRemove = allKeys.where(
+          (key) =>
+              key.contains(userId) ||
+              key.contains('gmail') ||
+              key.contains('google_meet') ||
+              key.contains('google_calendar') ||
+              key.contains('linkedin') ||
+              key.contains('vault') ||
+              key.contains('pda_context'),
+        );
+
+        debugPrint(
+          '🗂️ [ACCOUNT DELETE] Removing ${keysToRemove.length} pref keys',
+        );
+        for (final key in keysToRemove) {
+          await prefs.remove(key);
+        }
+
+        // Post-check
+        final remaining = prefs
+            .getKeys()
+            .where(
+              (key) =>
+                  key.contains(userId) ||
+                  key.contains('gmail') ||
+                  key.contains('google_meet') ||
+                  key.contains('google_calendar') ||
+                  key.contains('linkedin') ||
+                  key.contains('vault') ||
+                  key.contains('pda_context'),
+            )
+            .toList();
+        if (remaining.isEmpty) {
+          debugPrint('✅ [ACCOUNT DELETE] SharedPreferences cleared (verified)');
+        } else {
+          debugPrint('⚠️ [ACCOUNT DELETE] Remaining pref keys: $remaining');
+        }
+      } catch (e) {
+        debugPrint('⚠️ [ACCOUNT DELETE] Failed to clear SharedPreferences: $e');
+      }
+
+      debugPrint('🎯 [ACCOUNT DELETE] Comprehensive cache clearing completed');
+    } catch (e) {
+      debugPrint('❌ [ACCOUNT DELETE] Error during cache clearing: $e');
+      // Don't throw - cache clearing is not critical for account deletion
     }
   }
 }

@@ -18,13 +18,14 @@ import '../services/linkedin_context_prewarm_service.dart';
 import '../services/gmail_context_prewarm_service.dart';
 import '../services/google_calendar_context_prewarm_service.dart';
 import '../services/google_meet_context_prewarm_service.dart';
+import '../../domain/repositories/gmail_repository.dart';
+import '../../domain/repositories/google_meet_repository.dart';
 import '../services/prewarming_coordinator_service.dart';
 import '../services/gemini_file_processor_service.dart';
 import 'package:hushh_user_app/features/vault/data/services/supabase_document_context_prewarm_service.dart';
 import 'package:hushh_user_app/features/vault/data/services/vault_startup_prewarm_service.dart';
 import 'package:hushh_user_app/features/vault/data/services/local_file_cache_service.dart';
 import '../services/api_cost_logger.dart';
-import '../../domain/repositories/google_meet_repository.dart';
 
 class PdaVertexAiDataSourceImpl implements PdaDataSource {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -40,7 +41,6 @@ class PdaVertexAiDataSourceImpl implements PdaDataSource {
   final SupabaseDocumentContextPrewarmService _documentPrewarmService =
       SupabaseDocumentContextPrewarmServiceImpl();
   late final VaultStartupPrewarmService _vaultPrewarmService;
-  late final GoogleMeetRepository _googleMeetRepo;
   final PrewarmingCoordinatorService _prewarmingCoordinator =
       PrewarmingCoordinatorService();
 
@@ -65,15 +65,6 @@ class PdaVertexAiDataSourceImpl implements PdaDataSource {
       debugPrint('✅ [PDA VERTEX AI] Vault service initialized');
     } catch (e) {
       debugPrint('⚠️ [PDA VERTEX AI] Failed to initialize Vault service: $e');
-    }
-
-    try {
-      _googleMeetRepo = GetIt.instance<GoogleMeetRepository>();
-      debugPrint('✅ [PDA VERTEX AI] Google Meet repository initialized');
-    } catch (e) {
-      debugPrint(
-        '⚠️ [PDA VERTEX AI] Failed to initialize Google Meet repository: $e',
-      );
     }
   }
 
@@ -318,27 +309,6 @@ class PdaVertexAiDataSourceImpl implements PdaDataSource {
 You are Hush, a personal digital assistant for the Hushh app - a platform that connects users with agents who sell products and services. You help users navigate the app, understand features, and get the most out of their Hushh experience.
 
 CRITICAL INSTRUCTION: Your responses MUST be professional and MUST NOT contain any emojis. If you generate any emojis, you MUST remove them before outputting the response. Use clear, concise language that maintains a professional tone throughout the conversation.
-
-CRITICAL PLUGIN DISCONNECTION HANDLING:
-If you see "PLUGIN_STATUS: [Plugin Name] is DISCONNECTED" in any context section, you MUST:
-
-1. **MID-CONVERSATION DISCONNECTION DETECTION**: If earlier in this conversation you had access to plugin data but now see a DISCONNECTED status, acknowledge this change explicitly:
-   - "I notice you've disconnected your [Plugin Name] plugin since our last exchange. I no longer have access to your [specific data type] and can only reference information from when it was last connected."
-   - "Since you disconnected your Gmail plugin, I can't access your current emails anymore. I can only refer to the email data from when it was connected earlier in our conversation."
-
-2. **NEW REQUESTS FOR DISCONNECTED PLUGINS**: When users ask new questions about disconnected plugin functionality:
-   - "I need you to connect your [Plugin Name] plugin first to access that information. Please go to your settings and connect the plugin so I can help you with [specific feature]."
-   - Be specific about what plugin needs to be connected
-
-3. **DO NOT**:
-   - Pretend you have current access to disconnected plugin data
-   - Reference cached data as if it's current when plugin is disconnected
-   - Give generic responses without acknowledging the disconnection
-
-4. **EXAMPLES**:
-   - Gmail disconnected mid-conversation → "I notice your Gmail plugin was disconnected. I no longer have access to your current emails and can only reference the email data from when it was connected earlier."
-   - Google Meet disconnected + user asks about meetings → "I need you to connect your Google Meet plugin first to access your current calendar information. Please reconnect the Google Meet plugin so I can help you with your schedule."
-   - User had Gmail access, now disconnected, asks about emails → "Since you disconnected Gmail, I can't check your current emails. The last email information I had was from when it was connected earlier in our conversation. To get current email updates, please reconnect your Gmail plugin."
 
 User Context:
 ${_formatUserContext(userContext)}$gmailContextText$linkedInContextText$calendarContextText$documentContextText
@@ -701,19 +671,15 @@ Last Updated: $updatedAt
       final currentUserId = _getCurrentUserId();
       if (currentUserId == null) return '';
 
-      // 🔌 CHECK PLUGIN STATUS: Check if Gmail is connected before fetching context
-      // If Gmail is disconnected, return explicit disconnection message for AI to handle
-      final isGmailConnected = await _gmailService.isGmailConnected();
+      // Check if Gmail is still connected before providing context
+      final gmailRepo = GetIt.instance<GmailRepository>();
+      final isGmailConnected = await gmailRepo.isGmailConnected(currentUserId);
       if (!isGmailConnected) {
         debugPrint(
-          '🔌 [PDA GMAIL CONTEXT] Gmail is disconnected - returning disconnection flag for AI to handle',
+          '🚫 [PDA GMAIL CONTEXT] Gmail disconnected - blocking context access',
         );
-        return 'PLUGIN_STATUS: Gmail plugin is DISCONNECTED. User needs to connect Gmail plugin to access email data.';
+        return '';
       }
-
-      debugPrint(
-        '✅ [PDA GMAIL CONTEXT] Gmail is connected - proceeding to fetch context',
-      );
 
       // First try to get from local cache (fastest)
       final prefs = await SharedPreferences.getInstance();
@@ -823,26 +789,16 @@ Last Updated: $updatedAt
       final currentUserId = _getCurrentUserId();
       if (currentUserId == null) return '';
 
-      // 🔌 CHECK PLUGIN STATUS: Check if Google Meet is connected before fetching calendar context
-      // If Google Meet is disconnected, return explicit disconnection message for AI to handle
-      try {
-        final isGoogleMeetConnected = await _googleMeetRepo
-            .isGoogleMeetConnected(currentUserId);
-        if (!isGoogleMeetConnected) {
-          debugPrint(
-            '🔌 [PDA CALENDAR CONTEXT] Google Meet is disconnected - returning disconnection flag for AI to handle',
-          );
-          return 'PLUGIN_STATUS: Google Meet/Calendar plugin is DISCONNECTED. User needs to connect Google Meet plugin to access calendar and meeting data.';
-        }
-
+      // Check if Google Meet is still connected before providing calendar context
+      final googleMeetRepo = GetIt.instance<GoogleMeetRepository>();
+      final isGoogleMeetConnected = await googleMeetRepo.isGoogleMeetConnected(
+        currentUserId,
+      );
+      if (!isGoogleMeetConnected) {
         debugPrint(
-          '✅ [PDA CALENDAR CONTEXT] Google Meet is connected - proceeding to fetch calendar context',
+          '🚫 [PDA CALENDAR CONTEXT] Google Meet disconnected - blocking calendar context access',
         );
-      } catch (e) {
-        debugPrint(
-          '⚠️ [PDA CALENDAR CONTEXT] Error checking Google Meet connection status: $e - returning disconnection flag as fallback',
-        );
-        return 'PLUGIN_STATUS: Google Meet/Calendar plugin is DISCONNECTED. User needs to connect Google Meet plugin to access calendar and meeting data.';
+        return '';
       }
 
       debugPrint(

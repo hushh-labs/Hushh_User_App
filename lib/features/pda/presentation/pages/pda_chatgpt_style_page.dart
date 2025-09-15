@@ -49,6 +49,7 @@ import '../../data/data_sources/google_calendar_api_data_source.dart';
 import '../../data/data_sources/google_calendar_supabase_data_source.dart';
 import '../../data/data_sources/google_meet_supabase_data_source.dart';
 import '../../data/services/google_calendar_cache_manager.dart';
+import '../../data/services/google_meet_context_prewarm_service.dart';
 
 class PdaChatGptStylePage extends StatefulWidget {
   const PdaChatGptStylePage({super.key});
@@ -937,6 +938,11 @@ class _PdaChatGptStylePageState extends State<PdaChatGptStylePage> {
   Future<void> _sendMessage({String? predefinedMessage}) async {
     final message = predefinedMessage ?? _messageController.text.trim();
     if (message.isEmpty && _selectedImages.isEmpty) return;
+
+    // If either plugin is disconnected, avoid using their context
+    if (!_isGmailConnected || !_isGoogleMeetConnected) {
+      // Silently proceed; context-level checks already prevent usage
+    }
 
     // Block sending messages if preprocessing is not complete
     if (_isPreprocessingRequired && !_isPreprocessingComplete) {
@@ -1938,31 +1944,37 @@ class _PdaChatGptStylePageState extends State<PdaChatGptStylePage> {
         _isGoogleMeetDataReady = false;
       });
 
-      // Try to clear Calendar/Meet PDA context cache if service is available
+      // Clear Google Meet context caches (memory, SharedPreferences, Firestore)
       try {
-        final api = _getIt<GoogleCalendarApiDataSource>();
-        final supa = _getIt<GoogleCalendarSupabaseDataSource>();
-        final meetSupa = _getIt<GoogleMeetSupabaseDataSource>();
-        final cache = _getIt<GoogleCalendarCacheManager>();
-        final prefs = await SharedPreferences.getInstance();
-        final calendarPrewarm = GoogleCalendarContextPrewarmService(
-          api,
-          supa,
-          meetSupa,
-          cache,
-          prefs,
-        );
-        await calendarPrewarm.clearPDAContextCachePublic(currentUser.uid);
+        final meetPrewarm = _getIt<GoogleMeetContextPrewarmService>();
+        await meetPrewarm.clearGoogleMeetContextCache();
       } catch (e) {
         debugPrint(
-          '⚠️ [PDA] Could not clear calendar context on disconnect: $e',
+          '⚠️ [PDA] Could not clear Google Meet context on disconnect: $e',
         );
       }
 
-      // Unified PDA-style toast
+      // Clear Calendar context caches related to meetings
+      try {
+        final calendarPrewarm = _getIt<GoogleCalendarContextPrewarmService>();
+        await calendarPrewarm.clearPDAContextCachePublic(currentUser.uid);
+
+        final calendarCache = _getIt<GoogleCalendarCacheManager>();
+        await calendarCache.clearUserCache(currentUser.uid);
+      } catch (e) {
+        debugPrint(
+          '⚠️ [PDA] Could not clear calendar caches on disconnect: $e',
+        );
+      }
+
       ToastManager.showToast(context, 'Google Meet disconnected');
     } catch (e) {
       debugPrint('Error disconnecting Google Meet: $e');
+      ToastManager.showToast(
+        context,
+        'Error disconnecting Google Meet',
+        type: ToastType.error,
+      );
     }
   }
 

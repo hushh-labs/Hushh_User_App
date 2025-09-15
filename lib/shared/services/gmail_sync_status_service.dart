@@ -320,11 +320,22 @@ class GmailSyncStatusService {
       final logs = snapshot.docs.map((doc) {
         final data = doc.data() as Map<String, dynamic>;
 
+        // Defensive timestamp parsing: supports Timestamp, ISO string, or null
+        final rawTs = data['timestamp'];
+        DateTime ts;
+        if (rawTs is Timestamp) {
+          ts = rawTs.toDate();
+        } else if (rawTs is String) {
+          ts = DateTime.tryParse(rawTs) ?? DateTime.now();
+        } else {
+          ts = DateTime.now();
+        }
+
         return GmailSyncLog(
           id: doc.id,
-          timestamp: (data['timestamp'] as Timestamp).toDate(),
+          timestamp: ts,
           stage: _parseStage(data['stage'] as String?),
-          message: data['message'] as String? ?? '',
+          message: data['message']?.toString() ?? '',
           metadata: data['metadata'] as Map<String, dynamic>?,
           isError: data['isError'] as bool? ?? false,
           progress: (data['progress'] as num?)?.toDouble(),
