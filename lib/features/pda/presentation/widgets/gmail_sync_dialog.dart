@@ -12,7 +12,7 @@ class GmailSyncDialog extends StatefulWidget {
 }
 
 class _GmailSyncDialogState extends State<GmailSyncDialog> {
-  SyncDuration _selectedDuration = SyncDuration.oneMonth;
+  SyncDuration _selectedDuration = SyncDuration.oneWeek;
   DateTime? _customStartDate;
   DateTime? _customEndDate;
   bool _isSyncing = false;
@@ -253,10 +253,7 @@ class _GmailSyncDialogState extends State<GmailSyncDialog> {
         const SizedBox(height: 8),
         Text(
           'This may take a few moments. Please don\'t close this dialog.',
-          style: TextStyle(
-            fontSize: 14,
-            color: subtle,
-          ),
+          style: TextStyle(fontSize: 14, color: subtle),
           textAlign: TextAlign.center,
         ),
         const SizedBox(height: 20),
@@ -272,11 +269,7 @@ class _GmailSyncDialogState extends State<GmailSyncDialog> {
     return Column(
       children: [
         const SizedBox(height: 20),
-        Icon(
-          Icons.error_outline,
-          color: Colors.red,
-          size: 48,
-        ),
+        Icon(Icons.error_outline, color: Colors.red, size: 48),
         const SizedBox(height: 16),
         Text(
           'Sync Failed',
@@ -289,10 +282,7 @@ class _GmailSyncDialogState extends State<GmailSyncDialog> {
         const SizedBox(height: 8),
         Text(
           _syncError ?? 'An unknown error occurred',
-          style: TextStyle(
-            fontSize: 14,
-            color: Colors.red,
-          ),
+          style: TextStyle(fontSize: 14, color: Colors.red),
           textAlign: TextAlign.center,
         ),
         const SizedBox(height: 20),
@@ -434,11 +424,11 @@ class _GmailSyncDialogState extends State<GmailSyncDialog> {
     });
 
     debugPrint('🔄 [GMAIL SYNC DIALOG] Calling onSyncSelected callback');
-    
+
     try {
       // Call the sync function and wait for it to complete
       await widget.onSyncSelected(syncOptions);
-      
+
       // If we get here, sync was successful
       if (mounted) {
         Navigator.of(context).pop();

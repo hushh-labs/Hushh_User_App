@@ -3,8 +3,8 @@ import '../entities/gmail_email.dart';
 
 enum SyncDuration {
   oneWeek(7, '1 Week'),
-  fifteenDays(15, '15 Days'),
-  oneMonth(30, '1 Month'),
+  // fifteenDays(15, '15 Days'),
+  // oneMonth(30, '1 Month'),
   custom(0, 'Custom');
 
   const SyncDuration(this.days, this.displayName);
@@ -50,7 +50,7 @@ class SyncOptions {
     final durationName = json['duration'] as String?;
     final duration = SyncDuration.values.firstWhere(
       (d) => d.name == durationName,
-      orElse: () => SyncDuration.oneMonth,
+      orElse: () => SyncDuration.oneWeek,
     );
 
     return SyncOptions(
