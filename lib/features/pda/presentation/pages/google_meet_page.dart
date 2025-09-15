@@ -193,18 +193,7 @@ class _GoogleMeetPageState extends State<GoogleMeetPage>
           fontWeight: FontWeight.w600,
         ),
       ),
-      actions: [
-        IconButton(
-          onPressed: _isRefreshing ? null : _refreshData,
-          icon: _isRefreshing
-              ? const SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Icon(Icons.refresh, color: textColor),
-        ),
-      ],
+      actions: const [],
       bottom: PreferredSize(
         preferredSize: const Size.fromHeight(1),
         child: Container(height: 1, color: borderColor),
@@ -248,7 +237,7 @@ class _GoogleMeetPageState extends State<GoogleMeetPage>
 
   Widget _buildEventList(List<CalendarEvent> events, String emptyMessage) {
     if (_isLoading) {
-      return const Center(child: CircularProgressIndicator());
+      return _buildLoading();
     }
 
     if (_error != null) {
@@ -268,6 +257,29 @@ class _GoogleMeetPageState extends State<GoogleMeetPage>
           final event = events[index];
           return _buildEventCard(event);
         },
+      ),
+    );
+  }
+
+  Widget _buildLoading() {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: const [
+          SizedBox(
+            width: 28,
+            height: 28,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              valueColor: AlwaysStoppedAnimation<Color>(textColor),
+            ),
+          ),
+          SizedBox(height: 10),
+          Text(
+            'Loading meetings...',
+            style: TextStyle(color: hintColor, fontSize: 13),
+          ),
+        ],
       ),
     );
   }
