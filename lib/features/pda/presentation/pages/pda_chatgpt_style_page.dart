@@ -90,6 +90,9 @@ class _PdaChatGptStylePageState extends State<PdaChatGptStylePage> {
   bool _isGoogleMeetDataReady =
       true; // Default to true to allow messaging until checked
 
+  // Periodic readiness check timer
+  Timer? _googleMeetReadinessTimer;
+
   // Image picker
   final ImagePicker _imagePicker = ImagePicker();
   List<File> _selectedImages = [];
@@ -248,6 +251,11 @@ class _PdaChatGptStylePageState extends State<PdaChatGptStylePage> {
 
             // Check if data is actually ready for queries
             await _refreshGoogleMeetDataReadiness();
+
+            // Add periodic checks for calendar data readiness if still not ready
+            if (!_isGoogleMeetDataReady) {
+              _startPeriodicGoogleMeetReadinessCheck();
+            }
           }
           // If sync failed or other states, don't automatically change _isGoogleMeetDataReady
         }
@@ -1530,6 +1538,45 @@ class _PdaChatGptStylePageState extends State<PdaChatGptStylePage> {
     }
   }
 
+  /// Start periodic checking for Google Meet calendar data readiness
+  void _startPeriodicGoogleMeetReadinessCheck() {
+    _googleMeetReadinessTimer?.cancel();
+
+    debugPrint('⏰ [GOOGLE MEET STATUS] Starting periodic readiness check...');
+
+    _googleMeetReadinessTimer = Timer.periodic(const Duration(seconds: 10), (
+      timer,
+    ) async {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+
+      try {
+        final isReady = await _googleMeetSyncStatusService
+            .isGoogleMeetDataReadyInLocalStorage();
+
+        debugPrint(
+          '⏰ [GOOGLE MEET STATUS] Periodic check: data ready = $isReady',
+        );
+
+        if (isReady) {
+          if (mounted) {
+            setState(() {
+              _isGoogleMeetDataReady = true;
+            });
+            debugPrint(
+              '✅ [GOOGLE MEET STATUS] Periodic check found data ready - stopping timer',
+            );
+          }
+          timer.cancel();
+        }
+      } catch (e) {
+        debugPrint('❌ [GOOGLE MEET STATUS] Error in periodic check: $e');
+      }
+    });
+  }
+
   Future<void> _triggerQuickSync() async {
     try {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1874,10 +1921,17 @@ class _PdaChatGptStylePageState extends State<PdaChatGptStylePage> {
       );
 
       if (result != null) {
+        // IMMEDIATE UPDATE: Data is ready locally, update UI immediately
         setState(() {
           _isGoogleMeetConnected = true;
+          _isGoogleMeetDataReady =
+              true; // Data is ready immediately after OAuth + sync
           _isConnectingGoogleMeet = false;
         });
+
+        debugPrint(
+          '🚀 [PDA UI] Google Meet OAuth completed - UI updated immediately with ready state',
+        );
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -3402,6 +3456,7 @@ class _PdaChatGptStylePageState extends State<PdaChatGptStylePage> {
     _stopTypingAnimation();
     _gmailSyncStatusSubscription?.cancel();
     _googleMeetSyncStatusSubscription?.cancel();
+    _googleMeetReadinessTimer?.cancel();
     super.dispose();
   }
 }
