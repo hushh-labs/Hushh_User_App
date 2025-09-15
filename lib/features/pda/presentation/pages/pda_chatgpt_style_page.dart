@@ -20,6 +20,8 @@ import '../../data/services/supabase_gmail_service.dart';
 import '../../data/services/simple_linkedin_service.dart';
 import '../widgets/gmail_sync_dialog.dart';
 import '../widgets/sync_progress_dialog.dart';
+import '../widgets/gmail_bottom_modal_sheet.dart';
+import '../widgets/google_meet_bottom_modal_sheet.dart';
 import '../../data/services/pda_preprocessing_manager.dart';
 import '../widgets/preprocessing_status_widget.dart';
 import '../../../../shared/services/gmail_sync_status_service.dart';
@@ -1212,11 +1214,21 @@ class _PdaChatGptStylePageState extends State<PdaChatGptStylePage> {
       final isConnected = await googleMeetRepo.isGoogleMeetConnected(
         currentUser.uid,
       );
+
+      // SIMPLE LOGIC: If connected, data is ready. Period.
+      // If we have a Google Meet account, sync must have completed at some point
+      final isDataReady = isConnected; // If connected → data ready
+
       if (mounted) {
         setState(() {
           _isGoogleMeetConnected = isConnected;
+          _isGoogleMeetDataReady = isDataReady;
         });
       }
+
+      debugPrint(
+        '🚀 [GOOGLE MEET INIT] IMMEDIATE STATUS - Connected: $isConnected, Ready: $isDataReady',
+      );
     } catch (e) {
       debugPrint('❌ [PDA] Error checking Google Meet connection: $e');
     }
@@ -1294,42 +1306,18 @@ class _PdaChatGptStylePageState extends State<PdaChatGptStylePage> {
   }
 
   void _showGmailOptionsDialog() {
-    showCupertinoDialog(
-      context: context,
-      builder: (context) => CupertinoAlertDialog(
-        title: const Text('Gmail Connected'),
-        content: const Text(
-          'Your Gmail is already connected. What would you like to do?',
-        ),
-        actions: [
-          CupertinoDialogAction(
-            onPressed: () {
-              Navigator.pop(context);
-              _showSyncOptionsDialog();
-            },
-            child: const Text('Sync Again'),
-          ),
-          CupertinoDialogAction(
-            onPressed: () {
-              Navigator.pop(context);
-              _triggerQuickSync();
-            },
-            child: const Text('Quick Sync'),
-          ),
-          CupertinoDialogAction(
-            onPressed: () {
-              Navigator.pop(context);
-              _disconnectGmail();
-            },
-            isDestructiveAction: true,
-            child: const Text('Disconnect'),
-          ),
-          CupertinoDialogAction(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-        ],
-      ),
+    // Close the drawer first if we can pop
+    if (mounted && Navigator.of(context).canPop()) {
+      Navigator.of(context).pop();
+    }
+
+    showGmailBottomModalSheet(
+      context,
+      isConnected: _isGmailConnected,
+      onConnect: _onConnectGmailPressed,
+      onSyncSelected: _triggerGmailSyncWithOptions,
+      onQuickSync: _triggerQuickSync,
+      onDisconnect: _disconnectGmail,
     );
   }
 
@@ -1958,35 +1946,17 @@ class _PdaChatGptStylePageState extends State<PdaChatGptStylePage> {
   }
 
   void _showGoogleMeetOptionsDialog() {
-    showCupertinoDialog(
-      context: context,
-      builder: (context) => CupertinoAlertDialog(
-        title: const Text('Google Meet Connected'),
-        content: const Text(
-          'Your Google Meet is already connected. What would you like to do?',
-        ),
-        actions: [
-          CupertinoDialogAction(
-            onPressed: () {
-              Navigator.pop(context);
-              _triggerGoogleMeetSync();
-            },
-            child: const Text('Sync Data'),
-          ),
-          CupertinoDialogAction(
-            onPressed: () {
-              Navigator.pop(context);
-              _disconnectGoogleMeet();
-            },
-            isDestructiveAction: true,
-            child: const Text('Disconnect'),
-          ),
-          CupertinoDialogAction(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-        ],
-      ),
+    // Close the drawer first if we can pop
+    if (mounted && Navigator.of(context).canPop()) {
+      Navigator.of(context).pop();
+    }
+
+    showGoogleMeetBottomModalSheet(
+      context,
+      isConnected: _isGoogleMeetConnected,
+      onConnect: _onConnectGoogleMeetPressed,
+      onSync: _triggerGoogleMeetSync,
+      onDisconnect: _disconnectGoogleMeet,
     );
   }
 
@@ -2595,6 +2565,13 @@ class _PdaChatGptStylePageState extends State<PdaChatGptStylePage> {
                     onTap: _isGoogleMeetConnected
                         ? () => _navigateToGoogleMeetPage()
                         : _onConnectGoogleMeetPressed,
+                    onLongPress: () {
+                      if (_isGoogleMeetConnected) {
+                        _showGoogleMeetOptionsDialog();
+                      } else {
+                        _onConnectGoogleMeetPressed();
+                      }
+                    },
                   ),
                   const SizedBox(height: 12),
 
