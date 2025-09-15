@@ -113,30 +113,12 @@ class _GoogleMeetOAuthWebViewState extends State<GoogleMeetOAuthWebView> {
   }
 
   void _showSuccessAndClose(String authCode) {
-    // Show success message
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('✅ Authentication successful!'),
-        backgroundColor: Colors.green,
-        duration: Duration(seconds: 2),
-      ),
-    );
-
-    // Return the auth code to the previous screen
+    // No interim snackbar; return success to previous screen
     context.pop({'success': true, 'authCode': authCode});
   }
 
   void _showErrorAndClose(String errorMessage) {
-    // Show error message
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('❌ $errorMessage'),
-        backgroundColor: Colors.red,
-        duration: const Duration(seconds: 3),
-      ),
-    );
-
-    // Return error to the previous screen
+    // No noisy snackbar; just return error
     context.pop({'success': false, 'error': errorMessage});
   }
 

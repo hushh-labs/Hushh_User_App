@@ -137,39 +137,20 @@ class _GmailPageState extends State<GmailPage> {
             fontWeight: FontWeight.w600,
           ),
         ),
-        actions: [
-          IconButton(
-            onPressed: _loading ? null : _bootstrap,
-            icon: _loading
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.refresh, color: text),
-          ),
-        ],
+        actions: const [],
         bottom: const PreferredSize(
           preferredSize: Size.fromHeight(1),
           child: Divider(height: 1, thickness: 1, color: border),
         ),
       ),
       body: _buildBody(),
-      floatingActionButton: _connected
-          ? FloatingActionButton.extended(
-              onPressed: _openSyncDialog,
-              backgroundColor: text,
-              foregroundColor: Colors.white,
-              icon: const Icon(Icons.sync),
-              label: const Text('Sync'),
-            )
-          : null,
+      floatingActionButton: null,
     );
   }
 
   Widget _buildBody() {
     if (_loading) {
-      return const Center(child: CircularProgressIndicator());
+      return _buildLoading();
     }
     if (_error != null) {
       return _buildError(_error!);
@@ -184,6 +165,29 @@ class _GmailPageState extends State<GmailPage> {
       padding: const EdgeInsets.all(16),
       itemCount: _emails.length,
       itemBuilder: (context, index) => _emailCard(_emails[index]),
+    );
+  }
+
+  Widget _buildLoading() {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: const [
+          SizedBox(
+            width: 28,
+            height: 28,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              valueColor: AlwaysStoppedAnimation<Color>(text),
+            ),
+          ),
+          SizedBox(height: 10),
+          Text(
+            'Loading emails...',
+            style: TextStyle(color: hint, fontSize: 13),
+          ),
+        ],
+      ),
     );
   }
 

@@ -24,6 +24,17 @@ class ToastManager {
 
   ToastManager(this.toast);
 
+  static void showToast(
+    BuildContext context,
+    String title, {
+    ToastType type = ToastType.success,
+    Duration duration = const Duration(seconds: 2),
+  }) {
+    ToastManager(
+      Toast(title: title, type: type, duration: duration),
+    )._showSnackBar(context);
+  }
+
   void show(BuildContext context, {Alignment? alignment}) {
     if (toast.title != null) {
       _showSnackBar(context);

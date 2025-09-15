@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:hushh_user_app/features/vault/presentation/bloc/vault_bloc.dart';
 import 'package:hushh_user_app/features/vault/presentation/bloc/vault_state.dart';
 import 'package:hushh_user_app/features/vault/presentation/bloc/vault_event.dart';
@@ -53,6 +54,32 @@ class _VaultPageState extends State<VaultPage> {
     super.initState();
     // Load documents when the page is first accessed
     _loadDocuments();
+  }
+
+  // Fetch full name and photo URL from Firestore 'HushUsers' like PDA page
+  Future<(String?, String?)> _fetchUserProfile() async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return (null, null);
+      final doc = await FirebaseFirestore.instance
+          .collection('HushUsers')
+          .doc(user.uid)
+          .get();
+      if (doc.exists && doc.data() != null) {
+        final data = doc.data()!;
+        final name =
+            (data['fullname'] as String?) ??
+            (data['fullName'] as String?) ??
+            (data['name'] as String?) ??
+            (data['displayName'] as String?);
+        final photo =
+            data['photoUrl'] as String? ?? data['avatarUrl'] as String?;
+        return (name, photo);
+      }
+      return (null, null);
+    } catch (_) {
+      return (null, null);
+    }
   }
 
   void _loadDocuments() {
@@ -156,26 +183,18 @@ class _VaultPageState extends State<VaultPage> {
       backgroundColor: VaultTheme.sidebarBackground,
       child: SafeArea(
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header
-            Container(
-              padding: const EdgeInsets.all(20),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
               child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: VaultTheme.userBubbleColor,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: const Icon(
-                      Icons.folder_open_rounded,
-                      color: Colors.white,
-                      size: 24,
-                    ),
+                children: const [
+                  Icon(
+                    Icons.folder_open_rounded,
+                    color: VaultTheme.sidebarTextColor,
                   ),
-                  const SizedBox(width: 12),
-                  const Text(
+                  SizedBox(width: 8),
+                  Text(
                     'Vault',
                     style: TextStyle(
                       color: VaultTheme.sidebarTextColor,
@@ -187,86 +206,144 @@ class _VaultPageState extends State<VaultPage> {
               ),
             ),
             const Divider(color: VaultTheme.borderColor, height: 1),
-
-            // Actions Section
             Expanded(
               child: ListView(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.symmetric(vertical: 8),
                 children: [
-                  const Text(
-                    'Actions',
-                    style: TextStyle(
-                      color: VaultTheme.hintColor,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 0.5,
+                  ListTile(
+                    dense: true,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+                    leading: const Icon(
+                      Icons.upload_file,
+                      color: VaultTheme.sidebarTextColor,
                     ),
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Upload Document
-                  _buildActionButton(
-                    icon: Icons.upload_file,
-                    title: 'Upload Document',
-                    subtitle: 'Add new files',
+                    title: const Text(
+                      'Upload Document',
+                      style: TextStyle(color: VaultTheme.sidebarTextColor),
+                    ),
+                    subtitle: const Text(
+                      'Add new files',
+                      style: TextStyle(
+                        color: VaultTheme.hintColor,
+                        fontSize: 12,
+                      ),
+                    ),
+                    trailing: const Icon(
+                      Icons.arrow_forward_ios,
+                      color: VaultTheme.hintColor,
+                      size: 16,
+                    ),
                     onTap: _showUploadModal,
                   ),
-                  const SizedBox(height: 12),
-
-                  // Back to PDA
-                  _buildActionButton(
-                    icon: Icons.psychology_alt_outlined,
-                    title: 'Back to PDA',
-                    subtitle: 'Return to assistant',
+                  const Padding(
+                    padding: EdgeInsets.only(left: 56, right: 16),
+                    child: Divider(
+                      color: VaultTheme.borderColor,
+                      height: 8,
+                      thickness: 0.6,
+                    ),
+                  ),
+                  ListTile(
+                    dense: true,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+                    leading: const Icon(
+                      Icons.psychology_alt_outlined,
+                      color: VaultTheme.sidebarTextColor,
+                    ),
+                    title: const Text(
+                      'Back to PDA',
+                      style: TextStyle(color: VaultTheme.sidebarTextColor),
+                    ),
+                    subtitle: const Text(
+                      'Return to assistant',
+                      style: TextStyle(
+                        color: VaultTheme.hintColor,
+                        fontSize: 12,
+                      ),
+                    ),
+                    trailing: const Icon(
+                      Icons.arrow_forward_ios,
+                      color: VaultTheme.hintColor,
+                      size: 16,
+                    ),
                     onTap: () => context.go(RoutePaths.discover),
                   ),
                 ],
               ),
             ),
-
-            // Footer
-            Container(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                children: [
-                  const Divider(color: VaultTheme.borderColor, height: 1),
-                  const SizedBox(height: 16),
-                  BlocBuilder<VaultBloc, VaultState>(
-                    builder: (context, state) {
-                      if (state is VaultLoaded && state.documents.isNotEmpty) {
-                        return InkWell(
-                          onTap: () => _showClearVaultConfirmation(),
-                          borderRadius: BorderRadius.circular(8),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              vertical: 12,
-                              horizontal: 16,
-                            ),
-                            child: Row(
-                              children: [
-                                Icon(
-                                  Icons.delete_outline,
-                                  color: Colors.red[400],
-                                  size: 20,
-                                ),
-                                const SizedBox(width: 12),
-                                Text(
-                                  'Clear Vault',
-                                  style: TextStyle(
-                                    color: Colors.red[400],
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                              ],
-                            ),
+            const Divider(color: VaultTheme.borderColor, height: 1),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
+              child: FutureBuilder<(String?, String?)>(
+                future: _fetchUserProfile(),
+                builder: (context, snapshot) {
+                  final authUser = FirebaseAuth.instance.currentUser;
+                  final firestoreName = snapshot.data?.$1;
+                  final firestorePhoto = snapshot.data?.$2;
+                  final displayName = firestoreName?.isNotEmpty == true
+                      ? firestoreName
+                      : (authUser?.displayName ??
+                            authUser?.email?.split('@').first ??
+                            'You');
+                  final photoUrl = firestorePhoto ?? authUser?.photoURL;
+                  return Row(
+                    children: [
+                      CircleAvatar(
+                        radius: 12,
+                        backgroundColor: VaultTheme.userBubbleColor,
+                        backgroundImage: photoUrl != null
+                            ? NetworkImage(photoUrl)
+                            : null,
+                        child: photoUrl == null
+                            ? const Icon(
+                                Icons.person,
+                                color: Colors.white,
+                                size: 16,
+                              )
+                            : null,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          displayName ?? 'You',
+                          style: const TextStyle(
+                            color: VaultTheme.sidebarTextColor,
+                            fontSize: 14,
                           ),
-                        );
-                      }
-                      return const SizedBox.shrink();
-                    },
-                  ),
-                ],
+                        ),
+                      ),
+                      BlocBuilder<VaultBloc, VaultState>(
+                        builder: (context, state) {
+                          if (state is VaultLoaded &&
+                              state.documents.isNotEmpty) {
+                            return InkWell(
+                              onTap: _showClearVaultConfirmation,
+                              borderRadius: BorderRadius.circular(8),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    Icons.delete_outline,
+                                    color: Colors.red[400],
+                                    size: 18,
+                                  ),
+                                  const SizedBox(width: 6),
+                                  const Text(
+                                    'Clear',
+                                    style: TextStyle(
+                                      color: Colors.red,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          }
+                          return const SizedBox.shrink();
+                        },
+                      ),
+                    ],
+                  );
+                },
               ),
             ),
           ],
@@ -275,67 +352,7 @@ class _VaultPageState extends State<VaultPage> {
     );
   }
 
-  Widget _buildActionButton({
-    required IconData icon,
-    required String title,
-    required String subtitle,
-    required VoidCallback onTap,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: VaultTheme.assistantBubbleColor,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: VaultTheme.borderColor, width: 1),
-        ),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: VaultTheme.userBubbleColor,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Icon(icon, color: Colors.white, size: 20),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      color: VaultTheme.sidebarTextColor,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    subtitle,
-                    style: const TextStyle(
-                      color: VaultTheme.hintColor,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w400,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const Icon(
-              Icons.arrow_forward_ios,
-              color: VaultTheme.hintColor,
-              size: 16,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+  // _buildActionButton removed (replaced by ListTile-based items in drawer)
 
   Widget _buildChatGptStyleAppBar() {
     return SafeArea(

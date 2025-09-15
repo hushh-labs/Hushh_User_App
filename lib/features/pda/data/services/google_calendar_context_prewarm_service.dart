@@ -526,6 +526,11 @@ class GoogleCalendarContextPrewarmService {
     }
   }
 
+  /// Clear PDA context cache to force fresh data fetch
+  Future<void> clearPDAContextCachePublic(String userId) async {
+    await _clearPDAContextCache(userId);
+  }
+
   /// Check if we should prewarm (avoid too frequent calls)
   Future<bool> _shouldPrewarm(String userId) async {
     try {

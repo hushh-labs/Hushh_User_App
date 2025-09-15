@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:hushh_user_app/features/pda/data/services/google_calendar_cache_manager.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -41,6 +42,13 @@ import 'package:hushh_user_app/shared/utils/app_local_storage.dart';
 import 'package:go_router/go_router.dart';
 import 'package:hushh_user_app/core/routing/route_paths.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:hushh_user_app/shared/core/utils/toast_manager.dart';
+import '../../data/services/gmail_context_prewarm_service.dart';
+import '../../data/services/google_calendar_context_prewarm_service.dart';
+import '../../data/data_sources/google_calendar_api_data_source.dart';
+import '../../data/data_sources/google_calendar_supabase_data_source.dart';
+import '../../data/data_sources/google_meet_supabase_data_source.dart';
+import '../../data/services/google_calendar_cache_manager.dart';
 
 class PdaChatGptStylePage extends StatefulWidget {
   const PdaChatGptStylePage({super.key});
@@ -103,6 +111,10 @@ class _PdaChatGptStylePageState extends State<PdaChatGptStylePage> {
   String? _currentConversationId;
   String _currentConversationTitle = 'New chat';
   List<Map<String, dynamic>> _conversations = [];
+  // Drawer search
+  final TextEditingController _drawerSearchController = TextEditingController();
+  String _drawerSearchQuery = '';
+  String? _currentUserPhotoUrl;
 
   // Typing indicator variations
   final List<String> _typingMessages = [
@@ -152,6 +164,11 @@ class _PdaChatGptStylePageState extends State<PdaChatGptStylePage> {
     _checkGoogleMeetConnectionStatus();
     _checkGoogleDriveConnectionStatus();
     _messageController.addListener(_updateSendButtonState);
+    _drawerSearchController.addListener(() {
+      setState(() {
+        _drawerSearchQuery = _drawerSearchController.text.trim();
+      });
+    });
 
     // Initialize preprocessing
     _initializePreprocessing();
@@ -431,6 +448,7 @@ class _PdaChatGptStylePageState extends State<PdaChatGptStylePage> {
                   : currentUser.displayName ??
                         currentUser.email?.split('@').first ??
                         'User';
+              _currentUserPhotoUrl = currentUser.photoURL;
             });
           }
 
@@ -448,6 +466,7 @@ class _PdaChatGptStylePageState extends State<PdaChatGptStylePage> {
                   currentUser.displayName ??
                   currentUser.email?.split('@').first ??
                   'User';
+              _currentUserPhotoUrl = currentUser.photoURL;
             });
           }
           debugPrint(
@@ -1275,13 +1294,7 @@ class _PdaChatGptStylePageState extends State<PdaChatGptStylePage> {
         });
 
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('✅ Gmail connected successfully!'),
-              backgroundColor: Colors.green,
-              duration: Duration(seconds: 2),
-            ),
-          );
+          // No interim snackbar; open sync options directly
           _showInitialSyncDialog();
         }
       } else {
@@ -1329,31 +1342,7 @@ class _PdaChatGptStylePageState extends State<PdaChatGptStylePage> {
   }
 
   Future<void> _triggerGmailSyncWithOptions(SyncOptions syncOptions) async {
-    // Show immediate feedback that sync has started
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Row(
-            children: [
-              SizedBox(
-                width: 16,
-                height: 16,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Text('🔄 Gmail sync started in background...'),
-            ],
-          ),
-          backgroundColor: Colors.blue,
-          duration: const Duration(seconds: 3),
-        ),
-      );
-    }
-
-    // Start background sync (don't await - let it run in background)
+    // Start background sync (no snackbars)
     _performBackgroundGmailSync(syncOptions);
   }
 
@@ -1364,7 +1353,7 @@ class _PdaChatGptStylePageState extends State<PdaChatGptStylePage> {
 
       if (mounted) {
         if (result.isSuccess) {
-          // Show success notification
+          // Final success snackbar (to match existing Gmail UX)
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('✅ Gmail sync completed successfully!'),
@@ -1379,15 +1368,10 @@ class _PdaChatGptStylePageState extends State<PdaChatGptStylePage> {
           // Trigger PDA prewarming after successful sync with delay
           debugPrint('🚀 [PDA] Triggering prewarming after Gmail sync...');
           try {
-            // Wait a bit for sync status to be fully updated
             await Future.delayed(const Duration(seconds: 3));
-
-            // Force a fresh preprocessing including Gmail data
             _preprocessingManager.reset();
             await _preprocessingManager.startPreprocessing();
             debugPrint('✅ [PDA] Prewarming completed after Gmail sync');
-
-            // Update UI state to reflect preprocessing completion
             if (mounted) {
               setState(() {
                 _isPreprocessingComplete = true;
@@ -1395,7 +1379,6 @@ class _PdaChatGptStylePageState extends State<PdaChatGptStylePage> {
             }
           } catch (e) {
             debugPrint('❌ [PDA] Prewarming failed after Gmail sync: $e');
-            // Fall back to regular preprocessing
             try {
               await _preprocessingManager.startPreprocessing();
             } catch (fallbackError) {
@@ -1405,26 +1388,11 @@ class _PdaChatGptStylePageState extends State<PdaChatGptStylePage> {
             }
           }
         } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('⚠️ Gmail sync failed: ${result.error}'),
-              backgroundColor: Colors.orange,
-              duration: const Duration(seconds: 4),
-            ),
-          );
+          debugPrint('⚠️ Gmail sync failed: ${result.error}');
         }
       }
     } catch (e) {
       debugPrint('❌ [GMAIL SYNC] Background sync error: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('❌ Gmail sync error: $e'),
-            backgroundColor: Colors.red,
-            duration: const Duration(seconds: 4),
-          ),
-        );
-      }
     }
   }
 
@@ -1567,42 +1535,17 @@ class _PdaChatGptStylePageState extends State<PdaChatGptStylePage> {
 
   Future<void> _triggerQuickSync() async {
     try {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('🔄 Quick syncing new emails...'),
-          duration: Duration(seconds: 2),
-        ),
-      );
-
       final result = await _supabaseGmailService.syncGmailNow();
 
       if (result.isSuccess) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              '✅ Quick sync completed! Found ${result.messagesCount} total emails.',
-            ),
-            backgroundColor: Colors.green,
-            duration: const Duration(seconds: 3),
-          ),
-        );
+        // Final success toast only
+        ToastManager.showToast(context, 'Gmail quick sync completed');
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('⚠️ Quick sync failed: ${result.error}'),
-            backgroundColor: Colors.orange,
-            duration: const Duration(seconds: 3),
-          ),
-        );
+        // No snackbars during connect/sync; just log
+        debugPrint('⚠️ Quick sync failed: ${result.error}');
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('❌ Error during quick sync: $e'),
-          backgroundColor: Colors.red,
-          duration: const Duration(seconds: 3),
-        ),
-      );
+      debugPrint('❌ Error during quick sync: $e');
     }
   }
 
@@ -1613,32 +1556,22 @@ class _PdaChatGptStylePageState extends State<PdaChatGptStylePage> {
       if (result.isSuccess) {
         setState(() {
           _isGmailConnected = false;
+          _isGmailDataReady = false;
         });
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Gmail disconnected successfully'),
-            backgroundColor: Colors.blue,
-            duration: Duration(seconds: 2),
-          ),
-        );
+        // Clear Gmail PDA context cache
+        final gmailPrewarm = GmailContextPrewarmService();
+        await gmailPrewarm.clearGmailContextCache();
+
+        // Toast instead of snackbar
+        ToastManager.showToast(context, 'Gmail disconnected');
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to disconnect Gmail: ${result.error}'),
-            backgroundColor: Colors.red,
-            duration: Duration(seconds: 3),
-          ),
-        );
+        // Avoid noisy snackbars; log instead
+        debugPrint('Failed to disconnect Gmail: ${result.error}');
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error disconnecting Gmail: $e'),
-          backgroundColor: Colors.red,
-          duration: Duration(seconds: 3),
-        ),
-      );
+      // Avoid noisy snackbars; log instead
+      debugPrint('Error disconnecting Gmail: $e');
     }
   }
 
@@ -1961,33 +1894,26 @@ class _PdaChatGptStylePageState extends State<PdaChatGptStylePage> {
   }
 
   Future<void> _triggerGoogleMeetSync() async {
-    // Show sync progress dialog with PDA animation
-    showSyncProgressDialog(
-      context,
-      title: 'Syncing Google Meet',
-      description: 'Fetching meetings and recordings',
-      onCompleted: () {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('✅ Google Meet data synced successfully!'),
-              backgroundColor: Colors.green,
-              duration: Duration(seconds: 2),
-            ),
-          );
-        }
-      },
-    );
-
     try {
       final googleMeetRepo = _getIt<GoogleMeetRepository>();
       final currentUser = FirebaseAuth.instance.currentUser;
       if (currentUser == null) return;
 
+      // Start Meet sync (progress will be shown by GoogleMeetSyncToastOverlay)
       await googleMeetRepo.syncGoogleMeetData(currentUser.uid);
+
+      if (mounted) {
+        // Final success snackbar to mirror Gmail
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('✅ Google Meet data synced successfully!'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
     } catch (e) {
       if (mounted) {
-        Navigator.of(context).pop(); // Close progress dialog
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('❌ Error syncing Google Meet data: $e'),
@@ -2009,23 +1935,34 @@ class _PdaChatGptStylePageState extends State<PdaChatGptStylePage> {
 
       setState(() {
         _isGoogleMeetConnected = false;
+        _isGoogleMeetDataReady = false;
       });
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Google Meet disconnected successfully'),
-          backgroundColor: Colors.blue,
-          duration: Duration(seconds: 2),
-        ),
-      );
+      // Try to clear Calendar/Meet PDA context cache if service is available
+      try {
+        final api = _getIt<GoogleCalendarApiDataSource>();
+        final supa = _getIt<GoogleCalendarSupabaseDataSource>();
+        final meetSupa = _getIt<GoogleMeetSupabaseDataSource>();
+        final cache = _getIt<GoogleCalendarCacheManager>();
+        final prefs = await SharedPreferences.getInstance();
+        final calendarPrewarm = GoogleCalendarContextPrewarmService(
+          api,
+          supa,
+          meetSupa,
+          cache,
+          prefs,
+        );
+        await calendarPrewarm.clearPDAContextCachePublic(currentUser.uid);
+      } catch (e) {
+        debugPrint(
+          '⚠️ [PDA] Could not clear calendar context on disconnect: $e',
+        );
+      }
+
+      // Unified PDA-style toast
+      ToastManager.showToast(context, 'Google Meet disconnected');
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error disconnecting Google Meet: $e'),
-          backgroundColor: Colors.red,
-          duration: Duration(seconds: 3),
-        ),
-      );
+      debugPrint('Error disconnecting Google Meet: $e');
     }
   }
 
@@ -2345,10 +2282,10 @@ class _PdaChatGptStylePageState extends State<PdaChatGptStylePage> {
     if (_isConnectingGoogleMeet ||
         (_googleMeetSyncStatus?.isActive == true && !_isGoogleMeetDataReady) ||
         (!_isGoogleMeetDataReady && _isGoogleMeetConnected)) {
-      return 'Google Meet is syncing, please wait...';
+      return 'Meet is syncing, please wait...';
     }
 
-    return 'Please wait for sync to complete...';
+    return 'Please wait for response...';
   }
 
   Future<void> _completeGoogleDriveOAuth(String authCode) async {
@@ -2454,26 +2391,15 @@ class _PdaChatGptStylePageState extends State<PdaChatGptStylePage> {
       backgroundColor: sidebarBackground,
       child: SafeArea(
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header
-            Container(
-              padding: const EdgeInsets.all(20),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
               child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: userBubbleColor,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: const Icon(
-                      Icons.psychology_alt_outlined,
-                      color: Colors.white,
-                      size: 24,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  const Text(
+                children: const [
+                  Icon(Icons.psychology_alt_outlined, color: sidebarTextColor),
+                  SizedBox(width: 8),
+                  Text(
                     'Hushh PDA',
                     style: TextStyle(
                       color: sidebarTextColor,
@@ -2484,213 +2410,319 @@ class _PdaChatGptStylePageState extends State<PdaChatGptStylePage> {
                 ],
               ),
             ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: TextField(
+                controller: _drawerSearchController,
+                textInputAction: TextInputAction.search,
+                decoration: InputDecoration(
+                  hintText: 'Search',
+                  isDense: true,
+                  filled: true,
+                  fillColor: assistantBubbleColor,
+                  prefixIcon: const Icon(
+                    Icons.search,
+                    size: 18,
+                    color: hintColor,
+                  ),
+                  prefixIconConstraints: const BoxConstraints(
+                    minWidth: 40,
+                    minHeight: 24,
+                  ),
+                  suffixIcon: _drawerSearchQuery.isNotEmpty
+                      ? IconButton(
+                          icon: const Icon(
+                            Icons.close,
+                            size: 18,
+                            color: hintColor,
+                          ),
+                          onPressed: () => _drawerSearchController.clear(),
+                        )
+                      : null,
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: const BorderSide(color: borderColor),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: const BorderSide(color: borderColor),
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                ),
+                style: const TextStyle(color: textColor, fontSize: 14),
+              ),
+            ),
+            const SizedBox(height: 8),
             const Divider(color: borderColor, height: 1),
-
-            // Content
             Expanded(
               child: ListView(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.symmetric(vertical: 8),
                 children: [
-                  InkWell(
-                    onTap: _createNewConversation,
-                    borderRadius: BorderRadius.circular(12),
-                    child: Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: assistantBubbleColor,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: borderColor),
-                      ),
-                      child: Row(
-                        children: const [
-                          Icon(Icons.edit_outlined, size: 18, color: textColor),
-                          SizedBox(width: 12),
-                          Text('New chat', style: TextStyle(color: textColor)),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const Text(
-                    'Plugins',
-                    style: TextStyle(
-                      color: hintColor,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 0.5,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Gmail Plugin - HIDDEN
-                  _buildPluginButton(
-                    icon: Icons.mail_outline,
-                    title: 'Gmail',
-                    subtitle: _getGmailSubtitle(),
-                    isConnected: _isGmailConnected && _isGmailDataReady,
-                    isLoading:
-                        _isConnectingGmail ||
-                        (_isGmailConnected && !_isGmailDataReady),
-                    onTap: () => _onGmailPluginTapped(),
-                    onLongPress: () {
-                      if (_isGmailConnected) {
-                        _showGmailOptionsDialog();
-                      } else {
-                        _onConnectGmailPressed();
-                      }
-                    },
-                  ),
-                  const SizedBox(height: 12),
-
-                  // LinkedIn Plugin - HIDDEN
-                  // _buildPluginButton(
-                  //   icon: Icons.work_outline,
-                  //   title: 'LinkedIn',
-                  //   subtitle: _isLinkedInConnected ? 'Connected' : 'Connect',
-                  //   isConnected: _isLinkedInConnected,
-                  //   isLoading: _isConnectingLinkedIn,
-                  //   onTap: _onConnectLinkedInPressed,
-                  // ),
-                  // const SizedBox(height: 12),
-
-                  // Google Meet Plugin
-                  _buildPluginButton(
-                    icon: Icons.video_call_outlined,
-                    title: 'Google Meet',
-                    subtitle: _getGoogleMeetSubtitle(),
-                    isConnected:
-                        _isGoogleMeetConnected && _isGoogleMeetDataReady,
-                    isLoading:
-                        _isConnectingGoogleMeet ||
-                        (_isGoogleMeetConnected && !_isGoogleMeetDataReady),
-                    onTap: _isGoogleMeetConnected
-                        ? () => _navigateToGoogleMeetPage()
-                        : _onConnectGoogleMeetPressed,
-                    onLongPress: () {
-                      if (_isGoogleMeetConnected) {
-                        _showGoogleMeetOptionsDialog();
-                      } else {
-                        _onConnectGoogleMeetPressed();
-                      }
-                    },
-                  ),
-                  const SizedBox(height: 12),
-
-                  // Google Drive Plugin - HIDDEN
-                  // _buildPluginButton(
-                  //   icon: Icons.drive_folder_upload_outlined,
-                  //   title: 'Google Drive',
-                  //   subtitle: _isGoogleDriveConnected ? 'Connected' : 'Connect',
-                  //   isConnected: _isGoogleDriveConnected,
-                  //   isLoading: _isConnectingGoogleDrive,
-                  //   onTap: _onConnectGoogleDrivePressed,
-                  // ),
-                  // const SizedBox(height: 12),
-
-                  // Vault Plugin
-                  _buildPluginButton(
-                    icon: Icons.folder_open_rounded,
-                    title: 'Vault',
-                    subtitle: 'Access documents',
-                    isConnected: true,
-                    isLoading: false,
-                    onTap: () => context.push(RoutePaths.vault),
-                  ),
-
-                  const SizedBox(height: 24),
-                  const Text(
-                    'Recent',
-                    style: TextStyle(
-                      color: hintColor,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 0.5,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  ..._conversations.map((c) {
-                    final isActive = c['id'] == _currentConversationId;
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
-                      child: InkWell(
-                        onTap: () => _openConversation(c),
-                        onLongPress: () =>
-                            _confirmDeleteConversation(c['id'] as String),
-                        borderRadius: BorderRadius.circular(12),
-                        child: Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: assistantBubbleColor,
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: isActive ? userBubbleColor : borderColor,
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(8),
+                      onTap: _createNewConversation,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          vertical: 10,
+                          horizontal: 12,
+                        ),
+                        decoration: BoxDecoration(
+                          color: assistantBubbleColor,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          children: const [
+                            Icon(Icons.add, color: sidebarTextColor),
+                            SizedBox(width: 8),
+                            Text(
+                              'New chat',
+                              style: TextStyle(color: sidebarTextColor),
                             ),
-                          ),
-                          child: Row(
-                            children: [
-                              Icon(
-                                Icons.chat_bubble_outline,
-                                size: 16,
-                                color: isActive ? userBubbleColor : hintColor,
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  (c['title'] as String?) ?? 'Conversation',
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    color: isActive
-                                        ? userBubbleColor
-                                        : sidebarTextColor,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
+                          ],
                         ),
                       ),
-                    );
-                  }),
+                    ),
+                  ),
+                  const Padding(
+                    padding: EdgeInsets.fromLTRB(16, 12, 16, 6),
+                    child: Text(
+                      'Plugins',
+                      style: TextStyle(
+                        color: hintColor,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  // Gmail
+                  ListTile(
+                    dense: true,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+                    leading: const Icon(
+                      Icons.mail_outline,
+                      color: sidebarTextColor,
+                    ),
+                    title: const Text(
+                      'Gmail',
+                      style: TextStyle(color: sidebarTextColor),
+                    ),
+                    subtitle: Text(
+                      (_isConnectingGmail ||
+                              (_isGmailConnected && !_isGmailDataReady))
+                          ? 'Connecting...'
+                          : _getGmailSubtitle(),
+                      style: const TextStyle(color: hintColor, fontSize: 12),
+                    ),
+                    trailing:
+                        (_isConnectingGmail ||
+                            (_isGmailConnected && !_isGmailDataReady))
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                userBubbleColor,
+                              ),
+                            ),
+                          )
+                        : (_isGmailConnected && _isGmailDataReady)
+                        ? const Icon(
+                            Icons.check_circle,
+                            color: userBubbleColor,
+                            size: 18,
+                          )
+                        : null,
+                    onTap:
+                        (_isConnectingGmail ||
+                            (_isGmailConnected && !_isGmailDataReady))
+                        ? null
+                        : () => _onGmailPluginTapped(),
+                    onLongPress:
+                        (_isConnectingGmail ||
+                            (_isGmailConnected && !_isGmailDataReady))
+                        ? null
+                        : () {
+                            if (_isGmailConnected) {
+                              _showGmailOptionsDialog();
+                            } else {
+                              _onConnectGmailPressed();
+                            }
+                          },
+                  ),
+                  // Google Meet
+                  ListTile(
+                    dense: true,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+                    leading: const Icon(
+                      Icons.video_call_outlined,
+                      color: sidebarTextColor,
+                    ),
+                    title: const Text(
+                      'Google Meet',
+                      style: TextStyle(color: sidebarTextColor),
+                    ),
+                    subtitle: Text(
+                      (_isConnectingGoogleMeet ||
+                              (_isGoogleMeetConnected &&
+                                  !_isGoogleMeetDataReady))
+                          ? 'Connecting...'
+                          : _getGoogleMeetSubtitle(),
+                      style: const TextStyle(color: hintColor, fontSize: 12),
+                    ),
+                    trailing:
+                        (_isConnectingGoogleMeet ||
+                            (_isGoogleMeetConnected && !_isGoogleMeetDataReady))
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                userBubbleColor,
+                              ),
+                            ),
+                          )
+                        : (_isGoogleMeetConnected && _isGoogleMeetDataReady)
+                        ? const Icon(
+                            Icons.check_circle,
+                            color: userBubbleColor,
+                            size: 18,
+                          )
+                        : null,
+                    onTap:
+                        (_isConnectingGoogleMeet ||
+                            (_isGoogleMeetConnected && !_isGoogleMeetDataReady))
+                        ? null
+                        : (_isGoogleMeetConnected
+                              ? () => _navigateToGoogleMeetPage()
+                              : _onConnectGoogleMeetPressed),
+                    onLongPress:
+                        (_isConnectingGoogleMeet ||
+                            (_isGoogleMeetConnected && !_isGoogleMeetDataReady))
+                        ? null
+                        : () {
+                            if (_isGoogleMeetConnected) {
+                              _showGoogleMeetOptionsDialog();
+                            } else {
+                              _onConnectGoogleMeetPressed();
+                            }
+                          },
+                  ),
+                  // Vault
+                  ListTile(
+                    dense: true,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+                    leading: const Icon(
+                      Icons.folder_open_rounded,
+                      color: sidebarTextColor,
+                    ),
+                    title: const Text(
+                      'Vault',
+                      style: TextStyle(color: sidebarTextColor),
+                    ),
+                    subtitle: const Text(
+                      'Access documents',
+                      style: TextStyle(color: hintColor, fontSize: 12),
+                    ),
+                    trailing: const Icon(
+                      Icons.check_circle,
+                      color: userBubbleColor,
+                      size: 18,
+                    ),
+                    onTap: () => context.push(RoutePaths.vault),
+                  ),
+                  const Padding(
+                    padding: EdgeInsets.only(left: 16, right: 16, top: 4),
+                    child: Divider(
+                      color: borderColor,
+                      height: 12,
+                      thickness: 0.6,
+                    ),
+                  ),
+                  const Padding(
+                    padding: EdgeInsets.fromLTRB(16, 16, 16, 6),
+                    child: Text(
+                      'Recent',
+                      style: TextStyle(
+                        color: hintColor,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  ..._conversations
+                      .where((c) {
+                        if (_drawerSearchQuery.isEmpty) return true;
+                        final title = (c['title'] as String?) ?? 'Conversation';
+                        return title.toLowerCase().contains(
+                          _drawerSearchQuery.toLowerCase(),
+                        );
+                      })
+                      .map((c) {
+                        final isActive = c['id'] == _currentConversationId;
+                        return ListTile(
+                          dense: true,
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                          ),
+                          leading: Icon(
+                            Icons.chat_bubble_outline,
+                            size: 18,
+                            color: isActive ? userBubbleColor : hintColor,
+                          ),
+                          title: Text(
+                            (c['title'] as String?) ?? 'Conversation',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: isActive
+                                  ? userBubbleColor
+                                  : sidebarTextColor,
+                            ),
+                          ),
+                          onTap: () => _openConversation(c),
+                          onLongPress: () =>
+                              _confirmDeleteConversation(c['id'] as String),
+                        );
+                      })
+                      .toList(),
+                  const SizedBox(height: 8),
                 ],
               ),
             ),
-
-            // Footer
-            Container(
-              padding: const EdgeInsets.all(16),
-              child: Column(
+            const Divider(color: borderColor, height: 1),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
+              child: Row(
                 children: [
-                  const Divider(color: borderColor, height: 1),
-                  const SizedBox(height: 16),
-                  // Clear Chat button - commented out
-                  // InkWell(
-                  //   onTap: _showClearConfirmation,
-                  //   borderRadius: BorderRadius.circular(8),
-                  //   child: Container(
-                  //     padding: const EdgeInsets.symmetric(
-                  //       vertical: 12,
-                  //       horizontal: 16,
-                  //     ),
-                  //     child: Row(
-                  //       children: [
-                  //         Icon(
-                  //           Icons.cleaning_services_outlined,
-                  //           color: Colors.red[400],
-                  //           size: 20,
-                  //         ),
-                  //         const SizedBox(width: 12),
-                  //         Text(
-                  //           'Clear Chat',
-                  //           style: TextStyle(
-                  //             color: Colors.red[400],
-                  //             fontSize: 14,
-                  //             fontWeight: FontWeight.w500,
-                  //           ),
-                  //         ),
-                  //       ],
-                  //     ),
-                  //   ),
-                  // ),
+                  CircleAvatar(
+                    radius: 12,
+                    backgroundColor: userBubbleColor,
+                    backgroundImage: _currentUserPhotoUrl != null
+                        ? NetworkImage(_currentUserPhotoUrl!)
+                        : null,
+                    child: _currentUserPhotoUrl == null
+                        ? const Icon(
+                            Icons.person,
+                            color: Colors.white,
+                            size: 16,
+                          )
+                        : null,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      _currentUserName ?? 'You',
+                      style: const TextStyle(
+                        color: sidebarTextColor,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ),
+                  // Settings icon removed by request
                 ],
               ),
             ),
@@ -2940,20 +2972,18 @@ class _PdaChatGptStylePageState extends State<PdaChatGptStylePage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  Text(
-                    _currentUserName ?? 'You',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: textColor,
-                    ),
-                  ),
+                  // Hide sender name for user prompts
                   const SizedBox(height: 8),
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
                       color: Color(0xFFF1F2F4),
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: const BorderRadius.only(
+                        topLeft: Radius.circular(16),
+                        topRight: Radius.circular(16),
+                        bottomLeft: Radius.circular(16),
+                        bottomRight: Radius.circular(4),
+                      ),
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -2978,17 +3008,6 @@ class _PdaChatGptStylePageState extends State<PdaChatGptStylePage> {
                   ),
                 ],
               ),
-            ),
-            const SizedBox(width: 12),
-            // Avatar on the right
-            Container(
-              width: 32,
-              height: 32,
-              decoration: BoxDecoration(
-                color: Color(0xFFF1F2F4),
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: const Icon(Icons.person, color: Colors.black87, size: 18),
             ),
           ],
         ),
@@ -3063,8 +3082,12 @@ class _PdaChatGptStylePageState extends State<PdaChatGptStylePage> {
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
                       color: assistantBubbleColor,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: borderColor),
+                      borderRadius: const BorderRadius.only(
+                        topLeft: Radius.circular(16),
+                        topRight: Radius.circular(16),
+                        bottomRight: Radius.circular(16),
+                        bottomLeft: Radius.circular(4),
+                      ),
                     ),
                     child: MarkdownBody(
                       data: message.content,
