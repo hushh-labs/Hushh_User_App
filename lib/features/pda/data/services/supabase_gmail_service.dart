@@ -11,6 +11,7 @@ import '../../domain/usecases/connect_gmail_usecase.dart';
 import '../../domain/usecases/sync_gmail_usecase.dart';
 import '../../domain/usecases/get_gmail_emails_usecase.dart';
 import '../../domain/entities/gmail_email.dart';
+import '../../../../shared/services/gmail_sync_status_service.dart';
 
 /// Result class for Gmail operations
 class GmailConnectionResult {
@@ -52,6 +53,7 @@ class SupabaseGmailService {
   // final FirebaseFunctions _functions = FirebaseFunctions.instance; // Removed - not used directly
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final GetIt _getIt = GetIt.instance;
+  final GmailSyncStatusService _statusService = GmailSyncStatusService();
 
   // Stream controllers for real-time email detection
   final StreamController<List<GmailEmail>> _emailController =
@@ -91,7 +93,9 @@ class SupabaseGmailService {
           hostedDomain: null,
         );
 
-        debugPrint('✅ [GMAIL SERVICE] GoogleSignIn initialized successfully with Google Meet client ID');
+        debugPrint(
+          '✅ [GMAIL SERVICE] GoogleSignIn initialized successfully with Google Meet client ID',
+        );
       } catch (e) {
         debugPrint('❌ [GMAIL SERVICE] Error initializing GoogleSignIn: $e');
         // Create a basic instance without serverClientId as fallback
@@ -224,6 +228,7 @@ class SupabaseGmailService {
 
   /// Sync Gmail emails with specified options
   Future<GmailConnectionResult> syncEmails(SyncOptions syncOptions) async {
+    final stopwatch = Stopwatch()..start();
     try {
       final user = _auth.currentUser;
       if (user == null) {
@@ -234,19 +239,83 @@ class SupabaseGmailService {
         '🔄 [GMAIL SERVICE] Starting Gmail sync with options: ${syncOptions.duration.displayName}',
       );
 
+      // Initialize status tracking
+      await _statusService.initialize();
+      await _statusService.startGmailSync();
+
+      // Update status: Connecting
+      await _statusService.updateSyncProgress(
+        GmailSyncStage.connecting,
+        message: 'Connecting to Gmail...',
+      );
+
+      // Update status: Authenticating
+      await _statusService.updateSyncProgress(
+        GmailSyncStage.authenticating,
+        progress: 0.1,
+        message: 'Authenticating with Gmail...',
+      );
+
+      // Update status: Fetching threads
+      await _statusService.updateSyncProgress(
+        GmailSyncStage.fetchingThreads,
+        progress: 0.3,
+        message: 'Scanning for email threads...',
+      );
+
+      // Start the actual sync
       final result = await _syncUseCase.call(user.uid, syncOptions);
 
       if (result.isSuccess) {
+        // Update status: Processing complete
+        await _statusService.updateSyncProgress(
+          GmailSyncStage.storingLocally,
+          progress: 0.8,
+          message: 'Storing emails locally...',
+          metadata: {'storedCount': result.emailCount},
+        );
+
+        // Update status: Updating context
+        await _statusService.updateSyncProgress(
+          GmailSyncStage.updatingContext,
+          progress: 0.95,
+          message: 'Preparing PDA context...',
+        );
+
+        // Complete sync with results
+        stopwatch.stop();
+        await _statusService.completeSyncWithResults(
+          totalEmails: result.emailCount ?? 0,
+          newEmails:
+              result.emailCount ??
+              0, // Use same count as we don't have separate new count
+          syncDuration: stopwatch.elapsed,
+        );
+
         _notifyEmailsUpdated(user.uid);
         debugPrint(
           '✅ [GMAIL SERVICE] Gmail sync completed: ${result.emailCount} emails',
         );
         return GmailConnectionResult.success(messagesCount: result.emailCount);
       } else {
+        // Mark sync as failed
+        await _statusService.failSyncWithError(
+          result.error ?? 'Sync failed for unknown reason',
+        );
         return GmailConnectionResult.failure(result.error ?? 'Sync failed');
       }
     } catch (e) {
       debugPrint('❌ [GMAIL SERVICE] Error during sync: $e');
+
+      // Mark sync as failed with error
+      try {
+        await _statusService.failSyncWithError('Sync error: $e');
+      } catch (statusError) {
+        debugPrint(
+          '❌ [GMAIL SERVICE] Error updating sync status: $statusError',
+        );
+      }
+
       return GmailConnectionResult.failure('Sync error: $e');
     }
   }

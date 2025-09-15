@@ -22,6 +22,10 @@ import '../widgets/gmail_sync_dialog.dart';
 import '../widgets/sync_progress_dialog.dart';
 import '../../data/services/pda_preprocessing_manager.dart';
 import '../widgets/preprocessing_status_widget.dart';
+import '../../../../shared/services/gmail_sync_status_service.dart';
+import '../../../../shared/widgets/gmail_sync_toast_overlay.dart';
+import '../../../../shared/services/google_meet_sync_status_service.dart';
+import '../../../../shared/widgets/google_meet_sync_toast_overlay.dart';
 import '../../domain/repositories/gmail_repository.dart';
 import '../../domain/repositories/google_meet_repository.dart';
 import '../../data/data_sources/google_meet_supabase_data_source_impl.dart';
@@ -52,6 +56,10 @@ class _PdaChatGptStylePageState extends State<PdaChatGptStylePage> {
       SupabaseLinkedInService();
   final PdaPreprocessingManager _preprocessingManager =
       PdaPreprocessingManager();
+  final GmailSyncStatusService _gmailSyncStatusService =
+      GmailSyncStatusService();
+  final GoogleMeetSyncStatusService _googleMeetSyncStatusService =
+      GoogleMeetSyncStatusService();
 
   List<PdaMessage> _messages = [];
   bool _isLoadingMessages = false;
@@ -69,6 +77,18 @@ class _PdaChatGptStylePageState extends State<PdaChatGptStylePage> {
   bool _isGoogleDriveConnected = false;
   bool _isConnectingGoogleDrive = false;
   String? _error;
+
+  // Gmail sync status
+  GmailSyncStatus? _gmailSyncStatus;
+  StreamSubscription<GmailSyncStatus>? _gmailSyncStatusSubscription;
+  bool _isGmailDataReady =
+      true; // Default to true to allow messaging until checked
+
+  // Google Meet sync status
+  GoogleMeetSyncStatus? _googleMeetSyncStatus;
+  StreamSubscription<GoogleMeetSyncStatus>? _googleMeetSyncStatusSubscription;
+  bool _isGoogleMeetDataReady =
+      true; // Default to true to allow messaging until checked
 
   // Image picker
   final ImagePicker _imagePicker = ImagePicker();
@@ -131,10 +151,129 @@ class _PdaChatGptStylePageState extends State<PdaChatGptStylePage> {
     // Initialize preprocessing
     _initializePreprocessing();
 
+    // Initialize Gmail sync status tracking
+    _initializeGmailSyncStatus();
+
+    // Initialize Google Meet sync status tracking
+    _initializeGoogleMeetSyncStatus();
+
     // Refresh username after a short delay to ensure Firebase is ready
     Future.delayed(const Duration(seconds: 1), () {
       _getCurrentUserName();
     });
+  }
+
+  /// Initialize Gmail sync status tracking
+  Future<void> _initializeGmailSyncStatus() async {
+    try {
+      await _gmailSyncStatusService.initialize();
+
+      // Listen to Gmail sync status changes
+      _gmailSyncStatusSubscription = _gmailSyncStatusService.statusStream.listen((
+        status,
+      ) async {
+        if (mounted) {
+          setState(() {
+            _gmailSyncStatus = status;
+          });
+
+          // Handle data readiness based on sync status
+          if (status.isActive) {
+            // If sync is active, data is definitely not ready
+            setState(() {
+              _isGmailDataReady = false;
+            });
+          } else if (status.isCompleted) {
+            // If sync completed, assume data is ready and force update
+            debugPrint(
+              '🔄 [GMAIL STATUS] Sync completed, updating data readiness to true',
+            );
+            setState(() {
+              _isGmailDataReady = true;
+            });
+            debugPrint(
+              '✅ [GMAIL STATUS] Data ready set to true after sync completion',
+            );
+          }
+          // If sync failed or other states, don't automatically change _isGmailDataReady
+        }
+      });
+
+      // Check initial Gmail data readiness
+      final isReady = await _gmailSyncStatusService
+          .isGmailDataReadyInLocalStorage();
+      if (mounted) {
+        setState(() {
+          _isGmailDataReady = isReady;
+        });
+      }
+
+      debugPrint('🔄 [GMAIL SYNC STATUS] Initialized - Data ready: $isReady');
+    } catch (e) {
+      debugPrint('❌ [GMAIL SYNC STATUS] Error initializing: $e');
+      // Default to allowing messaging if initialization fails
+      if (mounted) {
+        setState(() {
+          _isGmailDataReady = true;
+        });
+      }
+    }
+  }
+
+  /// Initialize Google Meet sync status tracking
+  Future<void> _initializeGoogleMeetSyncStatus() async {
+    try {
+      await _googleMeetSyncStatusService.initialize();
+
+      // Listen to Google Meet sync status changes
+      _googleMeetSyncStatusSubscription = _googleMeetSyncStatusService.statusStream.listen((
+        status,
+      ) async {
+        if (mounted) {
+          setState(() {
+            _googleMeetSyncStatus = status;
+          });
+
+          // Handle data readiness based on sync status
+          if (status.isActive) {
+            // If sync is active, data is definitely not ready
+            setState(() {
+              _isGoogleMeetDataReady = false;
+            });
+          } else if (status.isCompleted) {
+            // If sync completed, verify data is actually ready through proper check
+            debugPrint(
+              '🔄 [GOOGLE MEET STATUS] Sync completed, verifying data readiness...',
+            );
+
+            // Check if data is actually ready for queries
+            await _refreshGoogleMeetDataReadiness();
+          }
+          // If sync failed or other states, don't automatically change _isGoogleMeetDataReady
+        }
+      });
+
+      // Check initial Google Meet data readiness
+      final isReady = await _googleMeetSyncStatusService
+          .isGoogleMeetDataReadyInLocalStorage();
+      if (mounted) {
+        setState(() {
+          _isGoogleMeetDataReady = isReady;
+        });
+      }
+
+      debugPrint(
+        '🔄 [GOOGLE MEET SYNC STATUS] Initialized - Data ready: $isReady',
+      );
+    } catch (e) {
+      debugPrint('❌ [GOOGLE MEET SYNC STATUS] Error initializing: $e');
+      // Default to allowing messaging if initialization fails
+      if (mounted) {
+        setState(() {
+          _isGoogleMeetDataReady = true;
+        });
+      }
+    }
   }
 
   /// Initialize preprocessing system
@@ -784,6 +923,64 @@ class _PdaChatGptStylePageState extends State<PdaChatGptStylePage> {
       return;
     }
 
+    // Block sending messages if Gmail sync is active
+    if (!_isGmailDataReady && _gmailSyncStatus?.isActive == true) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  '📧 Gmail is syncing your emails. Please wait for sync to complete before sending messages.',
+                ),
+              ),
+            ],
+          ),
+          backgroundColor: Colors.blue,
+          duration: const Duration(seconds: 4),
+        ),
+      );
+      return;
+    }
+
+    // Block sending messages if Google Meet sync is active
+    if (!_isGoogleMeetDataReady && _googleMeetSyncStatus?.isActive == true) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  '📅 Google Meet is syncing your calendar events. Please wait for sync to complete before sending messages.',
+                ),
+              ),
+            ],
+          ),
+          backgroundColor: Colors.blue,
+          duration: const Duration(seconds: 4),
+        ),
+      );
+      return;
+    }
+
     final currentUser = FirebaseAuth.instance.currentUser;
     if (currentUser == null) {
       setState(() {
@@ -1054,6 +1251,7 @@ class _PdaChatGptStylePageState extends State<PdaChatGptStylePage> {
         setState(() {
           _isGmailConnected = true;
           _isConnectingGmail = false;
+          _isGmailDataReady = false; // Data not ready until sync completes
         });
 
         if (mounted) {
@@ -1179,13 +1377,36 @@ class _PdaChatGptStylePageState extends State<PdaChatGptStylePage> {
             ),
           );
 
-          // Trigger PDA prewarming after successful sync
+          // Re-check Gmail data readiness after sync completion
+          await _refreshGmailDataReadiness();
+
+          // Trigger PDA prewarming after successful sync with delay
           debugPrint('🚀 [PDA] Triggering prewarming after Gmail sync...');
           try {
+            // Wait a bit for sync status to be fully updated
+            await Future.delayed(const Duration(seconds: 3));
+
+            // Force a fresh preprocessing including Gmail data
+            _preprocessingManager.reset();
             await _preprocessingManager.startPreprocessing();
             debugPrint('✅ [PDA] Prewarming completed after Gmail sync');
+
+            // Update UI state to reflect preprocessing completion
+            if (mounted) {
+              setState(() {
+                _isPreprocessingComplete = true;
+              });
+            }
           } catch (e) {
             debugPrint('❌ [PDA] Prewarming failed after Gmail sync: $e');
+            // Fall back to regular preprocessing
+            try {
+              await _preprocessingManager.startPreprocessing();
+            } catch (fallbackError) {
+              debugPrint(
+                '❌ [PDA] Fallback preprocessing also failed: $fallbackError',
+              );
+            }
           }
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -1207,6 +1428,104 @@ class _PdaChatGptStylePageState extends State<PdaChatGptStylePage> {
             duration: const Duration(seconds: 4),
           ),
         );
+      }
+    }
+  }
+
+  /// Refresh Gmail data readiness status after sync completion
+  Future<void> _refreshGmailDataReadiness() async {
+    try {
+      debugPrint('🔄 [GMAIL STATUS] Refreshing Gmail data readiness...');
+
+      // Try multiple times with increasing delays to handle Firestore eventual consistency
+      for (int attempt = 1; attempt <= 5; attempt++) {
+        await Future.delayed(Duration(seconds: attempt * 2));
+
+        final isReady = await _gmailSyncStatusService
+            .isGmailDataReadyInLocalStorage();
+
+        debugPrint(
+          '🔄 [GMAIL STATUS] Attempt $attempt: Gmail data ready = $isReady',
+        );
+
+        if (isReady) {
+          if (mounted) {
+            setState(() {
+              _isGmailDataReady = true;
+            });
+            debugPrint('✅ [GMAIL STATUS] Gmail data ready updated: true');
+          }
+          return; // Exit early if data is ready
+        }
+      }
+
+      // If still not ready after 5 attempts, force it to true
+      debugPrint(
+        '⚠️ [GMAIL STATUS] Forcing Gmail data ready to true after 5 attempts',
+      );
+      if (mounted) {
+        setState(() {
+          _isGmailDataReady = true;
+        });
+      }
+    } catch (e) {
+      debugPrint('❌ [GMAIL STATUS] Error refreshing data readiness: $e');
+      // Default to ready if there's an error
+      if (mounted) {
+        setState(() {
+          _isGmailDataReady = true;
+        });
+      }
+    }
+  }
+
+  /// Refresh Google Meet data readiness status after sync completion
+  Future<void> _refreshGoogleMeetDataReadiness() async {
+    try {
+      debugPrint(
+        '🔄 [GOOGLE MEET STATUS] Refreshing Google Meet data readiness...',
+      );
+
+      // Try multiple times with increasing delays to handle Firestore eventual consistency
+      for (int attempt = 1; attempt <= 5; attempt++) {
+        await Future.delayed(Duration(seconds: attempt * 2));
+
+        final isReady = await _googleMeetSyncStatusService
+            .isGoogleMeetDataReadyInLocalStorage();
+
+        debugPrint(
+          '🔄 [GOOGLE MEET STATUS] Attempt $attempt: Google Meet data ready = $isReady',
+        );
+
+        if (isReady) {
+          if (mounted) {
+            setState(() {
+              _isGoogleMeetDataReady = true;
+            });
+            debugPrint(
+              '✅ [GOOGLE MEET STATUS] Google Meet data ready updated: true',
+            );
+          }
+          return; // Exit early if data is ready
+        }
+      }
+
+      // If still not ready after 5 attempts, force it to true
+      debugPrint(
+        '⚠️ [GOOGLE MEET STATUS] Forcing Google Meet data ready to true after 5 attempts',
+      );
+      if (mounted) {
+        setState(() {
+          _isGoogleMeetDataReady = true;
+        });
+      }
+    } catch (e) {
+      debugPrint('❌ [GOOGLE MEET STATUS] Error refreshing data readiness: $e');
+      // Default to ready if there's an error
+      if (mounted) {
+        setState(() {
+          _isGoogleMeetDataReady = true;
+        });
       }
     }
   }
@@ -1879,6 +2198,135 @@ class _PdaChatGptStylePageState extends State<PdaChatGptStylePage> {
     }
   }
 
+  /// Get Gmail subtitle based on connection and sync status
+  String _getGmailSubtitle() {
+    if (!_isGmailConnected) {
+      return 'Connect';
+    }
+
+    if (_gmailSyncStatus?.isActive == true) {
+      return 'Syncing emails...';
+    }
+
+    if (!_isGmailDataReady) {
+      return 'Data loading...';
+    }
+
+    return 'View emails';
+  }
+
+  /// Get Google Meet subtitle based on connection and sync status
+  String _getGoogleMeetSubtitle() {
+    if (!_isGoogleMeetConnected) {
+      return 'Connect';
+    }
+
+    if (_googleMeetSyncStatus?.isActive == true) {
+      return 'Syncing calendar...';
+    }
+
+    if (!_isGoogleMeetDataReady) {
+      return 'Data loading...';
+    }
+
+    return 'View meetings';
+  }
+
+  /// Handle Gmail plugin tap with sync status checking
+  Future<void> _onGmailPluginTapped() async {
+    if (!_isGmailConnected) {
+      await _onConnectGmailPressed();
+      return;
+    }
+
+    // Check if sync is active
+    if (_gmailSyncStatus?.isActive == true) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  '📧 Gmail is syncing your emails. Please wait for sync to complete before accessing Gmail page.',
+                ),
+              ),
+            ],
+          ),
+          backgroundColor: Colors.blue,
+          duration: const Duration(seconds: 4),
+        ),
+      );
+      return;
+    }
+
+    // Check if data is ready in local storage
+    if (!_isGmailDataReady) {
+      final isReady = await _gmailSyncStatusService
+          .isGmailDataReadyInLocalStorage();
+
+      if (!isReady) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '📧 Gmail data is still being processed',
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Please wait for the sync process to complete before accessing your emails.',
+                ),
+              ],
+            ),
+            backgroundColor: Colors.orange,
+            duration: const Duration(seconds: 5),
+          ),
+        );
+        return;
+      } else {
+        // Update state if data is now ready
+        setState(() {
+          _isGmailDataReady = true;
+        });
+      }
+    }
+
+    // All checks passed, navigate to Gmail page
+    context.push(RoutePaths.gmail);
+  }
+
+  /// Get appropriate hint text based on current sync status
+  String _getSyncingHintText() {
+    if (_isPreprocessingRequired && !_isPreprocessingComplete) {
+      return 'Processing data, please wait...';
+    }
+
+    if (_isConnectingGmail ||
+        (_gmailSyncStatus?.isActive == true && !_isGmailDataReady)) {
+      return 'Gmail is syncing, please wait...';
+    }
+
+    if (_isConnectingGoogleMeet ||
+        (_googleMeetSyncStatus?.isActive == true && !_isGoogleMeetDataReady) ||
+        (!_isGoogleMeetDataReady && _isGoogleMeetConnected)) {
+      return 'Google Meet is syncing, please wait...';
+    }
+
+    return 'Please wait for sync to complete...';
+  }
+
   Future<void> _completeGoogleDriveOAuth(String authCode) async {
     try {
       setState(() {
@@ -1930,44 +2378,48 @@ class _PdaChatGptStylePageState extends State<PdaChatGptStylePage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: lightBackground,
-      drawer: _buildSideDrawer(),
-      body: GestureDetector(
-        onTap: () {
-          // Dismiss keyboard when tapping outside
-          FocusScope.of(context).unfocus();
-        },
-        child: Column(
-          children: [
-            _buildChatGptStyleAppBar(),
-            if (_error != null) _buildErrorBanner(),
-            Expanded(
-              child: _isLoadingMessages && _messages.isEmpty
-                  ? PdaLoadingAnimation(
-                      isLoading: _isLoadingMessages,
-                      onAnimationComplete: () {},
-                    )
-                  : (_isPreprocessingRequired && !_isPreprocessingComplete)
-                  ? PdaLoadingAnimation(
-                      isLoading: true,
-                      showPreprocessingStatus: true,
-                      onAnimationComplete: () {
-                        setState(() {
-                          _isPreprocessingComplete = true;
-                        });
-                      },
-                    )
-                  : _messages.isEmpty
-                  ? _buildWelcomeScreen()
-                  : _buildMessagesList(),
+    return GmailSyncToastOverlay(
+      child: GoogleMeetSyncToastOverlay(
+        child: Scaffold(
+          backgroundColor: lightBackground,
+          drawer: _buildSideDrawer(),
+          body: GestureDetector(
+            onTap: () {
+              // Dismiss keyboard when tapping outside
+              FocusScope.of(context).unfocus();
+            },
+            child: Column(
+              children: [
+                _buildChatGptStyleAppBar(),
+                if (_error != null) _buildErrorBanner(),
+                Expanded(
+                  child: _isLoadingMessages && _messages.isEmpty
+                      ? PdaLoadingAnimation(
+                          isLoading: _isLoadingMessages,
+                          onAnimationComplete: () {},
+                        )
+                      : (_isPreprocessingRequired && !_isPreprocessingComplete)
+                      ? PdaLoadingAnimation(
+                          isLoading: true,
+                          showPreprocessingStatus: true,
+                          onAnimationComplete: () {
+                            setState(() {
+                              _isPreprocessingComplete = true;
+                            });
+                          },
+                        )
+                      : _messages.isEmpty
+                      ? _buildWelcomeScreen()
+                      : _buildMessagesList(),
+                ),
+                if (_messages.isEmpty &&
+                    !_isLoadingMessages &&
+                    _isPreprocessingComplete)
+                  _buildSuggestionChips(),
+                _buildChatGptStyleInputBar(),
+              ],
             ),
-            if (_messages.isEmpty &&
-                !_isLoadingMessages &&
-                _isPreprocessingComplete)
-              _buildSuggestionChips(),
-            _buildChatGptStyleInputBar(),
-          ],
+          ),
         ),
       ),
     );
@@ -2049,16 +2501,12 @@ class _PdaChatGptStylePageState extends State<PdaChatGptStylePage> {
                   _buildPluginButton(
                     icon: Icons.mail_outline,
                     title: 'Gmail',
-                    subtitle: _isGmailConnected ? 'Connected' : 'Connect',
-                    isConnected: _isGmailConnected,
-                    isLoading: _isConnectingGmail,
-                    onTap: () {
-                      if (_isGmailConnected) {
-                        context.push(RoutePaths.gmail);
-                      } else {
-                        _onConnectGmailPressed();
-                      }
-                    },
+                    subtitle: _getGmailSubtitle(),
+                    isConnected: _isGmailConnected && _isGmailDataReady,
+                    isLoading:
+                        _isConnectingGmail ||
+                        (_isGmailConnected && !_isGmailDataReady),
+                    onTap: () => _onGmailPluginTapped(),
                     onLongPress: () {
                       if (_isGmailConnected) {
                         _showGmailOptionsDialog();
@@ -2084,11 +2532,12 @@ class _PdaChatGptStylePageState extends State<PdaChatGptStylePage> {
                   _buildPluginButton(
                     icon: Icons.video_call_outlined,
                     title: 'Google Meet',
-                    subtitle: _isGoogleMeetConnected
-                        ? 'View meetings'
-                        : 'Connect',
-                    isConnected: _isGoogleMeetConnected,
-                    isLoading: _isConnectingGoogleMeet,
+                    subtitle: _getGoogleMeetSubtitle(),
+                    isConnected:
+                        _isGoogleMeetConnected && _isGoogleMeetDataReady,
+                    isLoading:
+                        _isConnectingGoogleMeet ||
+                        (_isGoogleMeetConnected && !_isGoogleMeetDataReady),
                     onTap: _isGoogleMeetConnected
                         ? () => _navigateToGoogleMeetPage()
                         : _onConnectGoogleMeetPressed,
@@ -2722,10 +3171,21 @@ class _PdaChatGptStylePageState extends State<PdaChatGptStylePage> {
   }
 
   Widget _buildChatGptStyleInputBar() {
+    // Check if any sync is active that should disable chat input
+    final isAnySyncActive =
+        (!_isGmailDataReady && _gmailSyncStatus?.isActive == true) ||
+        _isConnectingGmail ||
+        (!_isGoogleMeetDataReady && _googleMeetSyncStatus?.isActive == true) ||
+        _isConnectingGoogleMeet ||
+        (_isPreprocessingRequired && !_isPreprocessingComplete);
+
     final isSendButtonEnabled =
         (_messageController.text.trim().isNotEmpty ||
             _selectedImages.isNotEmpty) &&
-        !_isSendingMessage;
+        !_isSendingMessage &&
+        !isAnySyncActive;
+
+    final isInputDisabled = isAnySyncActive || _isSendingMessage;
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -2849,15 +3309,29 @@ class _PdaChatGptStylePageState extends State<PdaChatGptStylePage> {
                 Expanded(
                   child: Container(
                     decoration: BoxDecoration(
-                      color: assistantBubbleColor,
+                      color: isInputDisabled
+                          ? assistantBubbleColor.withOpacity(0.5)
+                          : assistantBubbleColor,
                       borderRadius: BorderRadius.circular(24),
-                      border: Border.all(color: borderColor),
+                      border: Border.all(
+                        color: isInputDisabled
+                            ? borderColor.withOpacity(0.5)
+                            : borderColor,
+                      ),
                     ),
                     child: TextField(
                       controller: _messageController,
+                      enabled: !isInputDisabled,
                       decoration: InputDecoration(
-                        hintText: 'Message Hushh PDA...',
-                        hintStyle: TextStyle(color: hintColor, fontSize: 15),
+                        hintText: isInputDisabled
+                            ? _getSyncingHintText()
+                            : 'Message Hushh PDA...',
+                        hintStyle: TextStyle(
+                          color: isInputDisabled
+                              ? hintColor.withOpacity(0.6)
+                              : hintColor,
+                          fontSize: 15,
+                        ),
                         border: InputBorder.none,
                         contentPadding: const EdgeInsets.symmetric(
                           horizontal: 20,
@@ -2926,6 +3400,8 @@ class _PdaChatGptStylePageState extends State<PdaChatGptStylePage> {
     _messageController.dispose();
     _scrollController.dispose();
     _stopTypingAnimation();
+    _gmailSyncStatusSubscription?.cancel();
+    _googleMeetSyncStatusSubscription?.cancel();
     super.dispose();
   }
 }

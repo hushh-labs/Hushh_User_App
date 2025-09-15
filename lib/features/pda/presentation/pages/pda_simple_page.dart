@@ -461,7 +461,9 @@ class _PdaSimplePageState extends State<PdaSimplePage> {
 
           // Note: PDA prewarming would be triggered here if we had the preprocessing manager
           // For the simple page, we'll just log that sync completed
-          debugPrint('✅ [PDA] Gmail sync completed - ready for enhanced responses');
+          debugPrint(
+            '✅ [PDA] Gmail sync completed - ready for enhanced responses',
+          );
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
