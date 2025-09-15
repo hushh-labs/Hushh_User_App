@@ -6,6 +6,7 @@ import '../data/data_sources/google_meet_supabase_data_source.dart';
 import '../data/data_sources/google_meet_supabase_data_source_impl.dart';
 import '../data/services/google_meet_context_prewarm_service.dart';
 import '../data/services/google_meet_cache_manager.dart';
+import '../data/services/google_calendar_context_prewarm_service.dart';
 
 class GoogleMeetModule {
   static void register() {
@@ -20,6 +21,8 @@ class GoogleMeetModule {
     getIt.registerLazySingleton<GoogleMeetRepository>(
       () => GoogleMeetRepositoryImpl(
         supabaseDataSource: getIt<GoogleMeetSupabaseDataSource>(),
+        calendarContextPrewarmService:
+            getIt<GoogleCalendarContextPrewarmService>(),
       ),
     );
 

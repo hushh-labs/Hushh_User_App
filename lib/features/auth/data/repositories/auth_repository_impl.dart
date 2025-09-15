@@ -522,18 +522,17 @@ class AuthRepositoryImpl implements AuthRepository {
 
     // Always delete from Firebase first (primary source of truth)
     try {
-      // Delete PDA messages subcollection if it exists
-      await _deletePdaMessagesSubcollection(userId);
-
-      // Delete PDA context from pdaContext collection if it exists
-      await _deletePdaContext(userId);
+      // Delete ALL subcollections first
+      await _deleteAllUserSubcollections(userId);
 
       // Delete main user document
       await _firestore
           .collection(FirestoreCollections.users)
           .doc(userId)
           .delete();
-      print('✅ [Firebase] User data and subcollections deleted successfully');
+      print(
+        '✅ [Firebase] User data and all subcollections deleted successfully',
+      );
     } catch (e) {
       print('❌ [Firebase] Failed to delete user data: $e');
       throw Exception('Failed to delete user data from Firebase: $e');
@@ -627,6 +626,108 @@ class AuthRepositoryImpl implements AuthRepository {
     } catch (e) {
       print('⚠️ [PDA] Failed to delete PDA context (non-critical): $e');
       // Don't throw - this is not critical for account deletion
+    }
+  }
+
+  /// Deletes ALL subcollections under the user document
+  Future<void> _deleteAllUserSubcollections(String userId) async {
+    try {
+      print(
+        '🗑️ [FIREBASE] Starting deletion of all subcollections for user: $userId',
+      );
+
+      final userDocRef = _firestore
+          .collection(FirestoreCollections.users)
+          .doc(userId);
+
+      // List of known subcollections to delete
+      final List<String> knownSubcollections = [
+        'pda_messages',
+        'pda_context',
+        'pda_conversations',
+        'gmail_context_cache',
+        'google_meet_context_cache',
+        'linkedin_context_cache',
+        'vault_context',
+        'documents',
+        'conversations',
+        'chats',
+        'notifications',
+        'settings',
+        'preferences',
+      ];
+
+      // Delete known subcollections
+      for (final subcollectionName in knownSubcollections) {
+        try {
+          await _deleteSubcollection(userDocRef, subcollectionName);
+        } catch (e) {
+          print(
+            '⚠️ [FIREBASE] Failed to delete subcollection $subcollectionName: $e',
+          );
+          // Continue with other subcollections
+        }
+      }
+
+      // Also try to discover and delete any other subcollections
+      // Note: Firestore doesn't have a direct way to list subcollections,
+      // so we rely on the known list above
+
+      print('✅ [FIREBASE] All subcollections deletion completed');
+    } catch (e) {
+      print(
+        '⚠️ [FIREBASE] Failed to delete some subcollections (non-critical): $e',
+      );
+      // Don't throw - this is not critical for account deletion
+    }
+  }
+
+  /// Helper method to delete a specific subcollection
+  Future<void> _deleteSubcollection(
+    DocumentReference userDocRef,
+    String subcollectionName,
+  ) async {
+    try {
+      print('🗑️ [FIREBASE] Deleting subcollection: $subcollectionName');
+
+      // Get all documents in the subcollection
+      final subcollectionQuery = await userDocRef
+          .collection(subcollectionName)
+          .get();
+
+      if (subcollectionQuery.docs.isEmpty) {
+        print('⏭️ [FIREBASE] No documents in $subcollectionName - skipping');
+        return;
+      }
+
+      // Delete documents in batches (Firestore batch limit is 500)
+      final batch = _firestore.batch();
+      int count = 0;
+
+      for (final doc in subcollectionQuery.docs) {
+        batch.delete(doc.reference);
+        count++;
+
+        // Execute batch if we reach 500 operations
+        if (count >= 500) {
+          await batch.commit();
+          count = 0;
+        }
+      }
+
+      // Execute remaining operations
+      if (count > 0) {
+        await batch.commit();
+      }
+
+      print(
+        '✅ [FIREBASE] Deleted ${subcollectionQuery.docs.length} documents from $subcollectionName',
+      );
+    } catch (e) {
+      print(
+        '⚠️ [FIREBASE] Failed to delete subcollection $subcollectionName: $e',
+      );
+      // Don't throw - continue with other subcollections
     }
   }
 }
