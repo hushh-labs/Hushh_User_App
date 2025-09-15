@@ -316,11 +316,11 @@ class GoogleMeetRepositoryImpl implements GoogleMeetRepository {
           .doc(userId)
           .collection('sync_status')
           .doc('google_meet')
-          .update({
+          .set({
             'calendarDataReady': true,
             'calendarVerifiedAt': FieldValue.serverTimestamp(),
             'lastVerified': DateTime.now().toIso8601String(),
-          });
+          }, SetOptions(merge: true));
 
       debugPrint(
         '✅ [GOOGLE MEET REPOSITORY] Sync status updated - UI will now show calendar data as ready',
