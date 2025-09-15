@@ -478,7 +478,22 @@ class GmailContextPrewarmService {
       await prefs.remove('gmail_pda_context_${user.uid}');
       await prefs.remove('gmail_pda_context_timestamp_${user.uid}');
 
-      debugPrint('🧹 [GMAIL PREWARM] Gmail context cache cleared (local only)');
+      // Clear Firestore cache
+      try {
+        await _firestore
+            .collection('gmail_context_cache')
+            .doc(user.uid)
+            .delete();
+        debugPrint('🧹 [GMAIL PREWARM] Firestore Gmail context cache cleared');
+      } catch (e) {
+        debugPrint(
+          '⚠️ [GMAIL PREWARM] Warning: Could not clear Firestore cache: $e',
+        );
+      }
+
+      debugPrint(
+        '🧹 [GMAIL PREWARM] Gmail context cache cleared (local + Firestore)',
+      );
     } catch (e) {
       debugPrint('❌ [GMAIL PREWARM] Error clearing Gmail context cache: $e');
     }
@@ -487,6 +502,18 @@ class GmailContextPrewarmService {
   /// Get Gmail context for PDA responses
   Future<String> getGmailContextForPda() async {
     try {
+      final user = _auth.currentUser;
+      if (user == null) return '';
+
+      // Check if Gmail is still connected before providing context
+      final isConnected = await _repository.isGmailConnected(user.uid);
+      if (!isConnected) {
+        debugPrint(
+          '🚫 [GMAIL PREWARM] Gmail disconnected - blocking context access',
+        );
+        return '';
+      }
+
       // Try to get from cache first
       final context = await _loadGmailContextFromCache();
 
@@ -534,9 +561,9 @@ class GmailContextPrewarmService {
       }
 
       // If no cache, try to pre-warm quickly
-      final user = _auth.currentUser;
-      if (user != null) {
-        final quickContext = await _fetchGmailContext(user.uid);
+      final currentUser = _auth.currentUser;
+      if (currentUser != null) {
+        final quickContext = await _fetchGmailContext(currentUser.uid);
         if (quickContext.isNotEmpty && quickContext['summary'] != null) {
           final summary = quickContext['summary'] as String;
           final recentEmails =
