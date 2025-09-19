@@ -24,7 +24,6 @@ import 'features/discover/di/discover_module.dart';
 import 'features/notifications/di/notification_module.dart';
 import 'features/chat/di/chat_module.dart';
 import 'features/vault/di/vault_module.dart';
-import 'features/micro_prompts/di/micro_prompts_module.dart';
 import 'features/micro_prompts/presentation/bloc/micro_prompts_bloc.dart';
 import 'features/micro_prompts/data/services/micro_prompts_scheduler_service.dart';
 import 'features/micro_prompts/presentation/widgets/micro_prompts_global_listener.dart';
@@ -38,6 +37,7 @@ import 'features/pda/data/data_sources/pda_vertex_ai_data_source_impl.dart';
 import 'features/pda/data/services/prewarming_coordinator_service.dart';
 import 'features/pda/data/services/gmail_context_prewarm_service.dart';
 import 'features/vault/data/services/local_file_cache_service.dart';
+import 'features/discover_revamp/di/discover_revamp_module.dart';
 
 final GetIt getIt = GetIt.instance;
 
@@ -72,6 +72,7 @@ Future<void> mainApp() async {
   NotificationModule.register();
   ChatModule.init();
   VaultModule.init(getIt);
+  DiscoverRevampModule.init(getIt);
   setupDependencies();
 
   // Initialize local notifications/channels early
@@ -354,6 +355,8 @@ class _AppContentState extends State<_AppContent> {
       child: MaterialApp.router(
         title: 'Hushh User App',
         theme: ThemeData(
+          fontFamily: 'Inter',
+          scaffoldBackgroundColor: const Color(0xFFF5F5F7),
           primarySwatch: Colors.blue,
           useMaterial3: true,
           colorScheme: ColorScheme.fromSeed(
