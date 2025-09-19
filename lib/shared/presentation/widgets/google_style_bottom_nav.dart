@@ -23,36 +23,48 @@ class GoogleStyleBottomNav extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      // The outer container for shadow and background color
-      decoration: BoxDecoration(
-        color: Colors.white,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.08),
-            blurRadius: 12,
-            offset: const Offset(0, -3),
-          ),
-        ],
-      ),
+      // Outer is transparent; only the rounded pill is opaque
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+      color: Colors.transparent,
       child: SafeArea(
-        child: Container(
-          height: 53, // Reduced from 50 to 45 to minimize gap below
-          padding: const EdgeInsets.symmetric(
-            horizontal: 8.0,
-            vertical: 8.0,
-          ), // Increased vertical padding to 8.0 for more gap
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: items.asMap().entries.map((entry) {
-              final index = entry.key;
-              final item = entry.value;
-              return _buildNavItem(
-                context: context,
-                item: item,
-                index: index,
-                isSelected: index == currentIndex,
-              );
-            }).toList(),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(24),
+          child: Container(
+            height: 60,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(24),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.08),
+                  blurRadius: 18,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            clipBehavior: Clip.hardEdge,
+            padding: const EdgeInsets.symmetric(
+              horizontal: 14.0,
+              vertical: 8.0,
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: items.asMap().entries.map((entry) {
+                final index = entry.key;
+                final item = entry.value;
+                return Expanded(
+                  child: Align(
+                    alignment: Alignment.center,
+                    child: _buildNavItem(
+                      context: context,
+                      item: item,
+                      index: index,
+                      isSelected: index == currentIndex,
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
           ),
         ),
       ),
@@ -81,44 +93,47 @@ class GoogleStyleBottomNav extends StatelessWidget {
       // Using a transparent color to ensure the gesture detector covers the whole area
       // even for unselected items.
       behavior: HitTestBehavior.translucent,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.ease,
-        padding: EdgeInsets.symmetric(
-          horizontal: isSelected ? 16.0 : 8.0,
-          vertical: isSelected ? 10.0 : 4.0,
-        ), // Increased vertical padding for selected items
-        decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFF616180) : Colors.transparent,
-          gradient: isSelected
-              ? const LinearGradient(colors: [Colors.purple, Colors.pinkAccent])
-              : null,
-          borderRadius: BorderRadius.circular(20.0), // Slightly reduced radius
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            _buildIcon(
-              item: item,
-              isSelected: isSelected,
-              isRestricted: isRestrictedForGuest,
-            ),
-            // Conditionally add spacing and the label if the item is selected
-            if (isSelected) ...[
-              const SizedBox(width: 6.0), // Reduced spacing
-              Text(
-                item.label,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 12, // Reduced font size
-                ),
-                overflow: TextOverflow.ellipsis,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 92),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.ease,
+          padding: EdgeInsets.symmetric(
+            horizontal: isSelected ? 10.0 : 8.0,
+            vertical: isSelected ? 8.0 : 6.0,
+          ),
+          decoration: BoxDecoration(
+            color: isSelected ? const Color(0xFF1D1D1F) : Colors.transparent,
+            borderRadius: BorderRadius.circular(18.0),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              _buildIcon(
+                item: item,
+                isSelected: isSelected,
+                isRestricted: isRestrictedForGuest,
               ),
+              // Conditionally add spacing and the label if the item is selected
+              if (isSelected) ...[
+                const SizedBox(width: 4.0),
+                Text(
+                  item.label,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 11,
+                    letterSpacing: 0,
+                    height: 1.1,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                  softWrap: false,
+                ),
+              ],
             ],
-          ],
+          ),
         ),
       ),
     );
@@ -133,7 +148,7 @@ class GoogleStyleBottomNav extends StatelessWidget {
     // Determine the icon color based on its state
     final Color iconColor = isSelected
         ? Colors.white
-        : (isRestricted ? Colors.grey[400]! : const Color(0xFF616180));
+        : (isRestricted ? Colors.grey[400]! : const Color(0xFF6E6E73));
 
     if (item.iconPath != null) {
       // Use ColorFilter for coloring SVG assets
