@@ -49,3 +49,5 @@ app.*.map.json
 .env.local
 .env.production
 PDA_DEVELOPMENT_DOCUMENTATION.md
+hushone-app-614e992e433a.jsonnode_modules/
+node_modules/
