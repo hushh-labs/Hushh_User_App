@@ -2,15 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../shared/presentation/widgets/google_style_bottom_nav.dart';
 import '../../../../shared/utils/app_local_storage.dart';
-// import '../../../pda/presentation/pages/pda_chatgpt_style_page.dart';
+import '../../../pda/presentation/pages/pda_chatgpt_style_page.dart';
 import '../../../profile/presentation/pages/profile_page_wrapper.dart';
 import '../../../discover_revamp/presentation/pages/discover_revamp_wrapper.dart';
-// import '../../../discover_revamp/presentation/pages/discover_revamp_wrapper.dart';
 import '../../../chat/presentation/pages/chat_page_wrapper.dart';
 import '../../../chat/presentation/bloc/chat_bloc.dart' as chat;
 import '../../../../shared/presentation/widgets/debug_wrapper.dart';
 import '../../../../shared/utils/guest_access_control.dart';
-import '../../../kai/presentation/pages/kai_page_wrapper.dart';
 
 class MainAppPage extends StatefulWidget {
   const MainAppPage({super.key});
@@ -24,14 +22,14 @@ class _MainAppPageState extends State<MainAppPage> {
 
   final List<Widget> _pages = [
     const DiscoverRevampWrapper(),
-    const KaiPageWrapper(),
+    const PdaChatGptStylePage(),
     const ChatPageWrapper(),
     const ProfilePageWrapper(),
   ];
 
   final List<BottomNavItem> _bottomNavItems = [
     BottomNavItem.user(label: 'Discover', icon: Icons.explore_outlined),
-    BottomNavItem.user(label: 'Kai', icon: Icons.auto_awesome),
+    BottomNavItem.user(label: 'PDA', icon: Icons.auto_awesome),
     BottomNavItem.user(
       label: 'Chat',
       iconPath: 'assets/chat_bottom_bar_icon.svg',

@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
+import 'cart_icon_with_badge.dart';
 import 'package:flutter/cupertino.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
-import '../../../discover/presentation/bloc/cart_bloc.dart';
+import 'package:go_router/go_router.dart';
+import '../pages/cart_page.dart';
 
 class DiscoverHeader extends StatelessWidget {
   final Color primaryPurple;
@@ -9,6 +10,7 @@ class DiscoverHeader extends StatelessWidget {
   final TextEditingController searchController;
   final FocusNode searchFocusNode;
   final VoidCallback? onFilterTap;
+  final Function(String)? onSearchSubmitted;
 
   const DiscoverHeader({
     super.key,
@@ -17,6 +19,7 @@ class DiscoverHeader extends StatelessWidget {
     required this.searchController,
     required this.searchFocusNode,
     this.onFilterTap,
+    this.onSearchSubmitted,
   });
 
   @override
@@ -77,59 +80,18 @@ class DiscoverHeader extends StatelessWidget {
                   ),
                   Row(
                     children: [
-                      // Cart button with badge
-                      BlocBuilder<CartBloc, CartState>(
-                        builder: (context, state) {
-                          int cartItemCount = 0;
-                          if (state is CartLoaded)
-                            cartItemCount = state.totalItems;
-                          return Stack(
-                            children: [
-                              IconButton(
-                                tooltip: 'Cart',
-                                onPressed: () {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text('Cart coming soon…'),
-                                    ),
-                                  );
-                                },
-                                icon: const Icon(
-                                  Icons.shopping_cart_outlined,
-                                  color: Color(0xFF1D1D1F),
-                                ),
-                              ),
-                              if (cartItemCount > 0)
-                                Positioned(
-                                  right: 6,
-                                  top: 6,
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 6,
-                                      vertical: 2,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      gradient: const LinearGradient(
-                                        colors: [
-                                          Color(0xFFE54D60),
-                                          Color(0xFFA342FF),
-                                        ],
-                                        begin: Alignment.topLeft,
-                                        end: Alignment.bottomRight,
-                                      ),
-                                      borderRadius: BorderRadius.circular(10),
-                                    ),
-                                    child: Text(
-                                      '$cartItemCount',
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                            ],
+                      // Cart button with badge using clean architecture
+                      CartIconWithBadge(
+                        iconColor: const Color(0xFF1D1D1F),
+                        iconSize: 24.0,
+                        badgeColor: primaryPink,
+                        badgeTextColor: Colors.white,
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const CartPage(),
+                            ),
                           );
                         },
                       ),
@@ -192,6 +154,7 @@ class DiscoverHeader extends StatelessWidget {
                           isCollapsed: true,
                           contentPadding: EdgeInsets.symmetric(vertical: 12),
                         ),
+                        onSubmitted: onSearchSubmitted,
                       ),
                     ),
                     Container(

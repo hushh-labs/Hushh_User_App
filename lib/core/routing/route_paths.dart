@@ -26,6 +26,10 @@ class RoutePaths {
   static const String notifications = '/notifications';
   static const String vault = '/vault';
   static const String gmail = '/gmail';
+  static const String qna = '/qna';
+  static const String searchResults = '/search-results';
+  static const String cart = '/cart';
+  static const String agentProfileRevamp = '/agent-profile-revamp';
 }
 
 class RouteNames {
@@ -54,4 +58,8 @@ class RouteNames {
   static const String settings = 'settings';
   static const String notifications = 'notifications';
   static const String vault = 'vault';
+  static const String qna = 'qna';
+  static const String searchResults = 'searchResults';
+  static const String cart = 'cart';
+  static const String agentProfileRevamp = 'agentProfileRevamp';
 }

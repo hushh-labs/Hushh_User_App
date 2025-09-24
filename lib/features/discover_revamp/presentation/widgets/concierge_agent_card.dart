@@ -37,8 +37,13 @@ class ConciergeAgentCard extends StatelessWidget {
           ClipRRect(
             borderRadius: BorderRadius.circular(12),
             child: AspectRatio(
-              aspectRatio: 1.4, // reduce image height slightly
-              child: Image.network(imageUrl, fit: BoxFit.cover),
+              aspectRatio: 1.2, // give more height to fit faces
+              child: Image.network(
+                imageUrl,
+                fit: BoxFit.cover, // fill while preserving aspect ratio
+                alignment: Alignment.topCenter, // bias crop to show faces
+                filterQuality: FilterQuality.medium,
+              ),
             ),
           ),
           const SizedBox(height: 8),
@@ -66,15 +71,18 @@ class ConciergeAgentCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 2),
-          // Industry (fallback to services)
+          // Industry (fallback to services). If multiple categories, show as
+          // comma-separated list and ellipsize as needed across up to 2 lines.
           Text(
             industry == null || industry!.isEmpty ? services : industry!,
-            maxLines: 1,
+            maxLines: 2,
             overflow: TextOverflow.ellipsis,
+            softWrap: true,
             style: const TextStyle(
               fontSize: 12,
               color: Color(0xFF6E6E73),
               fontWeight: FontWeight.w500,
+              height: 1.2,
             ),
           ),
         ],
@@ -107,7 +115,7 @@ class ConciergeAgentsGrid extends StatelessWidget {
           crossAxisCount: 2,
           crossAxisSpacing: 16,
           mainAxisSpacing: 16,
-          childAspectRatio: 0.9, // a bit taller to avoid bottom overflow
+          childAspectRatio: 0.75, // taller cards to show more of the face
         ),
         itemCount: agents.length,
         itemBuilder: (context, index) {

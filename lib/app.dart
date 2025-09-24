@@ -38,6 +38,7 @@ import 'features/pda/data/services/prewarming_coordinator_service.dart';
 import 'features/pda/data/services/gmail_context_prewarm_service.dart';
 import 'features/vault/data/services/local_file_cache_service.dart';
 import 'features/discover_revamp/di/discover_revamp_module.dart';
+import 'features/discover_revamp/di/qna_module.dart';
 
 final GetIt getIt = GetIt.instance;
 
@@ -73,6 +74,7 @@ Future<void> mainApp() async {
   ChatModule.init();
   VaultModule.init(getIt);
   DiscoverRevampModule.init(getIt);
+  QnAModule.init(getIt);
   setupDependencies();
 
   // Initialize local notifications/channels early
