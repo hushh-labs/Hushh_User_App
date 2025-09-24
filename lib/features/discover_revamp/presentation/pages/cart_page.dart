@@ -10,7 +10,13 @@ class CartPage extends StatefulWidget {
 }
 
 class _CartPageState extends State<CartPage> {
-  final CartPresentationService _cartService = CartPresentationService();
+  final CartPresentationService _cartService = CartPresentationService.instance;
+
+  @override
+  void dispose() {
+    // Don't dispose singleton service - it's shared across widgets
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -219,8 +225,29 @@ class _CartPageState extends State<CartPage> {
                                       ),
                                     ),
                                   const SizedBox(height: 8),
+                                  Row(
+                                    children: [
+                                      Text(
+                                        '\$${item.price.toStringAsFixed(2)}',
+                                        style: const TextStyle(
+                                          color: Color(0xFF666666),
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                      Text(
+                                        ' × ${item.quantity}',
+                                        style: const TextStyle(
+                                          color: Color(0xFF666666),
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 4),
                                   Text(
-                                    '\$${item.price.toStringAsFixed(2)}',
+                                    '\$${(item.price * item.quantity).toStringAsFixed(2)}',
                                     style: const TextStyle(
                                       color: Color(0xFF1A1A1A),
                                       fontSize: 18,

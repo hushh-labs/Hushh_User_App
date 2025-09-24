@@ -6,16 +6,30 @@ import '../../domain/services/cart_business_service.dart';
 
 /// Presentation service for cart operations
 /// Coordinates between UI and business logic following clean architecture
+/// Implemented as singleton to ensure shared state across all widgets
 class CartPresentationService {
-  final CartBusinessService _cartBusinessService;
-  final StreamController<CartEntity> _cartStreamController =
+  static CartPresentationService? _instance;
+  static final StreamController<CartEntity> _cartStreamController =
       StreamController<CartEntity>.broadcast();
 
-  CartPresentationService({CartBusinessService? cartBusinessService})
+  final CartBusinessService _cartBusinessService;
+
+  CartPresentationService._internal({CartBusinessService? cartBusinessService})
     : _cartBusinessService = cartBusinessService ?? CartBusinessService() {
     // Initialize with current cart state
     _initializeCart();
   }
+
+  /// Get the singleton instance
+  factory CartPresentationService({CartBusinessService? cartBusinessService}) {
+    _instance ??= CartPresentationService._internal(
+      cartBusinessService: cartBusinessService,
+    );
+    return _instance!;
+  }
+
+  /// Get the singleton instance (shorter syntax)
+  static CartPresentationService get instance => CartPresentationService();
 
   /// Stream of cart updates for real-time UI synchronization
   Stream<CartEntity> get cartStream async* {
@@ -190,9 +204,28 @@ class CartPresentationService {
     return await _cartBusinessService.isProductInCart(productId);
   }
 
+  /// Check if product from specific agent is in cart
+  Future<bool> isProductInCartFromAgent(
+    String productId,
+    String agentId,
+  ) async {
+    return await _cartBusinessService.isProductInCartFromAgent(
+      productId,
+      agentId,
+    );
+  }
+
   /// Get cart item for specific product
   Future<CartItemEntity?> getCartItem(String productId) async {
     return await _cartBusinessService.getCartItem(productId);
+  }
+
+  /// Get cart item for specific product from specific agent
+  Future<CartItemEntity?> getCartItemFromAgent(
+    String productId,
+    String agentId,
+  ) async {
+    return await _cartBusinessService.getCartItemFromAgent(productId, agentId);
   }
 
   /// Get cart count for UI badge
@@ -215,8 +248,11 @@ class CartPresentationService {
   }
 
   /// Dispose resources
+  /// Note: For singleton pattern, we don't dispose the shared stream controller
+  /// unless the entire app is being disposed
   void dispose() {
-    _cartStreamController.close();
+    // Don't close the shared StreamController for singleton instance
+    // The StreamController will be disposed when the app terminates
   }
 }
 

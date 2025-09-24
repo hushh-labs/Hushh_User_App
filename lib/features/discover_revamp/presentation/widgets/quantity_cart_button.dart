@@ -33,12 +33,12 @@ class QuantityCartButton extends StatefulWidget {
 }
 
 class _QuantityCartButtonState extends State<QuantityCartButton> {
-  final CartPresentationService _cartService = CartPresentationService();
+  final CartPresentationService _cartService = CartPresentationService.instance;
   bool _isLoading = false;
 
   @override
   void dispose() {
-    _cartService.dispose();
+    // Don't dispose singleton service - it's shared across widgets
     super.dispose();
   }
 
@@ -180,7 +180,9 @@ class _QuantityCartButtonState extends State<QuantityCartButton> {
         if (snapshot.hasData && widget.productId != null) {
           try {
             final cartItem = snapshot.data!.items.firstWhere(
-              (item) => item.productId == widget.productId,
+              (item) =>
+                  item.productId == widget.productId &&
+                  item.agentId == widget.agentId,
             );
             currentQuantity = cartItem.quantity;
           } catch (e) {
@@ -189,6 +191,10 @@ class _QuantityCartButtonState extends State<QuantityCartButton> {
           }
         }
 
+        // Only show loading for add to cart operation, not for quantity updates
+        final bool showLoadingForAdd = _isLoading && currentQuantity == 0;
+        final bool showLoadingForUpdate = _isLoading && currentQuantity > 0;
+
         if (currentQuantity == 0) {
           // Show "Add to Cart" button
           return Container(
@@ -196,7 +202,7 @@ class _QuantityCartButtonState extends State<QuantityCartButton> {
             constraints: const BoxConstraints(minWidth: 120),
             child: InkWell(
               borderRadius: BorderRadius.circular(12),
-              onTap: _isLoading ? null : _addToCart,
+              onTap: showLoadingForAdd ? null : _addToCart,
               child: Container(
                 width: double.infinity,
                 height: 48,
@@ -204,7 +210,7 @@ class _QuantityCartButtonState extends State<QuantityCartButton> {
                   color: const Color(0xFF111111),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: _isLoading
+                child: showLoadingForAdd
                     ? const Center(
                         child: SizedBox(
                           width: 20,
@@ -252,7 +258,7 @@ class _QuantityCartButtonState extends State<QuantityCartButton> {
                 color: const Color(0xFF111111),
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: _isLoading
+              child: showLoadingForUpdate
                   ? const Center(
                       child: SizedBox(
                         width: 20,
@@ -270,11 +276,13 @@ class _QuantityCartButtonState extends State<QuantityCartButton> {
                       children: [
                         // Minus button
                         GestureDetector(
-                          onTap: () {
-                            if (currentQuantity > 0) {
-                              _updateQuantity(currentQuantity - 1);
-                            }
-                          },
+                          onTap: showLoadingForUpdate
+                              ? null
+                              : () {
+                                  if (currentQuantity > 0) {
+                                    _updateQuantity(currentQuantity - 1);
+                                  }
+                                },
                           child: Container(
                             width: 32,
                             height: 32,
@@ -306,9 +314,11 @@ class _QuantityCartButtonState extends State<QuantityCartButton> {
 
                         // Plus button
                         GestureDetector(
-                          onTap: () {
-                            _updateQuantity(currentQuantity + 1);
-                          },
+                          onTap: showLoadingForUpdate
+                              ? null
+                              : () {
+                                  _updateQuantity(currentQuantity + 1);
+                                },
                           child: Container(
                             width: 32,
                             height: 32,

@@ -136,10 +136,36 @@ class CartBusinessService {
     return currentCart.containsProduct(productId);
   }
 
+  /// Check if product from specific agent is in cart
+  Future<bool> isProductInCartFromAgent(
+    String productId,
+    String agentId,
+  ) async {
+    final currentCart = await getCurrentCart();
+    return currentCart.items.any(
+      (item) => item.productId == productId && item.agentId == agentId,
+    );
+  }
+
   /// Get cart item for specific product
   Future<CartItemEntity?> getCartItem(String productId) async {
     final currentCart = await getCurrentCart();
     return currentCart.getItem(productId);
+  }
+
+  /// Get cart item for specific product from specific agent
+  Future<CartItemEntity?> getCartItemFromAgent(
+    String productId,
+    String agentId,
+  ) async {
+    final currentCart = await getCurrentCart();
+    try {
+      return currentCart.items.firstWhere(
+        (item) => item.productId == productId && item.agentId == agentId,
+      );
+    } catch (e) {
+      return null;
+    }
   }
 
   /// Force add item after clearing conflicting agent items

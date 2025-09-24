@@ -25,7 +25,7 @@ class CartIconWithBadge extends StatefulWidget {
 }
 
 class _CartIconWithBadgeState extends State<CartIconWithBadge> {
-  final CartPresentationService _cartService = CartPresentationService();
+  final CartPresentationService _cartService = CartPresentationService.instance;
   int _cartCount = 0;
 
   @override
@@ -37,7 +37,7 @@ class _CartIconWithBadgeState extends State<CartIconWithBadge> {
 
   @override
   void dispose() {
-    _cartService.dispose();
+    // Don't dispose singleton service - it's shared across widgets
     super.dispose();
   }
 
@@ -202,7 +202,7 @@ class CartButton extends StatefulWidget {
 }
 
 class _CartButtonState extends State<CartButton> {
-  final CartPresentationService _cartService = CartPresentationService();
+  final CartPresentationService _cartService = CartPresentationService.instance;
   bool _isLoading = false;
   bool _isInCart = false;
 
@@ -216,7 +216,7 @@ class _CartButtonState extends State<CartButton> {
 
   @override
   void dispose() {
-    _cartService.dispose();
+    // Don't dispose singleton service - it's shared across widgets
     super.dispose();
   }
 
@@ -359,7 +359,9 @@ class _CartButtonState extends State<CartButton> {
         bool productInCart = false;
         if (snapshot.hasData && widget.productId != null) {
           productInCart = snapshot.data!.items.any(
-            (item) => item.productId == widget.productId,
+            (item) =>
+                item.productId == widget.productId &&
+                item.agentId == widget.agentId,
           );
         }
 
