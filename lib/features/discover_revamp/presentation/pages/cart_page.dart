@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:get_it/get_it.dart';
 import '../services/cart_presentation_service.dart';
 import '../widgets/cart_icon_with_badge.dart';
+import '../../../checkout/presentation/bloc/checkout_bloc.dart';
+import '../../../checkout/presentation/pages/checkout_form_page.dart';
 
 class CartPage extends StatefulWidget {
   const CartPage({super.key});
@@ -325,11 +329,7 @@ class _CartPageState extends State<CartPage> {
                       SizedBox(
                         width: double.infinity,
                         child: ElevatedButton(
-                          onPressed: () {
-                            _showBlackToast(
-                              'Checkout functionality coming soon!',
-                            );
-                          },
+                          onPressed: _navigateToCheckout,
                           style: ElevatedButton.styleFrom(
                             backgroundColor: const Color(0xFF1D1D1F),
                             foregroundColor: Colors.white,
@@ -355,6 +355,18 @@ class _CartPageState extends State<CartPage> {
             ],
           );
         },
+      ),
+    );
+  }
+
+  void _navigateToCheckout() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => BlocProvider(
+          create: (context) => GetIt.instance<CheckoutBloc>(),
+          child: const CheckoutFormPage(),
+        ),
       ),
     );
   }

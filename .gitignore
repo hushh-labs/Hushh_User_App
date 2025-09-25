@@ -1,3 +1,9 @@
+# Node and Functions
+functions/node_modules/
+.firebase/
+firebase-debug.log
+functions/.env
+functions/.runtimeconfig.json
 # Miscellaneous
 *.class
 *.log

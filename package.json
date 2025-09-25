@@ -24,5 +24,8 @@
   "homepage": "https://github.com/hushh-labs/Hushh_User_App#readme",
   "dependencies": {
     "firebase-admin": "^13.5.0"
+  },
+  "devDependencies": {
+    "firebase-tools": "^13.12.0"
   }
 }

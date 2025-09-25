@@ -4,6 +4,8 @@ import 'package:get_it/get_it.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_stripe/flutter_stripe.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 import 'core/config/firebase_init.dart';
 import 'core/config/supabase_init.dart';
@@ -50,6 +52,21 @@ Future<void> mainApp() async {
 
   // Initialize Supabase
   await SupabaseInit.initialize();
+
+  // Initialize Stripe with publishable key from environment
+  try {
+    final stripePublishableKey = dotenv.env['STRIPE_PUBLISHABLE_KEY'];
+    if (stripePublishableKey != null && stripePublishableKey.isNotEmpty) {
+      Stripe.publishableKey = stripePublishableKey;
+      debugPrint('💳 [APP] Stripe initialized successfully');
+    } else {
+      debugPrint(
+        '⚠️ [APP] Warning: STRIPE_PUBLISHABLE_KEY not found in environment variables',
+      );
+    }
+  } catch (e) {
+    debugPrint('❌ [APP] Error initializing Stripe: $e');
+  }
 
   // Initialize guest mode state
   await AppLocalStorage.initializeGuestMode();

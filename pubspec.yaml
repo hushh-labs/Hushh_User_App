@@ -150,6 +150,12 @@ dependencies:
   
   # App Tracking Transparency for iOS
   app_tracking_transparency: any
+  
+  # Stripe payment integration
+  flutter_stripe: any
+  
+  # Razorpay payment integration
+  razorpay_flutter: any
  
 
 dev_dependencies:

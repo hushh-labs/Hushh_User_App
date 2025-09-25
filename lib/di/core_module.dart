@@ -13,6 +13,8 @@ import '../core/routing/app_router.dart';
 import '../features/notifications/di/notification_module.dart';
 import '../features/micro_prompts/di/micro_prompts_module.dart';
 import '../features/discover_revamp/di/agent_profile_module.dart';
+import '../features/checkout/di/checkout_module.dart';
+import '../features/payment/di/payment_module.dart';
 
 class CoreModule {
   static void register() {
@@ -44,5 +46,7 @@ class CoreModule {
     NotificationModule.register();
     MicroPromptsModule.init(sl);
     AgentProfileModule.register(sl);
+    CheckoutModule.registerDependencies();
+    PaymentModule.registerDependencies();
   }
 }
