@@ -901,10 +901,16 @@ class _PaymentSelectionPageState extends State<PaymentSelectionPage> {
       final currencySymbol = orderState.currency == 'INR' ? '₹' : '\$';
       final formattedAmount = orderState.amount.toStringAsFixed(2);
 
-      // Create order items list
+      // Create order items list with correct currency conversion
       final itemsList = cart.items
           .map((item) {
-            return '• ${item.productName} - Qty: ${item.quantity} - ${currencySymbol}${item.price.toStringAsFixed(2)}';
+            // Convert price to correct currency if needed
+            double itemPrice = item.price;
+            if (orderState.currency == 'INR') {
+              // Convert USD to INR (same conversion rate as used in payment)
+              itemPrice = item.price * 83;
+            }
+            return '• ${item.productName} - Qty: ${item.quantity} - ${currencySymbol}${itemPrice.toStringAsFixed(2)}';
           })
           .join('\n');
 
@@ -920,30 +926,30 @@ ${_checkoutData!.country ?? 'Country not provided'}
 Phone: ${_checkoutData!.phoneNumber ?? 'Phone not provided'}'''
           : 'Delivery address not available';
 
-      // Create comprehensive order confirmation message
+      // Create comprehensive order confirmation message without emojis
       final orderMessage =
-          '''🎉 ORDER PLACED SUCCESSFULLY!
+          '''ORDER PLACED SUCCESSFULLY!
 
 Thank you for your purchase! Your order has been confirmed and payment processed.
 
-📋 ORDER DETAILS:
+ORDER DETAILS:
 Order ID: ${orderState.orderId}
 Payment ID: ${orderState.paymentId}
 Total Amount: $currencySymbol$formattedAmount
 Payment Method: ${orderState.paymentMethod.toUpperCase()}
 Currency: ${orderState.currency}
 
-🛍️ ITEMS ORDERED:
+ITEMS ORDERED:
 $itemsList
 
-📍 $deliveryAddress
+$deliveryAddress
 
-✅ PAYMENT STATUS: CONFIRMED
+PAYMENT STATUS: CONFIRMED
 Your payment has been successfully processed and your order is now being prepared for shipment.
 
 We'll keep you updated on your order status. If you have any questions or need assistance, feel free to reach out!
 
-Thanks for choosing us! 🙏''';
+Thanks for choosing us!''';
 
       // Add a small delay to ensure chat is initialized
       await Future.delayed(const Duration(milliseconds: 1000));
