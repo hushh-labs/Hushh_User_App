@@ -58,6 +58,8 @@ class PdaVertexAiDataSourceImpl implements PdaDataSource {
       debugPrint(
         '⚠️ [PDA VERTEX AI] Failed to initialize Google Calendar service: $e',
       );
+      // Initialize with a fallback service to prevent LateInitializationError
+      _googleCalendarPrewarmService = GoogleCalendarContextPrewarmService();
     }
 
     try {
@@ -65,6 +67,8 @@ class PdaVertexAiDataSourceImpl implements PdaDataSource {
       debugPrint('✅ [PDA VERTEX AI] Vault service initialized');
     } catch (e) {
       debugPrint('⚠️ [PDA VERTEX AI] Failed to initialize Vault service: $e');
+      // Initialize with a fallback service to prevent LateInitializationError
+      _vaultPrewarmService = VaultStartupPrewarmService();
     }
   }
 
