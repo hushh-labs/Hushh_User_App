@@ -26,6 +26,15 @@ class ConciergeAgentCard extends StatelessWidget {
     this.isFavorite = false,
   });
 
+  String _getInitials(String fullName) {
+    if (fullName.trim().isEmpty) return 'A';
+    final parts = fullName.trim().split(' ');
+    if (parts.length >= 2) {
+      return (parts[0][0] + parts[1][0]).toUpperCase();
+    }
+    return parts[0][0].toUpperCase();
+  }
+
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
@@ -43,6 +52,20 @@ class ConciergeAgentCard extends StatelessWidget {
                 fit: BoxFit.cover, // fill while preserving aspect ratio
                 alignment: Alignment.topCenter, // bias crop to show faces
                 filterQuality: FilterQuality.medium,
+                errorBuilder: (context, error, stack) {
+                  return Container(
+                    color: const Color(0xFFF2F2F7),
+                    alignment: Alignment.center,
+                    child: Text(
+                      _getInitials(name),
+                      style: const TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF6E6E73),
+                      ),
+                    ),
+                  );
+                },
               ),
             ),
           ),

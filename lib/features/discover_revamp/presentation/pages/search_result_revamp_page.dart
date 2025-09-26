@@ -414,10 +414,29 @@ class _SearchResultRevampPageState extends State<SearchResultRevampPage> {
                               padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
                               child: Row(
                                 children: [
-                                  CircleAvatar(
-                                    radius: 12,
-                                    backgroundImage: NetworkImage(
+                                  ClipOval(
+                                    child: Image.network(
                                       agent.imageUrl,
+                                      width: 24,
+                                      height: 24,
+                                      fit: BoxFit.cover,
+                                      errorBuilder:
+                                          (context, error, stackTrace) {
+                                            return Container(
+                                              width: 24,
+                                              height: 24,
+                                              color: const Color(0xFF1D1D1F),
+                                              alignment: Alignment.center,
+                                              child: Text(
+                                                _initials(agent.name),
+                                                style: const TextStyle(
+                                                  color: Colors.white,
+                                                  fontSize: 10,
+                                                  fontWeight: FontWeight.w700,
+                                                ),
+                                              ),
+                                            );
+                                          },
                                     ),
                                   ),
                                   const SizedBox(width: 8),
@@ -625,6 +644,16 @@ class _SearchResultRevampPageState extends State<SearchResultRevampPage> {
     // Implement search logic here
     print('Searching for: $query');
     print('Filters: $_selectedFilters');
+  }
+
+  String _initials(String name) {
+    final trimmed = name.trim();
+    if (trimmed.isEmpty) return 'A';
+    final parts = trimmed.split(' ');
+    if (parts.length >= 2) {
+      return (parts[0][0] + parts[1][0]).toUpperCase();
+    }
+    return parts[0][0].toUpperCase();
   }
 }
 

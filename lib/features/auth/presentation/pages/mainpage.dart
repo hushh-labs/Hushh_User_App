@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -56,7 +57,9 @@ class _MainAuthPageState extends State<MainAuthPage> {
                       children: [
                         const SizedBox(height: 8),
                         Container(
-                          height: MediaQuery.of(context).size.height * 0.75,
+                          height: kIsWeb
+                              ? MediaQuery.of(context).size.height * 0.82
+                              : MediaQuery.of(context).size.height * 0.75,
                           width: double.infinity,
                           decoration: BoxDecoration(
                             borderRadius: BorderRadius.circular(32),
@@ -74,17 +77,35 @@ class _MainAuthPageState extends State<MainAuthPage> {
                                   child: Column(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
-                                      ClickableLogo(
-                                        imagePath: 'assets/hushh_s_logo_v1.png',
-                                        color: Colors.white,
-                                        width:
-                                            MediaQuery.of(context).size.width *
-                                            0.33,
-                                        fit: BoxFit.fill,
-                                        height:
-                                            MediaQuery.of(context).size.width *
-                                            0.33 *
-                                            1.2,
+                                      Builder(
+                                        builder: (context) {
+                                          final screenWidth = MediaQuery.of(
+                                            context,
+                                          ).size.width;
+                                          if (kIsWeb) {
+                                            // Keep logo intentionally small on web
+                                            final double logoWidth = 160.0;
+                                            final double logoHeight =
+                                                160.0 * 1.2;
+                                            return ClickableLogo(
+                                              imagePath:
+                                                  'assets/hushh_s_logo_v1.png',
+                                              color: Colors.white,
+                                              width: logoWidth,
+                                              fit: BoxFit.fill,
+                                              height: logoHeight,
+                                            );
+                                          } else {
+                                            return ClickableLogo(
+                                              imagePath:
+                                                  'assets/hushh_s_logo_v1.png',
+                                              color: Colors.white,
+                                              width: screenWidth * 0.33,
+                                              fit: BoxFit.fill,
+                                              height: screenWidth * 0.33 * 1.2,
+                                            );
+                                          }
+                                        },
                                       ),
                                       const SizedBox(height: 16),
                                       Text(

@@ -9,6 +9,8 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 import 'core/config/firebase_init.dart';
 import 'core/config/supabase_init.dart';
+// Secure Remote Config service (NO KEYS IN CODE)
+import 'core/config/remote_config_service.dart';
 import 'core/routing/app_router.dart';
 import 'core/routing/route_paths.dart';
 import 'di/core_module.dart';
@@ -31,6 +33,7 @@ import 'features/micro_prompts/data/services/micro_prompts_scheduler_service.dar
 import 'features/micro_prompts/presentation/widgets/micro_prompts_global_listener.dart';
 import 'shared/di/dependencies.dart';
 import 'shared/utils/app_local_storage.dart';
+import 'shared/widgets/responsive_web_wrapper.dart';
 import 'features/notifications/data/services/notification_service.dart';
 import 'features/discover/presentation/bloc/cart_bloc.dart';
 import 'features/notifications/domain/repositories/notification_repository.dart';
@@ -53,19 +56,37 @@ Future<void> mainApp() async {
   // Initialize Supabase
   await SupabaseInit.initialize();
 
-  // Initialize Stripe with publishable key from environment
+  // Initialize Firebase Remote Config (SECURE - NO KEYS IN CODE)
   try {
-    final stripePublishableKey = dotenv.env['STRIPE_PUBLISHABLE_KEY'];
-    if (stripePublishableKey != null && stripePublishableKey.isNotEmpty) {
+    await RemoteConfigService.initialize();
+    debugPrint('🔒 [APP] Remote Config initialized successfully');
+  } catch (e) {
+    debugPrint('❌ [APP] Error initializing Remote Config: $e');
+    debugPrint('🔄 [APP] Continuing with safe defaults');
+  }
+
+  // Initialize Stripe with publishable key from secure Remote Config
+  try {
+    final stripePublishableKey = RemoteConfigService.stripePublishableKey;
+    final isStripeDemoMode = RemoteConfigService.isStripeDemoMode;
+
+    if (!isStripeDemoMode && stripePublishableKey.isNotEmpty) {
       Stripe.publishableKey = stripePublishableKey;
-      debugPrint('💳 [APP] Stripe initialized successfully');
+      debugPrint('💳 [APP] Stripe initialized successfully with Remote Config');
     } else {
       debugPrint(
-        '⚠️ [APP] Warning: STRIPE_PUBLISHABLE_KEY not found in environment variables',
+        '⚠️ [APP] Stripe in demo mode - configure real keys in Firebase Remote Config',
       );
+      // Keep Stripe uninitialized for demo mode, or use demo key if available
+      if (stripePublishableKey.isNotEmpty &&
+          !stripePublishableKey.contains('placeholder')) {
+        Stripe.publishableKey = stripePublishableKey;
+        debugPrint('💳 [APP] Stripe initialized with demo/test key');
+      }
     }
   } catch (e) {
     debugPrint('❌ [APP] Error initializing Stripe: $e');
+    debugPrint('🔄 [APP] Stripe will use fallback configuration');
   }
 
   // Initialize guest mode state
@@ -396,9 +417,12 @@ class _AppContentState extends State<_AppContent> {
         routerConfig: AppRouter.router,
         debugShowCheckedModeBanner: false,
         builder: (context, child) {
-          // Wrap the entire app with MicroPromptsGlobalListener
-          // This ensures it has access to MaterialApp context
-          return MicroPromptsGlobalListener(child: child ?? Container());
+          // Wrap the entire app with ResponsiveWebWrapper and MicroPromptsGlobalListener
+          // ResponsiveWebWrapper constrains to mobile width on desktop web
+          // MicroPromptsGlobalListener ensures it has access to MaterialApp context
+          return ResponsiveWebWrapper(
+            child: MicroPromptsGlobalListener(child: child ?? Container()),
+          );
         },
       ),
     );

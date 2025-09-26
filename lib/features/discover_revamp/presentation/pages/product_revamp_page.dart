@@ -127,15 +127,37 @@ class _ProductRevampPageState extends State<ProductRevampPage>
                   child: Stack(
                     fit: StackFit.expand,
                     children: [
-                      PageView.builder(
-                        controller: _pageController,
-                        itemCount: widget.imageUrls.length,
-                        onPageChanged: (i) => setState(() => _index = i),
-                        itemBuilder: (context, i) => Image.network(
-                          widget.imageUrls[i],
-                          fit: BoxFit.cover,
+                      if (widget.imageUrls.isNotEmpty)
+                        PageView.builder(
+                          controller: _pageController,
+                          itemCount: widget.imageUrls.length,
+                          onPageChanged: (i) => setState(() => _index = i),
+                          itemBuilder: (context, i) => Image.network(
+                            widget.imageUrls[i],
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) {
+                              return Container(
+                                color: const Color(0xFFF5F5F7),
+                                alignment: Alignment.center,
+                                child: const Icon(
+                                  Icons.image_outlined,
+                                  size: 48,
+                                  color: Color(0xFF6E6E73),
+                                ),
+                              );
+                            },
+                          ),
+                        )
+                      else
+                        Container(
+                          color: const Color(0xFFF5F5F7),
+                          alignment: Alignment.center,
+                          child: const Icon(
+                            Icons.image_outlined,
+                            size: 48,
+                            color: Color(0xFF6E6E73),
+                          ),
                         ),
-                      ),
                       // Vertical thumbnail rail (left)
                       if (widget.imageUrls.length > 1)
                         Positioned(
@@ -178,6 +200,20 @@ class _ProductRevampPageState extends State<ProductRevampPage>
                                         child: Image.network(
                                           widget.imageUrls[i],
                                           fit: BoxFit.cover,
+                                          errorBuilder:
+                                              (context, error, stack) {
+                                                return Container(
+                                                  color: const Color(
+                                                    0xFFF5F5F7,
+                                                  ),
+                                                  alignment: Alignment.center,
+                                                  child: const Icon(
+                                                    Icons.broken_image_outlined,
+                                                    size: 20,
+                                                    color: Color(0xFF6E6E73),
+                                                  ),
+                                                );
+                                              },
                                         ),
                                       ),
                                     ),

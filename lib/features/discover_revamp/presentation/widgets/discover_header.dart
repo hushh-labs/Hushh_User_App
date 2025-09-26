@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'cart_icon_with_badge.dart';
 import 'package:flutter/cupertino.dart';
-import 'package:go_router/go_router.dart';
 import '../pages/cart_page.dart';
 
 class DiscoverHeader extends StatelessWidget {
@@ -95,6 +94,7 @@ class DiscoverHeader extends StatelessWidget {
                           );
                         },
                       ),
+                      const SizedBox(width: 12),
                       Container(
                         width: 32,
                         height: 32,

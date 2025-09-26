@@ -1,8 +1,9 @@
 import 'package:get_it/get_it.dart';
 import 'package:http/http.dart' as http;
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import '../data/data_sources/stripe_api_data_source.dart';
 import '../data/data_sources/razorpay_api_data_source.dart';
+// Secure Remote Config service (NO KEYS IN CODE)
+import '../../../core/config/remote_config_service.dart';
 import '../data/repository_impl/payment_repository_impl.dart';
 import '../domain/repositories/payment_repository.dart';
 import '../domain/usecases/create_payment_intent.dart';
@@ -19,19 +20,25 @@ class PaymentModule {
   static void registerDependencies() {
     final getIt = GetIt.instance;
 
-    // Load environment variables
-    final stripeSecretKey = dotenv.env['STRIPE_SECRET_KEY'] ?? '';
-    final stripePublishableKey = dotenv.env['STRIPE_PUBLISHABLE_KEY'] ?? '';
-    final razorpayKeyId = dotenv.env['RAZORPAY_KEY_ID'] ?? '';
+    // Load payment keys from secure Remote Config (NO KEYS IN CODE)
+    final stripeSecretKey = RemoteConfigService.stripeSecretKey;
+    final stripePublishableKey = RemoteConfigService.stripePublishableKey;
+    final razorpayKeyId = RemoteConfigService.razorpayKeyId;
 
-    // Check if we have at least one payment method configured
-    final hasStripe = stripePublishableKey.isNotEmpty;
-    final hasRazorpay = razorpayKeyId.isNotEmpty;
+    // Check demo mode status
+    final isStripeDemoMode = RemoteConfigService.isStripeDemoMode;
+    final isRazorpayDemoMode = RemoteConfigService.isDemoMode;
+
+    // Check if we have at least one payment method configured (or demo mode enabled)
+    final hasStripe = stripePublishableKey.isNotEmpty || isStripeDemoMode;
+    final hasRazorpay = razorpayKeyId.isNotEmpty || isRazorpayDemoMode;
 
     if (!hasStripe && !hasRazorpay) {
-      throw Exception(
-        'At least one payment provider must be configured. Please set STRIPE_PUBLISHABLE_KEY or RAZORPAY_KEY_ID',
+      print('⚠️ [PAYMENT] No payment providers configured, using demo mode');
+      print(
+        '💡 [PAYMENT] Configure keys in Firebase Remote Config for production',
       );
+      // Allow demo mode to continue - don't throw exception
     }
 
     // Data Sources - only register if keys are available

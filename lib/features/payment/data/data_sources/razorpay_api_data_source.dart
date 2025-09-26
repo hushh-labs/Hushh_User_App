@@ -1,7 +1,8 @@
 import 'package:razorpay_flutter/razorpay_flutter.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import '../models/razorpay_request_model.dart';
 import '../models/razorpay_payment_model.dart';
+// Secure Remote Config service (NO KEYS IN CODE)
+import '../../../../core/config/remote_config_service.dart';
 
 abstract class RazorpayApiDataSource {
   Future<Map<String, dynamic>> initiatePayment(RazorpayRequestModel request);
@@ -21,9 +22,13 @@ class RazorpayApiDataSourceImpl implements RazorpayApiDataSource {
     RazorpayRequestModel request,
   ) async {
     try {
-      // Check if we're in demo mode (missing secret key)
-      final razorpaySecret = dotenv.env['RAZORPAY_KEY_SECRET'] ?? '';
-      if (razorpaySecret.isEmpty ||
+      // Check if we're in demo mode using secure Remote Config (NO KEYS IN CODE)
+      final razorpaySecret = RemoteConfigService.razorpayKeySecret;
+      final isDemoMode = RemoteConfigService.isDemoMode;
+
+      if (isDemoMode ||
+          razorpaySecret.isEmpty ||
+          keyId.contains('demo_key_placeholder') ||
           keyId.contains('your_actual_razorpay_key_id_here')) {
         // Demo mode - create mock payment options for testing
         final demoOrderId =
@@ -44,7 +49,7 @@ class RazorpayApiDataSourceImpl implements RazorpayApiDataSource {
         };
       }
 
-      // Real Razorpay payment flow
+      // Real Razorpay payment flow with keys from Remote Config
       final orderId = 'order_${DateTime.now().millisecondsSinceEpoch}';
       return request.toRazorpayOptions(keyId: keyId, orderId: orderId);
     } catch (e) {

@@ -2,8 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_stripe/flutter_stripe.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:get_it/get_it.dart';
-import 'package:razorpay_flutter/razorpay_flutter.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:flutter/foundation.dart';
+
+// Platform-specific imports
+import 'razorpay_mobile.dart' if (dart.library.html) 'razorpay_web.dart';
+// Secure config service (NO KEYS IN CODE)
+import '../../../../core/config/remote_config_service.dart';
 import '../../../payment/presentation/bloc/payment_bloc.dart';
 import '../../../payment/presentation/bloc/payment_event.dart';
 import '../../../payment/presentation/bloc/payment_state.dart';
@@ -43,31 +47,33 @@ class _PaymentSelectionPageState extends State<PaymentSelectionPage> {
 
   void _initializeRazorpayIfNeeded() {
     try {
-      // Check if we're in demo mode using dotenv (runtime environment variables)
-      final razorpayKeyId =
-          dotenv.env['RAZORPAY_KEY_ID'] ??
-          'rzp_test_your_actual_razorpay_key_id_here';
-      final razorpaySecret = dotenv.env['RAZORPAY_KEY_SECRET'] ?? '';
+      // Check if we're in demo mode using secure Remote Config (NO KEYS IN CODE)
+      final razorpayKeyId = RemoteConfigService.razorpayKeyId;
+      final razorpaySecret = RemoteConfigService.razorpayKeySecret;
+      final isDemo = RemoteConfigService.isDemoMode;
 
       print('Razorpay Key ID: $razorpayKeyId');
       print('Razorpay Secret length: ${razorpaySecret.length}');
-
-      final isDemo =
-          razorpaySecret.isEmpty ||
-          razorpayKeyId.contains('your_actual_razorpay_key_id_here') ||
-          razorpayKeyId == 'rzp_test_your_actual_razorpay_key_id_here';
-
       print('Razorpay Demo Mode: $isDemo');
 
       if (!isDemo) {
-        // Only initialize for real mode
-        print('Initializing Razorpay for real mode');
+        // Initialize for real mode on both mobile and web platforms
+        if (kIsWeb) {
+          print('Initializing Razorpay for real mode on web');
+        } else {
+          print('Initializing Razorpay for real mode on mobile');
+        }
         _razorpay = Razorpay();
         _razorpay!.on(Razorpay.EVENT_PAYMENT_SUCCESS, _handleRazorpaySuccess);
         _razorpay!.on(Razorpay.EVENT_PAYMENT_ERROR, _handleRazorpayError);
         _razorpay!.on(Razorpay.EVENT_EXTERNAL_WALLET, _handleExternalWallet);
       } else {
         print('Razorpay in demo mode - not initializing plugin');
+        if (kDebugMode) {
+          print(
+            '💡 Configure real keys in Firebase Remote Config to enable live payments',
+          );
+        }
       }
     } catch (e) {
       // If there's any error initializing Razorpay, continue in demo mode
@@ -445,7 +451,7 @@ class _PaymentSelectionPageState extends State<PaymentSelectionPage> {
   ) {
     print('Opening Razorpay checkout with options: $options');
 
-    // Check if this is demo mode
+    // Check if this is demo mode (backend sends demo_mode flag)
     if (options.containsKey('demo_mode') && options['demo_mode'] == true) {
       print('Demo mode detected - showing demo payment sheet');
       // Demo mode - show demo payment sheet instead of real Razorpay
@@ -463,7 +469,13 @@ class _PaymentSelectionPageState extends State<PaymentSelectionPage> {
       return;
     }
 
-    // Real Razorpay checkout
+    // Real Razorpay checkout for both mobile and web
+    if (kIsWeb) {
+      print('Web platform - using Razorpay JavaScript SDK');
+    } else {
+      print('Mobile platform - using Razorpay Flutter plugin');
+    }
+
     print('Real Razorpay mode - checking instance: ${_razorpay != null}');
     if (_razorpay == null) {
       print('Razorpay instance is null, showing error');
@@ -874,18 +886,18 @@ class _PaymentSelectionPageState extends State<PaymentSelectionPage> {
       final participantIds = [currentUser.uid, agentId]..sort();
       final chatId = participantIds.join('_');
 
-      // Create chat bloc and handle chat creation/opening
+      // Create chat bloc and handle chat opening (works for both new and existing chats)
       final chatBloc = chat.ChatBloc();
 
-      // Open or create chat
+      // Open existing chat or create new one - OpenChatEvent handles both scenarios
       chatBloc.add(chat.OpenChatEvent(chatId));
 
-      // Send automatic order confirmation message
+      // Send automatic order confirmation message to the chat (existing or new)
       await _sendOrderConfirmationMessage(chatBloc, chatId, orderState, cart);
 
-      print('Automatic order chat created: $chatId');
+      print('Order confirmation sent to chat (existing or new): $chatId');
     } catch (e) {
-      print('Error creating automatic order chat: $e');
+      print('Error sending order confirmation to chat: $e');
       // Don't throw error as this is not critical to the order process
     }
   }

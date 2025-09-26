@@ -1274,6 +1274,9 @@ PODS:
   - Firebase/Messaging (12.0.0):
     - Firebase/CoreOnly
     - FirebaseMessaging (~> 12.0.0)
+  - Firebase/RemoteConfig (12.0.0):
+    - Firebase/CoreOnly
+    - FirebaseRemoteConfig (~> 12.0.0)
   - Firebase/Storage (12.0.0):
     - Firebase/CoreOnly
     - FirebaseStorage (~> 12.0.0)
@@ -1292,10 +1295,16 @@ PODS:
     - Firebase/Messaging (= 12.0.0)
     - firebase_core
     - Flutter
+  - firebase_remote_config (6.0.0):
+    - Firebase/RemoteConfig (= 12.0.0)
+    - firebase_core
+    - Flutter
   - firebase_storage (13.0.0):
     - Firebase/Storage (= 12.0.0)
     - firebase_core
     - Flutter
+  - FirebaseABTesting (12.0.0):
+    - FirebaseCore (~> 12.0.0)
   - FirebaseAppCheckInterop (12.0.0)
   - FirebaseAuth (12.0.0):
     - FirebaseAppCheckInterop (~> 12.0.0)
@@ -1364,6 +1373,15 @@ PODS:
     - GoogleUtilities/UserDefaults (~> 8.1)
     - nanopb (~> 3.30910.0)
   - FirebaseMessagingInterop (12.0.0)
+  - FirebaseRemoteConfig (12.0.0):
+    - FirebaseABTesting (~> 12.0.0)
+    - FirebaseCore (~> 12.0.0)
+    - FirebaseInstallations (~> 12.0.0)
+    - FirebaseRemoteConfigInterop (~> 12.0.0)
+    - FirebaseSharedSwift (~> 12.0.0)
+    - GoogleUtilities/Environment (~> 8.1)
+    - "GoogleUtilities/NSData+zlib (~> 8.1)"
+  - FirebaseRemoteConfigInterop (12.0.0)
   - FirebaseSharedSwift (12.0.0)
   - FirebaseStorage (12.0.0):
     - FirebaseAppCheckInterop (~> 12.0.0)
@@ -1644,6 +1662,7 @@ DEPENDENCIES:
   - firebase_core (from `.symlinks/plugins/firebase_core/ios`)
   - firebase_database (from `.symlinks/plugins/firebase_database/ios`)
   - firebase_messaging (from `.symlinks/plugins/firebase_messaging/ios`)
+  - firebase_remote_config (from `.symlinks/plugins/firebase_remote_config/ios`)
   - firebase_storage (from `.symlinks/plugins/firebase_storage/ios`)
   - Flutter (from `Flutter`)
   - flutter_local_notifications (from `.symlinks/plugins/flutter_local_notifications/ios`)
@@ -1673,6 +1692,7 @@ SPEC REPOS:
     - DKImagePickerController
     - DKPhotoGallery
     - Firebase
+    - FirebaseABTesting
     - FirebaseAppCheckInterop
     - FirebaseAuth
     - FirebaseAuthInterop
@@ -1686,6 +1706,8 @@ SPEC REPOS:
     - FirebaseInstallations
     - FirebaseMessaging
     - FirebaseMessagingInterop
+    - FirebaseRemoteConfig
+    - FirebaseRemoteConfigInterop
     - FirebaseSharedSwift
     - FirebaseStorage
     - flutter_sound_core
@@ -1738,6 +1760,8 @@ EXTERNAL SOURCES:
     :path: ".symlinks/plugins/firebase_database/ios"
   firebase_messaging:
     :path: ".symlinks/plugins/firebase_messaging/ios"
+  firebase_remote_config:
+    :path: ".symlinks/plugins/firebase_remote_config/ios"
   firebase_storage:
     :path: ".symlinks/plugins/firebase_storage/ios"
   Flutter:
@@ -1797,7 +1821,9 @@ SPEC CHECKSUMS:
   firebase_core: 633e1851ffe1b9ab875f6467a4f574c79cef02e4
   firebase_database: 330f96717fc1fc6ba7e13329ac1ee29bdc059d47
   firebase_messaging: d17feef781edc84ebefe62624fb384358ad96361
+  firebase_remote_config: ce17e27739e9fa1a5a41a70319c5ce3f792788d4
   firebase_storage: 5063abf1ea47bad3df367f24314f4cc6c61a1e16
+  FirebaseABTesting: 2cad22e464cd7ef4589ae29f897bc71ff83ce83b
   FirebaseAppCheckInterop: c848d06a04030c9858ef0ae555b82035dbe470d0
   FirebaseAuth: 654e4de84787c45d7265599a651038e854ccb439
   FirebaseAuthInterop: 002da671896af5e8879ae117dc604ed240b86e80
@@ -1811,6 +1837,8 @@ SPEC CHECKSUMS:
   FirebaseInstallations: d4c7c958f99c8860d7fcece786314ae790e2f988
   FirebaseMessaging: af49f8d7c0a3d2a017d9302c80946f45a7777dde
   FirebaseMessagingInterop: 30024b4793b4876fa1e104e42949eb0273257e38
+  FirebaseRemoteConfig: 4cbbe0083474359025e7bb334b9d0cff16b78d3a
+  FirebaseRemoteConfigInterop: bfa0ea72ba3dc5af739777296424e46bd6f42613
   FirebaseSharedSwift: 59266c22ccfcef604d725c034c568fa666ea9bda
   FirebaseStorage: 5603c913805b0eacc8e6853395e837ca5742e5f7
   Flutter: cabc95a1d2626b1b06e7179b784ebcf0c0cde467
