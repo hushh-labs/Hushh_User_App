@@ -19,14 +19,9 @@ class GmailRepositoryImpl implements GmailRepository {
   GmailRepositoryImpl(this._dataSource);
 
   // Get Supabase URL and key from environment
-  String get _supabaseUrl {
-    const String.fromEnvironment('SUPABASE_URL', defaultValue: 'https://biiqwforuvzgubrrkfgq.supabase.co');
-    return dotenv.env['SUPABASE_URL'] ?? 'https://biiqwforuvzgubrrkfgq.supabase.co';
-  }
-  String get _supabaseKey {
-    const String.fromEnvironment('SUPABASE_ANON_KEY', defaultValue: '');
-    return dotenv.env['SUPABASE_ANON_KEY'] ?? '';
-  }
+  String get _supabaseUrl =>
+      dotenv.env['SUPABASE_URL'] ?? 'https://biiqwforuvzgubrrkfgq.supabase.co';
+  String get _supabaseKey => dotenv.env['SUPABASE_ANON_KEY'] ?? '';
 
   @override
   Future<bool> connectGmail(

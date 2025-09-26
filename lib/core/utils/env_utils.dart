@@ -15,7 +15,7 @@ class EnvUtils {
       return dotenv.env[key] ?? defaultValue;
     }
   }
-  
+
   /// Get environment variable with default value
   static String getWithDefault(String key, String defaultValue) {
     final value = get(key);
