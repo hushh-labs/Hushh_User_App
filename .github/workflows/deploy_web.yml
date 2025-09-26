@@ -27,6 +27,7 @@ jobs:
 
       - name: Create .env file from secrets
         run: |
+          echo "🔐 Creating .env file from GitHub Secrets..."
           cat > .env << EOF
           VERTEX_AI_PROJECT_ID=${{ secrets.VERTEX_AI_PROJECT_ID }}
           VERTEX_AI_LOCATION=${{ secrets.VERTEX_AI_LOCATION }}
@@ -55,9 +56,27 @@ jobs:
           RAZORPAY_KEY_ID=${{ secrets.RAZORPAY_KEY_ID }}
           RAZORPAY_KEY_SECRET=${{ secrets.RAZORPAY_KEY_SECRET }}
           EOF
+          
+          echo "✅ .env file created successfully"
+          echo "📋 .env file contents (first 5 lines):"
+          head -5 .env
+          echo "📊 Total lines in .env: $(wc -l < .env)"
 
       - name: Build Flutter web
         run: flutter build web --release --verbose
+
+      - name: Verify .env file in build
+        run: |
+          echo "🔍 Checking if .env file is in build output..."
+          if [ -f "build/web/.env" ]; then
+            echo "✅ .env file found in build/web/"
+            echo "📋 .env file contents (first 3 lines):"
+            head -3 build/web/.env
+          else
+            echo "❌ .env file NOT found in build/web/"
+            echo "📁 Files in build/web/:"
+            ls -la build/web/ | head -10
+          fi
 
       - name: Deploy to Firebase Hosting (live)
         uses: FirebaseExtended/action-hosting-deploy@v0
