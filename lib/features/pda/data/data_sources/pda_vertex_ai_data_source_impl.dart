@@ -215,7 +215,7 @@ class PdaVertexAiDataSourceImpl implements PdaDataSource {
 
       // Get Gmail context from Supabase for enhanced responses (if Gmail is connected)
       final gmailContext = await _getGmailContextForPda();
-s t
+
       // Get LinkedIn context for enhanced responses (if LinkedIn is connected)
       final linkedInContext = await _getLinkedInContextForPda();
 
