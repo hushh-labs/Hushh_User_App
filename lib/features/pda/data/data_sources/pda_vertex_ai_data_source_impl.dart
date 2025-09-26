@@ -206,7 +206,7 @@ class PdaVertexAiDataSourceImpl implements PdaDataSource {
       // Validate Vertex AI configuration
       if (!VertexAiConfig.isConfigured) {
         throw Exception(
-          'Vertex AI is not properly configured. Please check your .env file and ensure VERTEX_AI_PROJECT_ID and VERTEX_AI_SERVICE_ACCOUNT_KEY are set.',
+          'Vertex AI is not properly configured. Please check your Firebase Remote Config and ensure vertex_ai_project_id and vertex_ai_service_account_key are set.',
         );
       }
 
@@ -215,7 +215,7 @@ class PdaVertexAiDataSourceImpl implements PdaDataSource {
 
       // Get Gmail context from Supabase for enhanced responses (if Gmail is connected)
       final gmailContext = await _getGmailContextForPda();
-
+s t
       // Get LinkedIn context for enhanced responses (if LinkedIn is connected)
       final linkedInContext = await _getLinkedInContextForPda();
 
