@@ -265,8 +265,6 @@ class RemoteConfigService {
   static String get googleMeetSyncFunctionUrl =>
       _remoteConfig.getString('google_meet_sync_function_url');
 
-  /// Check if the service is properly initialized
-  static bool get isInitialized => _isInitialized;
 
   /// Refresh configuration from Firebase (useful for testing)
   static Future<void> refresh() async {
