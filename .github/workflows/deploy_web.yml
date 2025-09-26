@@ -65,6 +65,12 @@ jobs:
       - name: Build Flutter web
         run: flutter build web --release --verbose
 
+      - name: Copy .env file to build output
+        run: |
+          echo "📋 Copying .env file to build/web/ directory..."
+          cp .env build/web/.env
+          echo "✅ .env file copied to build/web/"
+
       - name: Verify .env file in build
         run: |
           echo "🔍 Checking if .env file is in build output..."
