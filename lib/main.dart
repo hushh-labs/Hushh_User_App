@@ -60,7 +60,10 @@ void main() async {
 
   // Load environment variables
   try {
-    await dotenv.load(fileName: ".env");
+    if (!kIsWeb) {
+      // Only load .env file for mobile builds
+      await dotenv.load(fileName: ".env");
+    }
   } catch (e) {
     // If .env file doesn't exist, continue with defaults
     // This allows the app to run even without .env file
