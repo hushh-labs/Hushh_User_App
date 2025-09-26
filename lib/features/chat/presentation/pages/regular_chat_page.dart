@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'dart:io';
-import 'dart:typed_data';
+import 'package:flutter/foundation.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../bloc/chat_bloc.dart' as chat;
 import '../../domain/entities/chat_entity.dart';
@@ -147,19 +146,24 @@ class _RegularChatPageState extends State<RegularChatPage> {
     });
   }
 
-  void _onImageSelected(File imageFile) async {
+  void _onImageSelected(String imagePath) async {
     try {
-      // Convert file to bytes for sending
-      final Uint8List imageBytes = await imageFile.readAsBytes();
+      // For web compatibility, we'll show a placeholder message for now
+      // In a production app, you'd handle the image upload properly for web
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Image selected: ${imagePath.split('/').last}'),
+          backgroundColor: Colors.blue,
+        ),
+      );
 
-      // Send image message
+      // Send text message indicating image was selected
+      // TODO: Implement proper image upload for web compatibility
       context.read<chat.ChatBloc>().add(
         chat.SendMessageEvent(
           chatId: _currentChatId,
-          message: 'Image',
+          message: '[Image: ${imagePath.split('/').last}]',
           isBot: false,
-          messageType: MessageType.image,
-          imageData: imageBytes.toList(),
         ),
       );
     } catch (e) {
@@ -172,7 +176,7 @@ class _RegularChatPageState extends State<RegularChatPage> {
     }
   }
 
-  void _onFileSelected(File file) async {
+  void _onFileSelected(String filePath) async {
     try {
       // For now, we'll just show a message
       ScaffoldMessenger.of(context).showSnackBar(

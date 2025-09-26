@@ -1,14 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:image_picker/image_picker.dart';
-import 'dart:io';
 
 class MessageInput extends StatelessWidget {
   final TextEditingController controller;
   final Function(String) onSendMessage;
   final VoidCallback onAttachFile;
   final Function(String)? onTextChanged;
-  final Function(File)? onImageSelected;
-  final Function(File)? onFileSelected;
+  final Function(String)?
+  onImageSelected; // Changed to String path for web compatibility
+  final Function(String)?
+  onFileSelected; // Changed to String path for web compatibility
 
   const MessageInput({
     super.key,
@@ -137,8 +139,8 @@ class MessageInput extends StatelessWidget {
       );
 
       if (image != null) {
-        final File imageFile = File(image.path);
-        onImageSelected?.call(imageFile);
+        // Use XFile path directly for web compatibility
+        onImageSelected?.call(image.path);
       }
     } catch (e) {
       debugPrint('Error picking image: $e');

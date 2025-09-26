@@ -43,19 +43,21 @@ class ChatRepositoryImpl implements ChatRepository {
 
   @override
   Future<Either<Failure, ChatEntity>> getChatById(String chatId) async {
-    if (await networkInfo.isConnected) {
-      try {
-        final chatModel = await remoteDataSource.getChatById(chatId);
-        if (chatModel != null) {
-          return Right(_mapChatModelToEntity(chatModel));
-        } else {
-          return Left(ServerFailure('Chat not found'));
-        }
-      } catch (e) {
-        return Left(ServerFailure(e.toString()));
+    // Remove strict network check - Firebase handles connectivity internally
+    try {
+      final chatModel = await remoteDataSource.getChatById(chatId);
+      if (chatModel != null) {
+        return Right(_mapChatModelToEntity(chatModel));
+      } else {
+        return Left(ServerFailure('Chat not found'));
       }
-    } else {
-      return Left(NetworkFailure('No internet connection'));
+    } catch (e) {
+      // Only return NetworkFailure for actual network-related errors
+      if (e.toString().toLowerCase().contains('network') ||
+          e.toString().toLowerCase().contains('connection')) {
+        return Left(NetworkFailure('No internet connection'));
+      }
+      return Left(ServerFailure(e.toString()));
     }
   }
 
@@ -63,29 +65,33 @@ class ChatRepositoryImpl implements ChatRepository {
   Future<Either<Failure, String>> createChat(
     List<String> participantIds,
   ) async {
-    if (await networkInfo.isConnected) {
-      try {
-        final chatId = await remoteDataSource.createChat(participantIds);
-        return Right(chatId);
-      } catch (e) {
-        return Left(ServerFailure(e.toString()));
+    // Remove strict network check - Firebase handles connectivity internally
+    try {
+      final chatId = await remoteDataSource.createChat(participantIds);
+      return Right(chatId);
+    } catch (e) {
+      // Only return NetworkFailure for actual network-related errors
+      if (e.toString().toLowerCase().contains('network') ||
+          e.toString().toLowerCase().contains('connection')) {
+        return Left(NetworkFailure('No internet connection'));
       }
-    } else {
-      return Left(NetworkFailure('No internet connection'));
+      return Left(ServerFailure(e.toString()));
     }
   }
 
   @override
   Future<Either<Failure, String?>> getExistingChatId(String otherUserId) async {
-    if (await networkInfo.isConnected) {
-      try {
-        final chatId = await remoteDataSource.getExistingChatId(otherUserId);
-        return Right(chatId);
-      } catch (e) {
-        return Left(ServerFailure(e.toString()));
+    // Remove strict network check - Firebase handles connectivity internally
+    try {
+      final chatId = await remoteDataSource.getExistingChatId(otherUserId);
+      return Right(chatId);
+    } catch (e) {
+      // Only return NetworkFailure for actual network-related errors
+      if (e.toString().toLowerCase().contains('network') ||
+          e.toString().toLowerCase().contains('connection')) {
+        return Left(NetworkFailure('No internet connection'));
       }
-    } else {
-      return Left(NetworkFailure('No internet connection'));
+      return Left(ServerFailure(e.toString()));
     }
   }
 
@@ -135,19 +141,21 @@ class ChatRepositoryImpl implements ChatRepository {
     String text, {
     MessageType type = MessageType.text,
   }) async {
-    if (await networkInfo.isConnected) {
-      try {
-        await remoteDataSource.sendMessage(
-          chatId,
-          text,
-          type: _mapDomainMessageTypeToData(type),
-        );
-        return const Right(null);
-      } catch (e) {
-        return Left(ServerFailure(e.toString()));
+    // Remove strict network check - Firebase handles connectivity internally
+    try {
+      await remoteDataSource.sendMessage(
+        chatId,
+        text,
+        type: _mapDomainMessageTypeToData(type),
+      );
+      return const Right(null);
+    } catch (e) {
+      // Only return NetworkFailure for actual network-related errors
+      if (e.toString().toLowerCase().contains('network') ||
+          e.toString().toLowerCase().contains('connection')) {
+        return Left(NetworkFailure('No internet connection'));
       }
-    } else {
-      return Left(NetworkFailure('No internet connection'));
+      return Left(ServerFailure(e.toString()));
     }
   }
 
@@ -320,15 +328,17 @@ class ChatRepositoryImpl implements ChatRepository {
 
   @override
   Future<Either<Failure, String>> getUserDisplayName(String userId) async {
-    if (await networkInfo.isConnected) {
-      try {
-        final result = await remoteDataSource.getUserDisplayName(userId);
-        return Right(result);
-      } catch (e) {
-        return Left(ServerFailure(e.toString()));
+    // Remove strict network check - Firebase handles connectivity internally
+    try {
+      final result = await remoteDataSource.getUserDisplayName(userId);
+      return Right(result);
+    } catch (e) {
+      // Only return NetworkFailure for actual network-related errors
+      if (e.toString().toLowerCase().contains('network') ||
+          e.toString().toLowerCase().contains('connection')) {
+        return Left(NetworkFailure('No internet connection'));
       }
-    } else {
-      return Left(NetworkFailure('No internet connection'));
+      return Left(ServerFailure(e.toString()));
     }
   }
 
