@@ -1,0 +1,35 @@
+name: Build and Deploy Flutter Web to Firebase Hosting
+
+on:
+  push:
+    branches:
+      - web-prod
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Flutter pub get
+        run: flutter pub get
+
+      - name: Build Flutter web
+        run: flutter build web --release
+
+      - name: Deploy to Firebase Hosting (live)
+        uses: google-github-actions/deploy-firebase@v0
+        with:
+          project_id: ${{ secrets.FIREBASE_PROJECT_ID }}
+          entryPoint: .
+          channelId: live
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
