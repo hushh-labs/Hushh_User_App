@@ -1,5 +1,5 @@
 import 'package:flutter_stripe/flutter_stripe.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
+import '../../../../core/config/remote_config_service.dart';
 import '../../domain/entities/payment_intent_entity.dart';
 import '../../domain/entities/razorpay_payment_entity.dart';
 import '../../domain/repositories/payment_repository.dart';
@@ -31,7 +31,7 @@ class PaymentRepositoryImpl implements PaymentRepository {
     }
 
     // Check if we're in demo mode (secret key is placeholder)
-    final stripeSecretKey = dotenv.env['STRIPE_SECRET_KEY'] ?? '';
+    final stripeSecretKey = RemoteConfigService.stripeSecretKey;
     if (stripeSecretKey.isEmpty ||
         stripeSecretKey.contains('your_secret_key_here')) {
       // Demo mode - create a mock payment intent for testing

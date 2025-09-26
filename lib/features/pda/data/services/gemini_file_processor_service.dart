@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
-import 'package:flutter_dotenv/flutter_dotenv.dart';
+import '../../../../core/config/remote_config_service.dart';
 import 'api_cost_logger.dart';
 
 /// Service to process files using Gemini API for content extraction
@@ -9,7 +9,7 @@ class GeminiFileProcessorService {
   static const String _baseUrl =
       'https://generativelanguage.googleapis.com/v1beta';
 
-  String get _apiKey => dotenv.env['GEMINI_API_KEY'] ?? '';
+  String get _apiKey => RemoteConfigService.geminiApiKey;
 
   bool get isConfigured => _apiKey.isNotEmpty;
 

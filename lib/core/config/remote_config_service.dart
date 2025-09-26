@@ -39,6 +39,41 @@ class RemoteConfigService {
         // Environment Configuration
         'app_environment': 'development', // Safe default
         'payment_enabled': false, // Safe default - disabled
+        // Vertex AI Configuration
+        'vertex_ai_project_id': 'your-gcp-project-id',
+        'vertex_ai_location': 'us-central1',
+        'vertex_ai_model': 'claude-sonnet-4@20250514',
+        'vertex_ai_service_account_key': '',
+        'vertex_ai_max_tokens': '1024',
+        'vertex_ai_temperature': '0.7',
+        'vertex_ai_top_p': '0.95',
+        'vertex_ai_top_k': '40',
+        'vertex_ai_max_conversation_history': '5',
+        'vertex_ai_max_recent_messages': '20',
+        'vertex_ai_max_stored_messages': '100',
+
+        // Supabase Configuration
+        'supabase_url': 'https://biiqwforuvzgubrrkfgq.supabase.co',
+        'supabase_anon_key': '',
+        'supabase_service_role_key': '',
+
+        // LinkedIn Configuration
+        'linkedin_client_id': '',
+        'linkedin_client_secret': '',
+        'linkedin_redirect_uri':
+            'https://biiqwforuvzgubrrkfgq.supabase.co/functions/v1/linkedin-comprehensive-sync',
+
+        // Gemini Configuration
+        'gemini_api_key': '',
+
+        // Google Meet Configuration
+        'google_meet_client_id': '',
+        'google_meet_client_secret': '',
+        'google_meet_redirect_uri': '',
+        'google_meet_sync_function_url': '',
+
+        // Additional missing variables
+        'linkedin_client_secret': '',
       });
 
       // Fetch and activate remote values
@@ -135,6 +170,55 @@ class RemoteConfigService {
   static bool get isPaymentEnabled {
     return _remoteConfig.getBool('payment_enabled');
   }
+
+  // Vertex AI Configuration
+  static String get vertexAiProjectId =>
+      _remoteConfig.getString('vertex_ai_project_id');
+  static String get vertexAiLocation =>
+      _remoteConfig.getString('vertex_ai_location');
+  static String get vertexAiModel => _remoteConfig.getString('vertex_ai_model');
+  static String get vertexAiServiceAccountKey =>
+      _remoteConfig.getString('vertex_ai_service_account_key');
+  static String get vertexAiMaxTokens =>
+      _remoteConfig.getString('vertex_ai_max_tokens');
+  static String get vertexAiTemperature =>
+      _remoteConfig.getString('vertex_ai_temperature');
+  static String get vertexAiTopP => _remoteConfig.getString('vertex_ai_top_p');
+  static String get vertexAiTopK => _remoteConfig.getString('vertex_ai_top_k');
+  static String get vertexAiMaxConversationHistory =>
+      _remoteConfig.getString('vertex_ai_max_conversation_history');
+  static String get vertexAiMaxRecentMessages =>
+      _remoteConfig.getString('vertex_ai_max_recent_messages');
+  static String get vertexAiMaxStoredMessages =>
+      _remoteConfig.getString('vertex_ai_max_stored_messages');
+
+  // Supabase Configuration
+  static String get supabaseUrl => _remoteConfig.getString('supabase_url');
+  static String get supabaseAnonKey =>
+      _remoteConfig.getString('supabase_anon_key');
+  static String get supabaseServiceRoleKey =>
+      _remoteConfig.getString('supabase_service_role_key');
+
+  // LinkedIn Configuration
+  static String get linkedinClientId =>
+      _remoteConfig.getString('linkedin_client_id');
+  static String get linkedinClientSecret =>
+      _remoteConfig.getString('linkedin_client_secret');
+  static String get linkedinRedirectUri =>
+      _remoteConfig.getString('linkedin_redirect_uri');
+
+  // Gemini Configuration
+  static String get geminiApiKey => _remoteConfig.getString('gemini_api_key');
+
+  // Google Meet Configuration
+  static String get googleMeetClientId =>
+      _remoteConfig.getString('google_meet_client_id');
+  static String get googleMeetClientSecret =>
+      _remoteConfig.getString('google_meet_client_secret');
+  static String get googleMeetRedirectUri =>
+      _remoteConfig.getString('google_meet_redirect_uri');
+  static String get googleMeetSyncFunctionUrl =>
+      _remoteConfig.getString('google_meet_sync_function_url');
 
   /// Check if the service is properly initialized
   static bool get isInitialized => _isInitialized;

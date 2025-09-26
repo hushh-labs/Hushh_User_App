@@ -5,7 +5,7 @@ import '../../domain/entities/gmail_account.dart';
 import '../../domain/entities/gmail_email.dart';
 import '../../domain/repositories/gmail_repository.dart';
 import '../data_sources/supabase_gmail_datasource.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
+import '../../../../core/config/remote_config_service.dart';
 
 class GmailRepositoryImpl implements GmailRepository {
   final SupabaseGmailDataSource _dataSource;
@@ -17,10 +17,9 @@ class GmailRepositoryImpl implements GmailRepository {
 
   GmailRepositoryImpl(this._dataSource);
 
-  // Get Supabase URL and key from environment
-  String get _supabaseUrl =>
-      dotenv.env['SUPABASE_URL'] ?? 'https://biiqwforuvzgubrrkfgq.supabase.co';
-  String get _supabaseKey => dotenv.env['SUPABASE_ANON_KEY'] ?? '';
+  // Get Supabase URL and key from Remote Config
+  String get _supabaseUrl => RemoteConfigService.supabaseUrl;
+  String get _supabaseKey => RemoteConfigService.supabaseAnonKey;
 
   @override
   Future<bool> connectGmail(

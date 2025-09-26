@@ -1,21 +1,18 @@
-import 'package:flutter_dotenv/flutter_dotenv.dart';
+import '../../../../core/config/remote_config_service.dart';
 
 /// Configuration for Google Cloud Vertex AI integration
 /// Uses environment variables for secure configuration
 class VertexAiConfig {
   // Google Cloud Project Configuration
-  static String get projectId =>
-      dotenv.env['VERTEX_AI_PROJECT_ID'] ?? 'your-gcp-project-id';
+  static String get projectId => RemoteConfigService.vertexAiProjectId;
 
-  static String get location =>
-      dotenv.env['VERTEX_AI_LOCATION'] ?? 'us-central1';
+  static String get location => RemoteConfigService.vertexAiLocation;
 
-  static String get model =>
-      dotenv.env['VERTEX_AI_MODEL'] ?? 'claude-sonnet-4@20250514';
+  static String get model => RemoteConfigService.vertexAiModel;
 
   // Service Account Configuration
   static String get serviceAccountKey =>
-      dotenv.env['VERTEX_AI_SERVICE_ACCOUNT_KEY'] ?? '';
+      RemoteConfigService.vertexAiServiceAccountKey;
 
   // API Configuration
   static const List<String> scopes = [
@@ -24,28 +21,27 @@ class VertexAiConfig {
 
   // Claude Configuration
   static int get maxTokens =>
-      int.tryParse(dotenv.env['VERTEX_AI_MAX_TOKENS'] ?? '') ?? 1024;
+      int.tryParse(RemoteConfigService.vertexAiMaxTokens) ?? 1024;
 
   static double get temperature =>
-      double.tryParse(dotenv.env['VERTEX_AI_TEMPERATURE'] ?? '') ?? 0.7;
+      double.tryParse(RemoteConfigService.vertexAiTemperature) ?? 0.7;
 
   static double get topP =>
-      double.tryParse(dotenv.env['VERTEX_AI_TOP_P'] ?? '') ?? 0.95;
+      double.tryParse(RemoteConfigService.vertexAiTopP) ?? 0.95;
 
-  static int get topK =>
-      int.tryParse(dotenv.env['VERTEX_AI_TOP_K'] ?? '') ?? 40;
+  static int get topK => int.tryParse(RemoteConfigService.vertexAiTopK) ?? 40;
 
   static const String anthropicVersion = 'vertex-2023-10-16';
 
   // Context limits
   static int get maxConversationHistory =>
-      int.tryParse(dotenv.env['VERTEX_AI_MAX_CONVERSATION_HISTORY'] ?? '') ?? 5;
+      int.tryParse(RemoteConfigService.vertexAiMaxConversationHistory) ?? 5;
 
   static int get maxRecentMessages =>
-      int.tryParse(dotenv.env['VERTEX_AI_MAX_RECENT_MESSAGES'] ?? '') ?? 20;
+      int.tryParse(RemoteConfigService.vertexAiMaxRecentMessages) ?? 20;
 
   static int get maxStoredMessages =>
-      int.tryParse(dotenv.env['VERTEX_AI_MAX_STORED_MESSAGES'] ?? '') ?? 100;
+      int.tryParse(RemoteConfigService.vertexAiMaxStoredMessages) ?? 100;
 
   // Validation helper
   static bool get isConfigured {

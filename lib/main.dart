@@ -1,11 +1,11 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'app.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'features/notifications/data/services/notification_service.dart';
 import 'core/services/logger_service.dart';
 import 'core/services/app_tracking_transparency_service.dart';
+import 'core/config/remote_config_service.dart';
 
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
@@ -58,14 +58,16 @@ void main() async {
   // Ensure binding is initialized before using any platform channels
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Load environment variables
+  // Initialize Remote Config (replaces .env file approach)
   try {
-    await dotenv.load(fileName: ".env");
-  } catch (e) {
-    // If .env file doesn't exist, continue with defaults
-    // This allows the app to run even without .env file
+    await RemoteConfigService.initialize();
     if (kDebugMode) {
-      print('Warning: .env file not found. Using default configuration.');
+      print('✅ Remote Config initialized successfully');
+    }
+  } catch (e) {
+    if (kDebugMode) {
+      print('❌ Remote Config initialization failed: $e');
+      print('🔄 Continuing with default configuration');
     }
   }
 

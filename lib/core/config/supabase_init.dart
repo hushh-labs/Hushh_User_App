@@ -1,27 +1,27 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'remote_config_service.dart';
 
 class SupabaseInit {
   static SupabaseClient? _serviceClient;
 
   static Future<void> initialize() async {
-    // Get credentials from .env file
-    final supabaseUrl = dotenv.env['SUPABASE_URL'];
+    // Get credentials from Remote Config
+    final supabaseUrl = RemoteConfigService.supabaseUrl;
     // Use anonymous key for client operations (RLS disabled on table)
-    final supabaseAnonKey = dotenv.env['SUPABASE_ANON_KEY'];
+    final supabaseAnonKey = RemoteConfigService.supabaseAnonKey;
     // Service role key for storage operations
-    final supabaseServiceKey = dotenv.env['SUPABASE_SERVICE_ROLE_KEY'];
+    final supabaseServiceKey = RemoteConfigService.supabaseServiceRoleKey;
 
-    if (supabaseUrl == null || supabaseAnonKey == null) {
+    if (supabaseUrl.isEmpty || supabaseAnonKey.isEmpty) {
       throw Exception(
-        'SUPABASE_URL and SUPABASE_ANON_KEY must be set in .env file',
+        'SUPABASE_URL and SUPABASE_ANON_KEY must be set in Remote Config',
       );
     }
 
     await Supabase.initialize(url: supabaseUrl, anonKey: supabaseAnonKey);
 
     // Initialize service client for storage operations
-    if (supabaseServiceKey != null) {
+    if (supabaseServiceKey.isNotEmpty) {
       _serviceClient = SupabaseClient(supabaseUrl, supabaseServiceKey);
     }
   }

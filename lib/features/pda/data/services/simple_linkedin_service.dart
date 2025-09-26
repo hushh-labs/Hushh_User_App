@@ -1,10 +1,10 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:get_it/get_it.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:firebase_auth/firebase_auth.dart' as firebase_auth;
+import '../../../../core/config/remote_config_service.dart';
 
 import '../../domain/entities/simple_linkedin_account.dart';
 import '../../domain/entities/simple_linkedin_post.dart';
@@ -71,10 +71,10 @@ class SupabaseLinkedInService {
 
   // LinkedIn OAuth configuration
   String get _linkedInClientId {
-    final clientId = dotenv.env['LINKEDIN_CLIENT_ID'];
-    if (clientId == null || clientId.isEmpty) {
+    final clientId = RemoteConfigService.linkedinClientId;
+    if (clientId.isEmpty) {
       debugPrint(
-        '❌ [LINKEDIN SERVICE] LINKEDIN_CLIENT_ID not found in .env file',
+        '❌ [LINKEDIN SERVICE] LINKEDIN_CLIENT_ID not found in Remote Config',
       );
       return '';
     }
@@ -82,9 +82,10 @@ class SupabaseLinkedInService {
   }
 
   String get _linkedInRedirectUri {
-    final redirectUri = dotenv.env['LINKEDIN_REDIRECT_URI'];
-    return redirectUri ??
-        'https://biiqwforuvzgubrrkfgq.supabase.co/functions/v1/linkedin-comprehensive-sync';
+    final redirectUri = RemoteConfigService.linkedinRedirectUri;
+    return redirectUri.isNotEmpty
+        ? redirectUri
+        : 'https://biiqwforuvzgubrrkfgq.supabase.co/functions/v1/linkedin-comprehensive-sync';
   }
 
   /// Check if LinkedIn is connected for the current user
