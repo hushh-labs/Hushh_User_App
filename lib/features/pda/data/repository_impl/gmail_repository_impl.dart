@@ -6,7 +6,6 @@ import '../../domain/entities/gmail_email.dart';
 import '../../domain/repositories/gmail_repository.dart';
 import '../data_sources/supabase_gmail_datasource.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
-import '../../../../core/utils/env_utils.dart';
 
 class GmailRepositoryImpl implements GmailRepository {
   final SupabaseGmailDataSource _dataSource;
