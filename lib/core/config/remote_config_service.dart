@@ -95,15 +95,32 @@ class RemoteConfigService {
     }
   }
 
+  /// Check if Remote Config is initialized
+  static bool get isInitialized => _isInitialized;
+
   /// Razorpay Key ID (fetched securely from Firebase)
   static String get razorpayKeyId {
-    final key = _remoteConfig.getString('razorpay_key_id');
-    if (kDebugMode && key == 'demo_key_placeholder') {
-      print(
-        '⚠️  Using demo Razorpay key - configure real keys in Firebase Console',
-      );
+    if (!_isInitialized) {
+      if (kDebugMode) {
+        print('⚠️ Remote Config not initialized, using default');
+      }
+      return 'demo_key_placeholder';
     }
-    return key;
+    
+    try {
+      final key = _remoteConfig.getString('razorpay_key_id');
+      if (kDebugMode && key == 'demo_key_placeholder') {
+        print(
+          '⚠️  Using demo Razorpay key - configure real keys in Firebase Console',
+        );
+      }
+      return key;
+    } catch (e) {
+      if (kDebugMode) {
+        print('❌ Error getting Razorpay key: $e');
+      }
+      return 'demo_key_placeholder';
+    }
   }
 
   /// Razorpay Key Secret (fetched securely from Firebase)
@@ -114,13 +131,27 @@ class RemoteConfigService {
 
   /// Stripe Publishable Key (fetched securely from Firebase)
   static String get stripePublishableKey {
-    final key = _remoteConfig.getString('stripe_publishable_key');
-    if (kDebugMode && key == 'pk_test_demo_placeholder') {
-      print(
-        '⚠️  Using demo Stripe key - configure real keys in Firebase Console',
-      );
+    if (!_isInitialized) {
+      if (kDebugMode) {
+        print('⚠️ Remote Config not initialized, using default Stripe key');
+      }
+      return 'pk_test_demo_placeholder';
     }
-    return key;
+    
+    try {
+      final key = _remoteConfig.getString('stripe_publishable_key');
+      if (kDebugMode && key == 'pk_test_demo_placeholder') {
+        print(
+          '⚠️  Using demo Stripe key - configure real keys in Firebase Console',
+        );
+      }
+      return key;
+    } catch (e) {
+      if (kDebugMode) {
+        print('❌ Error getting Stripe key: $e');
+      }
+      return 'pk_test_demo_placeholder';
+    }
   }
 
   /// Stripe Secret Key (fetched securely from Firebase)
@@ -147,18 +178,32 @@ class RemoteConfigService {
 
   /// Check if we're in demo mode for Stripe
   static bool get isStripeDemoMode {
-    final demoMode = _remoteConfig.getBool('stripe_demo_mode');
-
-    // Additional safety check
-    final key = stripePublishableKey;
-    if (key == 'pk_test_demo_placeholder' ||
-        key.contains('placeholder') ||
-        key.contains('demo') ||
-        key.isEmpty) {
+    if (!_isInitialized) {
+      if (kDebugMode) {
+        print('⚠️ Remote Config not initialized, defaulting to demo mode');
+      }
       return true;
     }
+    
+    try {
+      final demoMode = _remoteConfig.getBool('stripe_demo_mode');
 
-    return demoMode;
+      // Additional safety check
+      final key = stripePublishableKey;
+      if (key == 'pk_test_demo_placeholder' ||
+          key.contains('placeholder') ||
+          key.contains('demo') ||
+          key.isEmpty) {
+        return true;
+      }
+
+      return demoMode;
+    } catch (e) {
+      if (kDebugMode) {
+        print('❌ Error getting Stripe demo mode: $e');
+      }
+      return true; // Default to demo mode on error
+    }
   }
 
   /// Get current environment (development/staging/production)

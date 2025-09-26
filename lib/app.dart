@@ -66,6 +66,11 @@ Future<void> mainApp() async {
 
   // Initialize Stripe with publishable key from secure Remote Config
   try {
+    // Wait a moment to ensure Remote Config is fully initialized
+    if (!RemoteConfigService.isInitialized) {
+      debugPrint('⚠️ [APP] Remote Config not initialized, using defaults');
+    }
+    
     final stripePublishableKey = RemoteConfigService.stripePublishableKey;
     final isStripeDemoMode = RemoteConfigService.isStripeDemoMode;
 
