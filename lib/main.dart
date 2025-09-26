@@ -58,17 +58,9 @@ void main() async {
   // Ensure binding is initialized before using any platform channels
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Initialize Remote Config (replaces .env file approach)
-  try {
-    await RemoteConfigService.initialize();
-    if (kDebugMode) {
-      print('✅ Remote Config initialized successfully');
-    }
-  } catch (e) {
-    if (kDebugMode) {
-      print('❌ Remote Config initialization failed: $e');
-      print('🔄 Continuing with default configuration');
-    }
+  // Debug: Print that main() is starting
+  if (kDebugMode) {
+    print('🚀 Main function starting...');
   }
 
   // Override debugPrint function to capture all prints
