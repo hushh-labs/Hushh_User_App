@@ -35,12 +35,12 @@ class PdaVertexAiDataSourceImpl implements PdaDataSource {
       LinkedInContextPrewarmService();
   final GmailContextPrewarmService _gmailPrewarmService =
       GmailContextPrewarmService();
-  late final GoogleCalendarContextPrewarmService _googleCalendarPrewarmService;
+  GoogleCalendarContextPrewarmService? _googleCalendarPrewarmService;
   final GoogleMeetContextPrewarmService _googleMeetPrewarmService =
       GoogleMeetContextPrewarmService();
   final SupabaseDocumentContextPrewarmService _documentPrewarmService =
       SupabaseDocumentContextPrewarmServiceImpl();
-  late final VaultStartupPrewarmService _vaultPrewarmService;
+  VaultStartupPrewarmService? _vaultPrewarmService;
   final PrewarmingCoordinatorService _prewarmingCoordinator =
       PrewarmingCoordinatorService();
 
@@ -58,8 +58,8 @@ class PdaVertexAiDataSourceImpl implements PdaDataSource {
       debugPrint(
         '⚠️ [PDA VERTEX AI] Failed to initialize Google Calendar service: $e',
       );
-      // Initialize with a fallback service to prevent LateInitializationError
-      _googleCalendarPrewarmService = GoogleCalendarContextPrewarmService();
+      // Skip initialization if GetIt service is not available
+      // This will cause the service to be null, which we'll handle in usage
     }
 
     try {
@@ -67,8 +67,8 @@ class PdaVertexAiDataSourceImpl implements PdaDataSource {
       debugPrint('✅ [PDA VERTEX AI] Vault service initialized');
     } catch (e) {
       debugPrint('⚠️ [PDA VERTEX AI] Failed to initialize Vault service: $e');
-      // Initialize with a fallback service to prevent LateInitializationError
-      _vaultPrewarmService = VaultStartupPrewarmService();
+      // Skip initialization if GetIt service is not available
+      // This will cause the service to be null, which we'll handle in usage
     }
   }
 
@@ -547,7 +547,7 @@ Be conversational, helpful, and concise in your responses.
           ),
           _prewarmingCoordinator.startProcess(
             'google_calendar_prewarm',
-            () => _googleCalendarPrewarmService.prewarmOnStartup(currentUserId),
+            () => _googleCalendarPrewarmService?.prewarmOnStartup(currentUserId) ?? Future.value(),
           ),
           _prewarmingCoordinator.startProcess(
             'document_prewarm',
@@ -561,7 +561,7 @@ Be conversational, helpful, and concise in your responses.
           ),
           _prewarmingCoordinator.startProcess(
             'vault_prewarm',
-            () => _vaultPrewarmService.prewarmVaultOnStartup(),
+            () => _vaultPrewarmService?.prewarmVaultOnStartup() ?? Future.value(),
           ),
         ];
 
@@ -810,14 +810,16 @@ Last Updated: $updatedAt
       );
 
       // Always get fresh data from prewarm service (bypass Firestore cache)
-      final calendarContext = await _googleCalendarPrewarmService
-          .getGoogleCalendarContextForPdaWithUserId(currentUserId);
+      final calendarContext = _googleCalendarPrewarmService != null
+          ? await _googleCalendarPrewarmService!
+              .getGoogleCalendarContextForPdaWithUserId(currentUserId)
+          : null;
 
       debugPrint(
-        '📦 [PDA CALENDAR CONTEXT] Calendar context length: ${calendarContext.length} characters',
+        '📦 [PDA CALENDAR CONTEXT] Calendar context length: ${calendarContext?.length ?? 0} characters',
       );
 
-      return calendarContext;
+      return calendarContext ?? '';
     } catch (e) {
       debugPrint(
         '❌ [PDA CALENDAR CONTEXT] Error getting Google Calendar context: $e',
@@ -1316,7 +1318,9 @@ This extracted content provides detailed information from your documents that ca
       debugPrint('⚡ [QUICK SYNC] Starting quick calendar sync...');
 
       // Force refresh calendar data
-      await _googleCalendarPrewarmService.quickSyncForPDA(currentUserId);
+      if (_googleCalendarPrewarmService != null) {
+        await _googleCalendarPrewarmService!.quickSyncForPDA(currentUserId);
+      }
 
       debugPrint('✅ [QUICK SYNC] Quick calendar sync completed');
     } catch (e) {

@@ -8,7 +8,7 @@ class SupabaseInit {
     try {
       // Force refresh Remote Config to get latest values
       await RemoteConfigService.refresh();
-      
+
       // Get credentials from Remote Config
       final supabaseUrl = RemoteConfigService.supabaseUrl;
       // Use anonymous key for client operations (RLS disabled on table)
@@ -17,9 +17,15 @@ class SupabaseInit {
       final supabaseServiceKey = RemoteConfigService.supabaseServiceRoleKey;
 
       // Debug: Print the actual values being retrieved
-      print('🔍 [SUPABASE DEBUG] URL: ${supabaseUrl.isNotEmpty ? "✅ Set" : "❌ Empty"}');
-      print('🔍 [SUPABASE DEBUG] Anon Key: ${supabaseAnonKey.isNotEmpty ? "✅ Set" : "❌ Empty"}');
-      print('🔍 [SUPABASE DEBUG] Service Key: ${supabaseServiceKey.isNotEmpty ? "✅ Set" : "❌ Empty"}');
+      print(
+        '🔍 [SUPABASE DEBUG] URL: ${supabaseUrl.isNotEmpty ? "✅ Set" : "❌ Empty"}',
+      );
+      print(
+        '🔍 [SUPABASE DEBUG] Anon Key: ${supabaseAnonKey.isNotEmpty ? "✅ Set" : "❌ Empty"}',
+      );
+      print(
+        '🔍 [SUPABASE DEBUG] Service Key: ${supabaseServiceKey.isNotEmpty ? "✅ Set" : "❌ Empty"}',
+      );
 
       if (supabaseUrl.isEmpty || supabaseAnonKey.isEmpty) {
         throw Exception(
