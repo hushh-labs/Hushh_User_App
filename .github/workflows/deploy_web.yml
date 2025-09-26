@@ -29,7 +29,7 @@ jobs:
       - name: Create .env file from secrets
         run: |
           echo "🔐 Creating .env file from GitHub Secrets..."
-          cat > .env << EOF
+          cat > .env << 'EOF'
           VERTEX_AI_PROJECT_ID=${{ secrets.VERTEX_AI_PROJECT_ID }}
           VERTEX_AI_LOCATION=${{ secrets.VERTEX_AI_LOCATION }}
           VERTEX_AI_MODEL=${{ secrets.VERTEX_AI_MODEL }}
@@ -57,20 +57,12 @@ jobs:
           RAZORPAY_KEY_ID=${{ secrets.RAZORPAY_KEY_ID }}
           RAZORPAY_KEY_SECRET=${{ secrets.RAZORPAY_KEY_SECRET }}
           EOF
-          
-          echo "✅ .env file created successfully"
-          echo "📋 .env file contents (first 5 lines):"
-          head -5 .env
-          echo "📊 Total lines in .env: $(wc -l < .env)"
 
       - name: Build Flutter web
-        run: flutter build web --release --verbose
+        run: flutter build web --release
 
       - name: Copy .env file to build output
-        run: |
-          echo "📋 Copying .env file to build/web/ directory..."
-          cp .env build/web/.env
-          echo "✅ .env file copied to build/web/"
+        run: cp .env build/web/.env
 
 
       - name: Deploy to Firebase Hosting (live)
