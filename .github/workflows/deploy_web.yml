@@ -22,8 +22,42 @@ jobs:
       - name: Flutter pub get
         run: flutter pub get
 
+      - name: Clean previous builds
+        run: flutter clean
+
+      - name: Create .env file from secrets
+        run: |
+          cat > .env << EOF
+          VERTEX_AI_PROJECT_ID=${{ secrets.VERTEX_AI_PROJECT_ID }}
+          VERTEX_AI_LOCATION=${{ secrets.VERTEX_AI_LOCATION }}
+          VERTEX_AI_MODEL=${{ secrets.VERTEX_AI_MODEL }}
+          VERTEX_AI_SERVICE_ACCOUNT_KEY=${{ secrets.VERTEX_AI_SERVICE_ACCOUNT_KEY }}
+          VERTEX_AI_MAX_TOKENS=${{ secrets.VERTEX_AI_MAX_TOKENS }}
+          VERTEX_AI_TEMPERATURE=${{ secrets.VERTEX_AI_TEMPERATURE }}
+          VERTEX_AI_TOP_P=${{ secrets.VERTEX_AI_TOP_P }}
+          VERTEX_AI_TOP_K=${{ secrets.VERTEX_AI_TOP_K }}
+          VERTEX_AI_MAX_CONVERSATION_HISTORY=${{ secrets.VERTEX_AI_MAX_CONVERSATION_HISTORY }}
+          VERTEX_AI_MAX_RECENT_MESSAGES=${{ secrets.VERTEX_AI_MAX_RECENT_MESSAGES }}
+          VERTEX_AI_MAX_STORED_MESSAGES=${{ secrets.VERTEX_AI_MAX_STORED_MESSAGES }}
+          SUPABASE_URL=${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY=${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          LINKEDIN_CLIENT_ID=${{ secrets.LINKEDIN_CLIENT_ID }}
+          LINKEDIN_CLIENT_SECRET=${{ secrets.LINKEDIN_CLIENT_SECRET }}
+          LINKEDIN_REDIRECT_URI=${{ secrets.LINKEDIN_REDIRECT_URI }}
+          GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
+          GOOGLE_MEET_CLIENT_ID=${{ secrets.GOOGLE_MEET_CLIENT_ID }}
+          GOOGLE_MEET_CLIENT_SECRET=${{ secrets.GOOGLE_MEET_CLIENT_SECRET }}
+          GOOGLE_MEET_REDIRECT_URI=${{ secrets.GOOGLE_MEET_REDIRECT_URI }}
+          GOOGLE_MEET_SYNC_FUNCTION_URL=${{ secrets.GOOGLE_MEET_SYNC_FUNCTION_URL }}
+          STRIPE_PUBLISHABLE_KEY=${{ secrets.STRIPE_PUBLISHABLE_KEY }}
+          STRIPE_SECRET_KEY=${{ secrets.STRIPE_SECRET_KEY }}
+          RAZORPAY_KEY_ID=${{ secrets.RAZORPAY_KEY_ID }}
+          RAZORPAY_KEY_SECRET=${{ secrets.RAZORPAY_KEY_SECRET }}
+          EOF
+
       - name: Build Flutter web
-        run: flutter build web --release
+        run: flutter build web --release --verbose
 
       - name: Deploy to Firebase Hosting (live)
         uses: FirebaseExtended/action-hosting-deploy@v0
