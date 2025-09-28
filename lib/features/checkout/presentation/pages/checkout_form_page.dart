@@ -26,6 +26,9 @@ class _CheckoutFormPageState extends State<CheckoutFormPage> {
   late final TextEditingController _stateController;
   late final TextEditingController _countryController;
 
+  // Track which fields are currently being edited to prevent overwriting
+  final Set<String> _editingFields = <String>{};
+
   @override
   void initState() {
     super.initState();
@@ -53,15 +56,34 @@ class _CheckoutFormPageState extends State<CheckoutFormPage> {
   }
 
   void _updateFormFields(CheckoutEntity data) {
-    _fullNameController.text = data.fullName ?? '';
-    _phoneController.text = data.phoneNumber ?? '';
-    _emailController.text = data.email ?? '';
-    _addressLine1Controller.text = data.addressLine1 ?? '';
-    _addressLine2Controller.text = data.addressLine2 ?? '';
-    _cityController.text = data.city ?? '';
-    _pincodeController.text = data.pincode ?? '';
-    _stateController.text = data.state ?? '';
-    _countryController.text = data.country ?? '';
+    // Only update fields that are not currently being edited
+    if (!_editingFields.contains('fullName')) {
+      _fullNameController.text = data.fullName ?? '';
+    }
+    if (!_editingFields.contains('phoneNumber')) {
+      _phoneController.text = data.phoneNumber ?? '';
+    }
+    if (!_editingFields.contains('email')) {
+      _emailController.text = data.email ?? '';
+    }
+    if (!_editingFields.contains('addressLine1')) {
+      _addressLine1Controller.text = data.addressLine1 ?? '';
+    }
+    if (!_editingFields.contains('addressLine2')) {
+      _addressLine2Controller.text = data.addressLine2 ?? '';
+    }
+    if (!_editingFields.contains('city')) {
+      _cityController.text = data.city ?? '';
+    }
+    if (!_editingFields.contains('pincode')) {
+      _pincodeController.text = data.pincode ?? '';
+    }
+    if (!_editingFields.contains('state')) {
+      _stateController.text = data.state ?? '';
+    }
+    if (!_editingFields.contains('country')) {
+      _countryController.text = data.country ?? '';
+    }
   }
 
   @override
@@ -119,12 +141,9 @@ class _CheckoutFormPageState extends State<CheckoutFormPage> {
       ),
       body: BlocListener<CheckoutBloc, CheckoutState>(
         listener: (context, state) {
-          if (state is CheckoutLoaded || state is CheckoutFieldUpdated) {
-            _updateFormFields(
-              state is CheckoutLoaded
-                  ? state.checkoutData
-                  : (state as CheckoutFieldUpdated).checkoutData,
-            );
+          if (state is CheckoutLoaded) {
+            // Only update form fields on initial load, not on every field update
+            _updateFormFields(state.checkoutData);
           } else if (state is CheckoutSubmitted) {
             _navigateToPaymentSelection();
           } else if (state is CheckoutError) {
@@ -273,6 +292,15 @@ class _CheckoutFormPageState extends State<CheckoutFormPage> {
     required IconData prefixIcon,
     TextInputType? keyboardType,
   }) {
+    final focusNode = FocusNode();
+
+    // Listen to focus changes to track when user stops editing
+    focusNode.addListener(() {
+      if (!focusNode.hasFocus) {
+        _editingFields.remove(fieldName);
+      }
+    });
+
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -287,11 +315,20 @@ class _CheckoutFormPageState extends State<CheckoutFormPage> {
       ),
       child: TextFormField(
         controller: controller,
+        focusNode: focusNode,
         keyboardType: keyboardType,
+        onTap: () {
+          // Mark field as being edited
+          _editingFields.add(fieldName);
+        },
         onChanged: (value) {
           context.read<CheckoutBloc>().add(
             UpdateCheckoutFieldEvent(fieldName, value),
           );
+        },
+        onFieldSubmitted: (value) {
+          // Remove from editing fields when user finishes editing
+          _editingFields.remove(fieldName);
         },
         validator: isRequired
             ? (value) {

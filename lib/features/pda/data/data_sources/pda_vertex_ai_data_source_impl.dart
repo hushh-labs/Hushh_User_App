@@ -547,7 +547,11 @@ Be conversational, helpful, and concise in your responses.
           ),
           _prewarmingCoordinator.startProcess(
             'google_calendar_prewarm',
-            () => _googleCalendarPrewarmService?.prewarmOnStartup(currentUserId) ?? Future.value(),
+            () =>
+                _googleCalendarPrewarmService?.prewarmOnStartup(
+                  currentUserId,
+                ) ??
+                Future.value(),
           ),
           _prewarmingCoordinator.startProcess(
             'document_prewarm',
@@ -561,7 +565,8 @@ Be conversational, helpful, and concise in your responses.
           ),
           _prewarmingCoordinator.startProcess(
             'vault_prewarm',
-            () => _vaultPrewarmService?.prewarmVaultOnStartup() ?? Future.value(),
+            () =>
+                _vaultPrewarmService?.prewarmVaultOnStartup() ?? Future.value(),
           ),
         ];
 
@@ -812,7 +817,7 @@ Last Updated: $updatedAt
       // Always get fresh data from prewarm service (bypass Firestore cache)
       final calendarContext = _googleCalendarPrewarmService != null
           ? await _googleCalendarPrewarmService!
-              .getGoogleCalendarContextForPdaWithUserId(currentUserId)
+                .getGoogleCalendarContextForPdaWithUserId(currentUserId)
           : null;
 
       debugPrint(

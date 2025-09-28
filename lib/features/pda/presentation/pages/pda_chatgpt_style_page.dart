@@ -32,7 +32,7 @@ import '../../../../shared/widgets/google_meet_sync_toast_overlay.dart';
 import '../../domain/repositories/gmail_repository.dart';
 import '../../domain/repositories/google_meet_repository.dart';
 import '../../data/data_sources/google_meet_supabase_data_source_impl.dart';
-import 'google_meet_oauth_webview.dart';
+import 'google_meet_oauth_page.dart';
 import 'google_meet_page.dart';
 import '../../domain/repositories/google_drive_repository.dart';
 import '../../data/data_sources/google_drive_supabase_data_source_impl.dart';
@@ -1789,7 +1789,7 @@ class _PdaChatGptStylePageState extends State<PdaChatGptStylePage> {
 
           final result = await Navigator.of(context).push<Map<String, dynamic>>(
             MaterialPageRoute(
-              builder: (context) => GoogleMeetOAuthWebView(
+              builder: (context) => GoogleMeetOAuthPage(
                 oauthUrl: authUrl,
                 redirectUri:
                     'https://biiqwforuvzgubrrkfgq.supabase.co/functions/v1/google-meet-sync/callback',
@@ -2026,7 +2026,7 @@ class _PdaChatGptStylePageState extends State<PdaChatGptStylePage> {
 
           final result = await Navigator.of(context).push<Map<String, dynamic>>(
             MaterialPageRoute(
-              builder: (context) => GoogleMeetOAuthWebView(
+              builder: (context) => GoogleMeetOAuthPage(
                 oauthUrl: authUrl,
                 redirectUri:
                     'https://biiqwforuvzgubrrkfgq.supabase.co/functions/v1/google-drive-sync/callback',

@@ -21,13 +21,25 @@ class VerifyPhoneOtpUseCase
   Future<Either<Failure, firebase_auth.UserCredential>> call(
     VerifyPhoneOtpParams params,
   ) async {
+    print('🔐 [VERIFY_OTP_USECASE] Starting VerifyPhoneOtpUseCase');
+    print('📱 [VERIFY_OTP_USECASE] Phone number: ${params.phoneNumber}');
+    print('🔑 [VERIFY_OTP_USECASE] OTP code: ${params.otp}');
+
     try {
+      print('⏳ [VERIFY_OTP_USECASE] Calling auth repository verifyPhoneOtp...');
+
       final result = await _authRepository.verifyPhoneOtp(
         params.phoneNumber,
         params.otp,
       );
+
+      print('✅ [VERIFY_OTP_USECASE] Repository call completed successfully');
+      print('👤 [VERIFY_OTP_USECASE] User ID: ${result.user?.uid}');
       return Right(result);
     } catch (e) {
+      print('💥 [VERIFY_OTP_USECASE] Exception caught: $e');
+      print('📊 [VERIFY_OTP_USECASE] Exception type: ${e.runtimeType}');
+      print('🔄 [VERIFY_OTP_USECASE] Returning ServerFailure');
       return Left(ServerFailure(e.toString()));
     }
   }

@@ -22,66 +22,96 @@ class AuthRepositoryImpl implements AuthRepository {
     String phoneNumber, {
     Function(String phoneNumber)? onOtpSent,
   }) async {
+    print('📱 [AUTH_REPO] Starting OTP send for phone: $phoneNumber');
+
     try {
       // Ensure phone number has proper format
       String formattedPhone = phoneNumber;
       if (!phoneNumber.startsWith('+')) {
         formattedPhone = '+$phoneNumber';
+        print('📱 [AUTH_REPO] Formatted phone number: $formattedPhone');
+      } else {
+        print('📱 [AUTH_REPO] Phone number already formatted: $formattedPhone');
       }
 
       // Use a Completer to handle the async callback properly
       final completer = Completer<void>();
+      print('⏳ [AUTH_REPO] Calling Firebase verifyPhoneNumber...');
 
       await _auth.verifyPhoneNumber(
         phoneNumber: formattedPhone,
         verificationCompleted:
             (firebase_auth.PhoneAuthCredential credential) async {
+              print('🔄 [AUTH_REPO] Auto-verification completed (disabled)');
               // Completely disable auto-verification to force manual OTP entry
               // Do nothing - let user manually enter OTP
             },
         verificationFailed: (firebase_auth.FirebaseAuthException e) {
+          print(
+            '❌ [AUTH_REPO] Firebase verification failed: ${e.code} - ${e.message}',
+          );
+
           // Handle specific Firebase error codes
           String errorMessage;
           switch (e.code) {
             case 'too-many-requests':
               errorMessage =
                   'Too many OTP requests. Please wait a few minutes before trying again.';
+              print('🚫 [AUTH_REPO] Rate limit exceeded');
               break;
             case 'invalid-phone-number':
               errorMessage =
                   'Invalid phone number format. Please check and try again.';
+              print('📞 [AUTH_REPO] Invalid phone number format');
               break;
             case 'quota-exceeded':
               errorMessage = 'SMS quota exceeded. Please try again later.';
+              print('📊 [AUTH_REPO] SMS quota exceeded');
               break;
             case 'network-request-failed':
               errorMessage =
                   'Network error. Please check your internet connection and try again.';
+              print('🌐 [AUTH_REPO] Network request failed');
               break;
             default:
               errorMessage = 'Failed to send OTP: ${e.message}';
+              print('❓ [AUTH_REPO] Unknown Firebase error: ${e.code}');
           }
 
+          print('💥 [AUTH_REPO] Error message: $errorMessage');
           // Complete with error
           if (!completer.isCompleted) {
             completer.completeError(Exception(errorMessage));
           }
         },
         codeSent: (String verificationId, int? resendToken) {
+          print(
+            '✅ [AUTH_REPO] OTP sent successfully! Verification ID: $verificationId',
+          );
+          print('🔄 [AUTH_REPO] Resend token: $resendToken');
+
           // Store verification ID for later use
           _verificationId = verificationId;
+          print('💾 [AUTH_REPO] Stored verification ID for later use');
 
           // Complete successfully
           if (!completer.isCompleted) {
             completer.complete();
+            print('✅ [AUTH_REPO] Completer completed successfully');
           }
 
           // Call navigation callback if provided
           if (onOtpSent != null) {
+            print('🚀 [AUTH_REPO] Calling onOtpSent callback');
             onOtpSent(phoneNumber);
+          } else {
+            print('⚠️ [AUTH_REPO] No onOtpSent callback provided');
           }
         },
         codeAutoRetrievalTimeout: (String verificationId) {
+          print(
+            '⏰ [AUTH_REPO] OTP auto-retrieval timeout for verification ID: $verificationId',
+          );
           // OTP auto-retrieval timeout
           if (!completer.isCompleted) {
             completer.complete();
@@ -90,13 +120,20 @@ class AuthRepositoryImpl implements AuthRepository {
         timeout: const Duration(seconds: 60),
       );
 
+      print('⏳ [AUTH_REPO] Waiting for completer to complete...');
       // Wait for the completer to complete
       await completer.future;
+      print('✅ [AUTH_REPO] OTP send process completed successfully');
     } catch (e) {
+      print('💥 [AUTH_REPO] Exception in sendPhoneOtp: $e');
+      print('📊 [AUTH_REPO] Exception type: ${e.runtimeType}');
+
       // Re-throw the exception with the specific error message
       if (e is Exception) {
+        print('🔄 [AUTH_REPO] Re-throwing exception');
         rethrow;
       } else {
+        print('🔄 [AUTH_REPO] Wrapping exception and re-throwing');
         throw Exception('Failed to send OTP: $e');
       }
     }
@@ -107,10 +144,16 @@ class AuthRepositoryImpl implements AuthRepository {
     String phoneNumber,
     String otp,
   ) async {
+    print('🔐 [AUTH_REPO] Starting OTP verification for phone: $phoneNumber');
+    print('🔑 [AUTH_REPO] OTP code: $otp');
+
     try {
       if (_verificationId == null) {
+        print('❌ [AUTH_REPO] No verification ID found. Please send OTP first.');
         throw Exception('No verification ID found. Please send OTP first.');
       }
+
+      print('✅ [AUTH_REPO] Verification ID found: $_verificationId');
 
       // Create credential with verification ID and OTP
       firebase_auth.PhoneAuthCredential credential =
@@ -119,14 +162,45 @@ class AuthRepositoryImpl implements AuthRepository {
             smsCode: otp,
           );
 
+      print('🔑 [AUTH_REPO] Created phone auth credential');
+      print('⏳ [AUTH_REPO] Attempting to sign in with credential...');
+
       // Sign in with credential
       final userCredential = await _auth.signInWithCredential(credential);
 
+      print('✅ [AUTH_REPO] Successfully signed in with credential');
+      print('👤 [AUTH_REPO] User ID: ${userCredential.user?.uid}');
+      print('📧 [AUTH_REPO] User email: ${userCredential.user?.email}');
+      print('📱 [AUTH_REPO] User phone: ${userCredential.user?.phoneNumber}');
+
       // Clear verification ID after successful verification
       _verificationId = null;
+      print('🧹 [AUTH_REPO] Cleared verification ID');
 
       return userCredential;
     } catch (e) {
+      print('💥 [AUTH_REPO] Exception in verifyPhoneOtp: $e');
+      print('📊 [AUTH_REPO] Exception type: ${e.runtimeType}');
+
+      if (e is firebase_auth.FirebaseAuthException) {
+        print(
+          '🔥 [AUTH_REPO] Firebase Auth Exception: ${e.code} - ${e.message}',
+        );
+        switch (e.code) {
+          case 'invalid-verification-code':
+            print('❌ [AUTH_REPO] Invalid OTP code provided');
+            break;
+          case 'invalid-verification-id':
+            print('❌ [AUTH_REPO] Invalid verification ID');
+            break;
+          case 'session-expired':
+            print('⏰ [AUTH_REPO] Verification session expired');
+            break;
+          default:
+            print('❓ [AUTH_REPO] Unknown Firebase Auth error: ${e.code}');
+        }
+      }
+
       rethrow;
     }
   }

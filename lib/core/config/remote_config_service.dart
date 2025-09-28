@@ -106,7 +106,7 @@ class RemoteConfigService {
       }
       return 'demo_key_placeholder';
     }
-    
+
     try {
       final key = _remoteConfig.getString('razorpay_key_id');
       if (kDebugMode && key == 'demo_key_placeholder') {
@@ -137,7 +137,7 @@ class RemoteConfigService {
       }
       return 'pk_test_demo_placeholder';
     }
-    
+
     try {
       final key = _remoteConfig.getString('stripe_publishable_key');
       if (kDebugMode && key == 'pk_test_demo_placeholder') {
@@ -168,11 +168,12 @@ class RemoteConfigService {
     final keyId = razorpayKeyId;
     if (keyId == 'demo_key_placeholder' ||
         keyId.contains('placeholder') ||
-        keyId.contains('demo') ||
         keyId.isEmpty) {
       return true;
     }
 
+    // Allow test keys (rzp_test_) to work with real Razorpay plugin
+    // Only force demo mode for actual placeholder keys, not test keys
     return demoMode;
   }
 
@@ -184,7 +185,7 @@ class RemoteConfigService {
       }
       return true;
     }
-    
+
     try {
       final demoMode = _remoteConfig.getBool('stripe_demo_mode');
 
@@ -264,7 +265,6 @@ class RemoteConfigService {
       _remoteConfig.getString('google_meet_redirect_uri');
   static String get googleMeetSyncFunctionUrl =>
       _remoteConfig.getString('google_meet_sync_function_url');
-
 
   /// Refresh configuration from Firebase (useful for testing)
   static Future<void> refresh() async {

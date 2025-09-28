@@ -121,6 +121,7 @@ dependencies:
   hive_flutter: any
   webview_flutter_plus: any
   webview_flutter: any
+  webview_flutter_web: any
   
   # UUID generation
   uuid: any

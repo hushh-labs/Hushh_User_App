@@ -68,6 +68,30 @@ class _OtpVerificationPageState extends State<OtpVerificationPage> {
   Widget build(BuildContext context) {
     final args = widget.args;
 
+    return BlocListener<AuthBloc, AuthState>(
+      listener: (context, state) {
+        if (state is OtpSentFailureState) {
+          debugPrint('❌ [OTP_PAGE] OTP resend failed: ${state.message}');
+          ToastManager(
+            Toast(
+              title: 'Resend Failed',
+              description: 'Failed to resend OTP: ${state.message}',
+              type: ToastType.error,
+              duration: const Duration(seconds: 3),
+            ),
+          ).show(context);
+        } else if (state is OtpSentState) {
+          debugPrint('✅ [OTP_PAGE] OTP resent successfully');
+        }
+      },
+      child: _buildOtpVerificationContent(context, args),
+    );
+  }
+
+  Widget _buildOtpVerificationContent(
+    BuildContext context,
+    OtpVerificationPageArgs args,
+  ) {
     return Scaffold(
       backgroundColor: Colors.white,
       body: BlocListener<AuthBloc, AuthState>(
@@ -222,11 +246,37 @@ class _OtpVerificationPageState extends State<OtpVerificationPage> {
                     ],
                   ),
                   TextButton(
-                    onPressed: () {
-                      if (countDownForResendStartValue.toString() == "60") {
-                        countDownForResendFunction();
-                      }
-                    },
+                    onPressed: resendValidation
+                        ? () {
+                            debugPrint('🔄 [OTP_PAGE] Resend button pressed');
+                            // Reset countdown
+                            setState(() {
+                              resendValidation = false;
+                              countDownForResendStartValue = 60;
+                            });
+                            countDownForResendFunction();
+
+                            // Actually resend OTP via BLoC
+                            if (args.type == OtpVerificationType.phone) {
+                              context.read<AuthBloc>().add(
+                                ResendPhoneOtpEvent(args.emailOrPhone),
+                              );
+                              debugPrint(
+                                '📱 [OTP_PAGE] Triggered ResendPhoneOtpEvent for: ${args.emailOrPhone}',
+                              );
+
+                              // Show success message
+                              ToastManager(
+                                Toast(
+                                  title: 'Success',
+                                  description: 'OTP resent successfully!',
+                                  type: ToastType.success,
+                                  duration: const Duration(seconds: 2),
+                                ),
+                              ).show(context);
+                            }
+                          }
+                        : null,
                     child: countDownForResendStartValue.toString().length == 1
                         ? RichText(
                             text: TextSpan(

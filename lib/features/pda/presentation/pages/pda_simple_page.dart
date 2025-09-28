@@ -16,7 +16,7 @@ import '../widgets/gmail_sync_dialog.dart';
 import '../../domain/repositories/gmail_repository.dart';
 import '../../domain/repositories/google_meet_repository.dart';
 import '../../data/data_sources/google_meet_supabase_data_source_impl.dart';
-import 'google_meet_oauth_webview.dart';
+import 'google_meet_oauth_page.dart';
 
 import 'package:hushh_user_app/shared/utils/app_local_storage.dart';
 import 'package:go_router/go_router.dart';
@@ -820,7 +820,7 @@ class _PdaSimplePageState extends State<PdaSimplePage> {
 
           final result = await Navigator.of(context).push<Map<String, dynamic>>(
             MaterialPageRoute(
-              builder: (context) => GoogleMeetOAuthWebView(
+              builder: (context) => GoogleMeetOAuthPage(
                 oauthUrl: authUrl,
                 redirectUri:
                     'https://biiqwforuvzgubrrkfgq.supabase.co/functions/v1/google-meet-sync/callback',

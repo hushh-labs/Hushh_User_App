@@ -29,7 +29,8 @@ class RazorpayApiDataSourceImpl implements RazorpayApiDataSource {
       if (isDemoMode ||
           razorpaySecret.isEmpty ||
           keyId.contains('demo_key_placeholder') ||
-          keyId.contains('your_actual_razorpay_key_id_here')) {
+          keyId.contains('your_actual_razorpay_key_id_here') ||
+          keyId == 'demo_key_placeholder') {
         // Demo mode - create mock payment options for testing
         final demoOrderId =
             'demo_order_${DateTime.now().millisecondsSinceEpoch}';

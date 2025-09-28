@@ -586,21 +586,19 @@ class _ProfilePageState extends State<ProfilePage>
           _MenuItemData('Send Feedback', Icons.rate_review_outlined, () {
             _showComingSoonSnackBar('Send Feedback');
           }),
-          if (!kIsWeb) ...[
-            _MenuItemData(
-              _isDeleting ? 'Deleting Account...' : 'Delete Account',
-              _isDeleting ? Icons.hourglass_empty : Icons.delete_outline,
-              _isDeleting
-                  ? () {}
-                  : () {
-                      try {
-                        _showDeleteAccountVerification();
-                      } catch (e) {
-                        _showErrorSnackBar('Unable to open Delete Account');
-                      }
-                    },
-            ),
-          ],
+          _MenuItemData(
+            _isDeleting ? 'Deleting Account...' : 'Delete Account',
+            _isDeleting ? Icons.hourglass_empty : Icons.delete_outline,
+            _isDeleting
+                ? () {}
+                : () {
+                    try {
+                      _showDeleteAccountVerification();
+                    } catch (e) {
+                      _showErrorSnackBar('Unable to open Delete Account');
+                    }
+                  },
+          ),
         ]),
       ],
     );

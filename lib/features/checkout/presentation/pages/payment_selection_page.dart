@@ -451,10 +451,13 @@ class _PaymentSelectionPageState extends State<PaymentSelectionPage> {
   ) {
     print('Opening Razorpay checkout with options: $options');
 
-    // Check if this is demo mode (backend sends demo_mode flag)
-    if (options.containsKey('demo_mode') && options['demo_mode'] == true) {
+    // Check if this is true demo mode (only show custom demo for placeholder keys)
+    // Test keys (rzp_test_) should use real Razorpay plugin in test mode
+    if (options.containsKey('demo_mode') &&
+        options['demo_mode'] == true &&
+        options['key'] == 'rzp_demo_key') {
       print('Demo mode detected - showing demo payment sheet');
-      // Demo mode - show demo payment sheet instead of real Razorpay
+      // Only show demo payment sheet for actual demo keys, not test keys
       _showDemoRazorpaySheet(context, () {
         // Simulate successful payment
         _handleRazorpaySuccess(

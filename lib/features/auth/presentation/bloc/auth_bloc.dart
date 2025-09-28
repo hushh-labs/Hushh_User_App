@@ -46,6 +46,11 @@ class SendPhoneOtpEvent extends AuthEvent {
   SendPhoneOtpEvent(this.phoneNumber);
 }
 
+class ResendPhoneOtpEvent extends AuthEvent {
+  final String phoneNumber;
+  ResendPhoneOtpEvent(this.phoneNumber);
+}
+
 class VerifyPhoneOtpEvent extends AuthEvent {
   final String phoneNumber;
   final String otp;
@@ -245,6 +250,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     on<OnCountryUpdateEvent>(onCountryUpdateEvent);
     on<OnPhoneUpdateEvent>(onPhoneUpdateEvent);
     on<SendPhoneOtpEvent>(onSendPhoneOtpEvent);
+    on<ResendPhoneOtpEvent>(onResendPhoneOtpEvent);
     on<VerifyPhoneOtpEvent>(onVerifyPhoneOtpEvent);
     on<CreateUserCardEvent>(onCreateUserCardEvent);
     on<CreateUserCardDualEvent>(onCreateUserCardDualEvent);
@@ -357,11 +363,17 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     SendPhoneOtpEvent event,
     Emitter<AuthState> emit,
   ) async {
+    debugPrint(
+      '🚀 [AUTH_BLOC] Starting OTP send process for: ${event.phoneNumber}',
+    );
     emit(SendingOtpState());
 
     final params = SendPhoneOtpParams(
       phoneNumber: event.phoneNumber,
       onOtpSent: (phoneNumber) {
+        debugPrint(
+          '✅ [AUTH_BLOC] OTP sent successfully, navigating to verification page',
+        );
         // Navigate to OTP verification page
         AppRouter.router.goNamed(
           RouteNames.otpVerification,
@@ -373,13 +385,52 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       },
     );
 
+    debugPrint(
+      '📞 [AUTH_BLOC] Calling SendPhoneOtpUseCase with phone: ${params.phoneNumber}',
+    );
     final result = await _sendPhoneOtpUseCase(params);
 
     result.fold(
       (failure) {
+        debugPrint('❌ [AUTH_BLOC] OTP send failed: ${failure.message}');
         emit(OtpSentFailureState(failure.message));
       },
       (_) {
+        debugPrint('✅ [AUTH_BLOC] OTP send use case completed successfully');
+        emit(OtpSentState());
+      },
+    );
+  }
+
+  FutureOr<void> onResendPhoneOtpEvent(
+    ResendPhoneOtpEvent event,
+    Emitter<AuthState> emit,
+  ) async {
+    debugPrint(
+      '🔄 [AUTH_BLOC] Starting OTP resend process for: ${event.phoneNumber}',
+    );
+    emit(SendingOtpState());
+
+    final params = SendPhoneOtpParams(
+      phoneNumber: event.phoneNumber,
+      onOtpSent: (phoneNumber) {
+        debugPrint('✅ [AUTH_BLOC] OTP resent successfully for: $phoneNumber');
+        // Don't navigate again, just show success message
+      },
+    );
+
+    debugPrint(
+      '📞 [AUTH_BLOC] Calling SendPhoneOtpUseCase for resend with phone: ${params.phoneNumber}',
+    );
+    final result = await _sendPhoneOtpUseCase(params);
+
+    result.fold(
+      (failure) {
+        debugPrint('❌ [AUTH_BLOC] OTP resend failed: ${failure.message}');
+        emit(OtpSentFailureState(failure.message));
+      },
+      (_) {
+        debugPrint('✅ [AUTH_BLOC] OTP resend use case completed successfully');
         emit(OtpSentState());
       },
     );
@@ -389,6 +440,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     VerifyPhoneOtpEvent event,
     Emitter<AuthState> emit,
   ) async {
+    debugPrint(
+      '🔐 [AUTH_BLOC] Starting OTP verification for phone: ${event.phoneNumber}',
+    );
     emit(VerifyingOtpState());
 
     final params = VerifyPhoneOtpParams(
@@ -396,15 +450,24 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       otp: event.otp,
     );
 
+    debugPrint(
+      '🔍 [AUTH_BLOC] Calling VerifyPhoneOtpUseCase with OTP: ${event.otp}',
+    );
     final result = await _verifyPhoneOtpUseCase(params);
 
     await result.fold(
       (failure) async {
+        debugPrint('❌ [AUTH_BLOC] OTP verification failed: ${failure.message}');
         emit(OtpVerificationFailureState(failure.message));
       },
       (userCredential) async {
+        debugPrint(
+          '✅ [AUTH_BLOC] OTP verification successful for user: ${userCredential.user?.uid}',
+        );
+
         // Store the login type as phone
         await AppLocalStorage.setLoginType(OtpVerificationType.phone);
+        debugPrint('💾 [AUTH_BLOC] Login type stored as phone');
 
         // Store phone number immediately in dual storage (Firebase + Supabase)
         try {
@@ -413,14 +476,17 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
             event.phoneNumber,
           );
           debugPrint(
-            '✅ Phone number stored in dual storage: ${event.phoneNumber}',
+            '✅ [AUTH_BLOC] Phone number stored in dual storage: ${event.phoneNumber}',
           );
         } catch (e) {
-          debugPrint('⚠️ Failed to store phone number in dual storage: $e');
+          debugPrint(
+            '⚠️ [AUTH_BLOC] Failed to store phone number in dual storage: $e',
+          );
           // Don't fail the entire authentication flow if dual storage fails
         }
 
         if (!emit.isDone) {
+          debugPrint('🎉 [AUTH_BLOC] Emitting OtpVerifiedState');
           emit(OtpVerifiedState(userCredential));
         }
       },
