@@ -17,6 +17,50 @@ class AuthRepositoryImpl implements AuthRepository {
   // Store verification ID for OTP verification
   String? _verificationId;
 
+  /// Force manual OTP entry by clearing any cached credentials
+  /// This helps prevent auto-verification issues
+  Future<void> _clearCachedCredentials() async {
+    try {
+      // Sign out any existing user to clear cached credentials
+      await _auth.signOut();
+      print('🧹 [AUTH_REPO] Cleared cached credentials');
+    } catch (e) {
+      print('⚠️ [AUTH_REPO] Could not clear cached credentials: $e');
+    }
+  }
+
+  /// Handle the case where auto-verification occurs
+  /// This method signs in with the provided credential when auto-verification happens
+  Future<void> _handleAutoVerification(
+    firebase_auth.PhoneAuthCredential credential,
+    Completer<void> completer,
+  ) async {
+    print(
+      '🔄 [AUTH_REPO] Auto-verification detected - signing in automatically',
+    );
+    print('✅ [AUTH_REPO] Firebase automatically verified the phone number');
+
+    try {
+      // Sign in with the automatically verified credential
+      final userCredential = await _auth.signInWithCredential(credential);
+
+      print('✅ [AUTH_REPO] Auto-verification sign-in successful');
+      print('👤 [AUTH_REPO] User ID: ${userCredential.user?.uid}');
+      print('📱 [AUTH_REPO] User phone: ${userCredential.user?.phoneNumber}');
+
+      // Complete the completer successfully since verification is done
+      if (!completer.isCompleted) {
+        completer.complete();
+        print('✅ [AUTH_REPO] Auto-verification completed successfully');
+      }
+    } catch (e) {
+      print('❌ [AUTH_REPO] Auto-verification sign-in failed: $e');
+      if (!completer.isCompleted) {
+        completer.completeError(Exception('Auto-verification failed: $e'));
+      }
+    }
+  }
+
   @override
   Future<void> sendPhoneOtp(
     String phoneNumber, {
@@ -25,6 +69,9 @@ class AuthRepositoryImpl implements AuthRepository {
     print('📱 [AUTH_REPO] Starting OTP send for phone: $phoneNumber');
 
     try {
+      // Clear any cached credentials to prevent auto-verification
+      await _clearCachedCredentials();
+
       // Ensure phone number has proper format
       String formattedPhone = phoneNumber;
       if (!phoneNumber.startsWith('+')) {
@@ -40,12 +87,16 @@ class AuthRepositoryImpl implements AuthRepository {
 
       await _auth.verifyPhoneNumber(
         phoneNumber: formattedPhone,
-        verificationCompleted:
-            (firebase_auth.PhoneAuthCredential credential) async {
-              print('🔄 [AUTH_REPO] Auto-verification completed (disabled)');
-              // Completely disable auto-verification to force manual OTP entry
-              // Do nothing - let user manually enter OTP
-            },
+        verificationCompleted: (firebase_auth.PhoneAuthCredential credential) async {
+          print(
+            '🔄 [AUTH_REPO] Auto-verification completed - Firebase automatically verified',
+          );
+          print(
+            '✅ [AUTH_REPO] This means no OTP was sent, but user is already verified',
+          );
+          // Handle auto-verification by signing in with the credential
+          await _handleAutoVerification(credential, completer);
+        },
         verificationFailed: (firebase_auth.FirebaseAuthException e) {
           print(
             '❌ [AUTH_REPO] Firebase verification failed: ${e.code} - ${e.message}',
@@ -89,6 +140,9 @@ class AuthRepositoryImpl implements AuthRepository {
             '✅ [AUTH_REPO] OTP sent successfully! Verification ID: $verificationId',
           );
           print('🔄 [AUTH_REPO] Resend token: $resendToken');
+          print(
+            '📱 [AUTH_REPO] This confirms OTP was actually sent to the phone',
+          );
 
           // Store verification ID for later use
           _verificationId = verificationId;
